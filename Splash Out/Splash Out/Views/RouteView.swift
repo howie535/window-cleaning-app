@@ -3,6 +3,7 @@ import CoreLocation
 
 struct RouteView: View {
     let stops: [Customer]
+    let stopPrices: [ObjectIdentifier: Decimal]
     let startLocation: CLLocationCoordinate2D?
 
     @State private var orderedStops: [Customer] = []
@@ -32,7 +33,7 @@ struct RouteView: View {
             orderedStops = RouteOrdering.order(stops, startingFrom: startLocation)
         }
         .sheet(item: $customerToLog) { customer in
-            AddCleanLogView(customer: customer)
+            AddCleanLogView(customer: customer, defaultAmount: stopPrices[ObjectIdentifier(customer)])
         }
     }
 }

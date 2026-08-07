@@ -1,28 +1,13 @@
 import SwiftUI
 import SwiftData
 
-private enum CrewSize: String, CaseIterable, Identifiable {
-    case one = "1 person"
-    case two = "2 people"
-
-    var id: String { rawValue }
-
-    var target: Decimal {
-        switch self {
-        case .one: 250
-        case .two: 450
-        }
-    }
-}
-
 struct RouteBuilderView: View {
     @Query private var customers: [Customer]
     @StateObject private var locationManager = LocationManager()
 
-    @State private var crewSize: CrewSize = .one
     @State private var selected: Set<ObjectIdentifier> = []
+    @State private var priceOverrides: [ObjectIdentifier: String] = [:]
     @State private var isBuildingRoute = false
-    @State private var orderedStops: [Customer] = []
 
     private var sortedCustomers: [Customer] {
         customers.sorted { ($0.nextDueDate ?? .distantPast) < ($1.nextDueDate ?? .distantPast) }
@@ -33,51 +18,33 @@ struct RouteBuilderView: View {
     }
 
     private var selectedTotal: Decimal {
-        selectedCustomers.reduce(0) { $0 + $1.price }
+        selectedCustomers.reduce(0) { $0 + effectivePrice(for: $1) }
     }
 
-    private var progressColor: Color {
-        let ratio = crewSize.target == 0 ? 0 : NSDecimalNumber(decimal: selectedTotal / crewSize.target).doubleValue
-        if ratio > 1.1 { return .red }
-        if ratio >= 0.85 { return .green }
-        return .orange
+    private var stopPrices: [ObjectIdentifier: Decimal] {
+        Dictionary(uniqueKeysWithValues: selectedCustomers.map { (ObjectIdentifier($0), effectivePrice(for: $0)) })
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Crew size", selection: $crewSize) {
-                    ForEach(CrewSize.allCases) { size in
-                        Text(size.rawValue).tag(size)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding()
-
                 HStack {
                     Text(selectedTotal, format: .currency(code: "GBP"))
                         .font(.title2.bold())
-                        .foregroundStyle(progressColor)
-                    Text("of \(crewSize.target, format: .currency(code: "GBP")) target")
-                        .foregroundStyle(.secondary)
                     Spacer()
                     Text("\(selectedCustomers.count) selected")
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding()
 
                 List {
                     ForEach(sortedCustomers) { customer in
-                        Button {
-                            toggle(customer)
-                        } label: {
-                            CustomerSelectionRow(
-                                customer: customer,
-                                isSelected: selected.contains(ObjectIdentifier(customer))
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        CustomerSelectionRow(
+                            customer: customer,
+                            isSelected: selected.contains(ObjectIdentifier(customer)),
+                            priceText: priceBinding(for: customer),
+                            onToggle: { toggle(customer) }
+                        )
                     }
                 }
                 .listStyle(.plain)
@@ -93,7 +60,7 @@ struct RouteBuilderView: View {
                 }
             }
             .navigationDestination(isPresented: $isBuildingRoute) {
-                RouteView(stops: selectedCustomers, startLocation: locationManager.currentLocation)
+                RouteView(stops: selectedCustomers, stopPrices: stopPrices, startLocation: locationManager.currentLocation)
             }
         }
     }
@@ -106,43 +73,73 @@ struct RouteBuilderView: View {
             selected.insert(id)
         }
     }
+
+    private func effectivePrice(for customer: Customer) -> Decimal {
+        let id = ObjectIdentifier(customer)
+        if let text = priceOverrides[id], let value = Decimal(string: text) {
+            return value
+        }
+        return customer.suggestedNextPrice
+    }
+
+    private func priceBinding(for customer: Customer) -> Binding<String> {
+        let id = ObjectIdentifier(customer)
+        return Binding(
+            get: { priceOverrides[id] ?? NSDecimalNumber(decimal: customer.suggestedNextPrice).stringValue },
+            set: { priceOverrides[id] = $0 }
+        )
+    }
 }
 
 private struct CustomerSelectionRow: View {
     let customer: Customer
     let isSelected: Bool
+    let priceText: Binding<String>
+    let onToggle: () -> Void
 
     var body: some View {
         HStack {
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                .font(.title3)
-
-            VStack(alignment: .leading) {
+            Button(action: onToggle) {
                 HStack {
-                    Text(customer.name)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    if customer.isDue {
-                        Text("Due")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.orange.opacity(0.2))
-                            .foregroundStyle(.orange)
-                            .clipShape(Capsule())
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        .font(.title3)
+
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text(customer.name)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            if customer.isDue {
+                                Text("Due")
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.orange.opacity(0.2))
+                                    .foregroundStyle(.orange)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        Text(customer.address)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
-                Text(customer.address)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            Text(customer.price, format: .currency(code: "GBP"))
-                .foregroundStyle(.secondary)
+            if isSelected {
+                TextField("Price", text: priceText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 70)
+            } else {
+                Text(customer.suggestedNextPrice, format: .currency(code: "GBP"))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }

@@ -5,15 +5,20 @@ import SwiftData
 final class CleanLog {
     var date: Date
     var amountCharged: Decimal
-    var paid: Bool
+    var amountPaid: Decimal
     var notes: String
     var customer: Customer?
 
-    init(date: Date, amountCharged: Decimal, paid: Bool, notes: String, customer: Customer? = nil) {
+    init(date: Date, amountCharged: Decimal, amountPaid: Decimal, notes: String, customer: Customer? = nil) {
         self.date = date
         self.amountCharged = amountCharged
-        self.paid = paid
+        self.amountPaid = amountPaid
         self.notes = notes
         self.customer = customer
+    }
+
+    /// Positive when the customer paid more than charged, negative when they paid less.
+    var paymentDifference: Decimal {
+        amountPaid - amountCharged
     }
 }

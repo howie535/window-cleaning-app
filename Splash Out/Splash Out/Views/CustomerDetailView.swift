@@ -12,12 +12,25 @@ struct CustomerDetailView: View {
         customer.cleanLogs.sorted { $0.date > $1.date }
     }
 
+    private var balanceDescription: String {
+        let balance = customer.outstandingBalance
+        let formatted = abs(balance).formatted(.currency(code: "GBP"))
+        return balance > 0 ? "In credit \(formatted)" : "Owed \(formatted)"
+    }
+
     var body: some View {
         List {
             Section {
                 LabeledContent("Address", value: customer.address)
                 LabeledContent("Phone", value: customer.phone)
                 LabeledContent("Price", value: customer.price, format: .currency(code: "GBP"))
+                if customer.outstandingBalance != 0 {
+                    LabeledContent("Balance") {
+                        Text(balanceDescription)
+                            .foregroundStyle(customer.outstandingBalance > 0 ? .blue : .orange)
+                    }
+                    LabeledContent("Next Price", value: customer.suggestedNextPrice, format: .currency(code: "GBP"))
+                }
                 LabeledContent("Frequency", value: "Every \(customer.frequencyWeeks) week\(customer.frequencyWeeks == 1 ? "" : "s")")
                 if let nextDueDate = customer.nextDueDate {
                     LabeledContent("Next Due") {
@@ -92,11 +105,24 @@ private struct CleanLogRow: View {
             Spacer()
             VStack(alignment: .trailing) {
                 Text(log.amountCharged, format: .currency(code: "GBP"))
-                Text(log.paid ? "Paid" : "Unpaid")
+                Text(paymentStatusText)
                     .font(.caption)
-                    .foregroundStyle(log.paid ? .green : .red)
+                    .foregroundStyle(paymentStatusColor)
             }
         }
+    }
+
+    private var paymentStatusText: String {
+        let difference = log.paymentDifference
+        if difference == 0 { return "Paid in full" }
+        let formatted = abs(difference).formatted(.currency(code: "GBP"))
+        return difference > 0 ? "Overpaid by \(formatted)" : "Underpaid by \(formatted)"
+    }
+
+    private var paymentStatusColor: Color {
+        let difference = log.paymentDifference
+        if difference == 0 { return .green }
+        return difference > 0 ? .blue : .orange
     }
 }
 

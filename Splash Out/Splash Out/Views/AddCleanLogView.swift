@@ -8,28 +8,40 @@ struct AddCleanLogView: View {
     let customer: Customer
 
     @State private var date: Date = .now
-    @State private var amountText: String
-    @State private var paid: Bool = true
+    @State private var amountChargedText: String
+    @State private var amountPaidText: String
     @State private var notes: String = ""
 
-    init(customer: Customer) {
+    init(customer: Customer, defaultAmount: Decimal? = nil) {
         self.customer = customer
-        _amountText = State(initialValue: NSDecimalNumber(decimal: customer.price).stringValue)
+        let charge = defaultAmount ?? customer.suggestedNextPrice
+        let chargeText = NSDecimalNumber(decimal: charge).stringValue
+        _amountChargedText = State(initialValue: chargeText)
+        _amountPaidText = State(initialValue: chargeText)
     }
 
+    private var amountCharged: Decimal? { Decimal(string: amountChargedText) }
+    private var amountPaid: Decimal? { Decimal(string: amountPaidText) }
+
     private var isValid: Bool {
-        Decimal(string: amountText) != nil
+        amountCharged != nil && amountPaid != nil
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                DatePicker("Date", selection: $date, displayedComponents: .date)
-                TextField("Amount charged", text: $amountText)
-                    .keyboardType(.decimalPad)
-                Toggle("Paid", isOn: $paid)
-                TextField("Notes", text: $notes, axis: .vertical)
-                    .lineLimit(2...5)
+                Section {
+                    DatePicker("Date", selection: $date, displayedComponents: .date)
+                    TextField("Amount charged", text: $amountChargedText)
+                        .keyboardType(.decimalPad)
+                    TextField("Amount paid", text: $amountPaidText)
+                        .keyboardType(.decimalPad)
+                    paymentStatusRow
+                }
+                Section("Notes") {
+                    TextField("Reason for a different price, if any", text: $notes, axis: .vertical)
+                        .lineLimit(2...5)
+                }
             }
             .navigationTitle("Log a Clean")
             .navigationBarTitleDisplayMode(.inline)
@@ -45,11 +57,28 @@ struct AddCleanLogView: View {
         }
     }
 
+    @ViewBuilder
+    private var paymentStatusRow: some View {
+        if let amountCharged, let amountPaid {
+            let difference = amountPaid - amountCharged
+            if difference == 0 {
+                Label("Paid in full", systemImage: "checkmark.circle")
+                    .foregroundStyle(.green)
+            } else if difference > 0 {
+                Label("Overpaid by \(difference, format: .currency(code: "GBP"))", systemImage: "arrow.up.circle")
+                    .foregroundStyle(.blue)
+            } else {
+                Label("Underpaid by \(-difference, format: .currency(code: "GBP"))", systemImage: "arrow.down.circle")
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
     private func save() {
         let log = CleanLog(
             date: date,
-            amountCharged: Decimal(string: amountText) ?? customer.price,
-            paid: paid,
+            amountCharged: amountCharged ?? customer.suggestedNextPrice,
+            amountPaid: amountPaid ?? customer.suggestedNextPrice,
             notes: notes,
             customer: customer
         )

@@ -55,4 +55,15 @@ final class Customer {
     var whatsAppDigits: String {
         phone.filter(\.isNumber)
     }
+
+    /// Running total of over/underpayment across all logged cleans. Positive means the customer
+    /// is in credit (they've paid more than charged overall); negative means they owe money.
+    var outstandingBalance: Decimal {
+        cleanLogs.reduce(0) { $0 + $1.paymentDifference }
+    }
+
+    /// The regular price adjusted to claw back a credit or recoup a shortfall from past cleans.
+    var suggestedNextPrice: Decimal {
+        max(0, price - outstandingBalance)
+    }
 }
