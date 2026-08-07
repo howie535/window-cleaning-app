@@ -12,7 +12,7 @@ import SwiftData
 struct Splash_OutApp: App {
     var body: some Scene {
         WindowGroup {
-            CustomerListView()
+            RootTabView()
         }
         .modelContainer(for: Customer.self)
     }

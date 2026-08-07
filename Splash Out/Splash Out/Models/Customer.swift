@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import SwiftData
 
@@ -9,6 +10,8 @@ final class Customer {
     var price: Decimal
     var frequencyWeeks: Int
     var accessNotes: String
+    var latitude: Double?
+    var longitude: Double?
 
     @Relationship(deleteRule: .cascade, inverse: \CleanLog.customer)
     var cleanLogs: [CleanLog] = []
@@ -27,6 +30,11 @@ final class Customer {
         self.price = price
         self.frequencyWeeks = frequencyWeeks
         self.accessNotes = accessNotes
+    }
+
+    var coordinate: CLLocationCoordinate2D? {
+        guard let latitude, let longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
     var lastCleanDate: Date? {

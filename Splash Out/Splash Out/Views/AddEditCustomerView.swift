@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 struct AddEditCustomerView: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,8 +12,9 @@ struct AddEditCustomerView: View {
     @State private var address: String = ""
     @State private var phone: String = ""
     @State private var priceText: String = ""
-    @State private var frequencyWeeks: Int = 4
+    @State private var frequencyWeeks: Int = 5
     @State private var accessNotes: String = ""
+    @State private var isShowingContactPicker = false
 
     private var isEditing: Bool { customer != nil }
 
@@ -23,6 +25,13 @@ struct AddEditCustomerView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button {
+                        isShowingContactPicker = true
+                    } label: {
+                        Label("Import from Contacts", systemImage: "person.crop.circle.badge.plus")
+                    }
+                }
                 Section("Customer") {
                     TextField("Name", text: $name)
                     TextField("Address", text: $address, axis: .vertical)
@@ -51,6 +60,15 @@ struct AddEditCustomerView: View {
                 }
             }
             .onAppear(perform: populateFieldsIfEditing)
+            .sheet(isPresented: $isShowingContactPicker) {
+                ContactPicker { contact in
+                    name = contact.splashOutFullName
+                    let digits = contact.splashOutPhoneDigits
+                    if !digits.isEmpty { phone = digits }
+                    let formattedAddress = contact.splashOutFormattedAddress
+                    if !formattedAddress.isEmpty { address = formattedAddress }
+                }
+            }
         }
     }
 
@@ -66,6 +84,8 @@ struct AddEditCustomerView: View {
 
     private func save() {
         let price = Decimal(string: priceText) ?? 0
+        let addressChanged = address != customer?.address
+        let target: Customer
 
         if let customer {
             customer.name = name
@@ -74,6 +94,7 @@ struct AddEditCustomerView: View {
             customer.price = price
             customer.frequencyWeeks = frequencyWeeks
             customer.accessNotes = accessNotes
+            target = customer
         } else {
             let newCustomer = Customer(
                 name: name,
@@ -84,6 +105,15 @@ struct AddEditCustomerView: View {
                 accessNotes: accessNotes
             )
             modelContext.insert(newCustomer)
+            target = newCustomer
+        }
+
+        if addressChanged {
+            Task {
+                let coordinate = await Geocoding.coordinate(for: target.address)
+                target.latitude = coordinate?.latitude
+                target.longitude = coordinate?.longitude
+            }
         }
 
         dismiss()
