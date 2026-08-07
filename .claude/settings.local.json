@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcode-select -p)",
+      "Read(//Applications/**)",
+      "Bash(xcodebuild -version)",
+      "Bash(git init *)",
+      "Bash(sudo -n xcodebuild -checkFirstLaunchStatus)",
+      "Bash(xcodebuild -list)",
+      "Bash(xcrun simctl *)",
+      "Bash(xcodebuild -downloadPlatform iOS)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(xcodebuild -checkFirstLaunchStatus)",
+      "Read(//Library/Developer/CoreSimulator/Volumes/**)",
+      "Read(//Library/Developer/CoreSimulator/Profiles/**)",
+      "Read(//Library/Developer/CoreSimulator/**)",
+      "Read(//Users/howie/Library/Developer/CoreSimulator/**)",
+      "Bash(launchctl list *)",
+      "Bash(pkill -9 -f com.apple.CoreSimulator.CoreSimulatorService)"
+    ]
+  }
+}
