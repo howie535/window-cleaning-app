@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct Splash_OutApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            CustomerListView()
         }
+        .modelContainer(for: Customer.self)
     }
 }
