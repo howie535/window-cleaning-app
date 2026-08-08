@@ -9,6 +9,7 @@ struct AddCleanLogView: View {
 
     @State private var date: Date = .now
     @State private var amountChargedText: String
+    @State private var hasDifferentAmountPaid = false
     @State private var amountPaidText: String
     @State private var notes: String = ""
 
@@ -21,7 +22,9 @@ struct AddCleanLogView: View {
     }
 
     private var amountCharged: Decimal? { Decimal(string: amountChargedText) }
-    private var amountPaid: Decimal? { Decimal(string: amountPaidText) }
+    private var amountPaid: Decimal? {
+        hasDifferentAmountPaid ? Decimal(string: amountPaidText) : amountCharged
+    }
 
     private var isValid: Bool {
         amountCharged != nil && amountPaid != nil
@@ -32,15 +35,28 @@ struct AddCleanLogView: View {
             Form {
                 Section {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
-                    TextField("Amount charged", text: $amountChargedText)
-                        .keyboardType(.decimalPad)
-                    TextField("Amount paid", text: $amountPaidText)
-                        .keyboardType(.decimalPad)
-                    paymentStatusRow
+                    LabeledField(label: "Amount Charged") {
+                        TextField("0.00", text: $amountChargedText)
+                            .keyboardType(.decimalPad)
+                    }
                 }
-                Section("Notes") {
-                    TextField("Reason for a different price, if any", text: $notes, axis: .vertical)
-                        .lineLimit(2...5)
+                Section {
+                    Toggle("Different amount paid", isOn: $hasDifferentAmountPaid.animation())
+                    if hasDifferentAmountPaid {
+                        LabeledField(label: "Amount Paid") {
+                            TextField("0.00", text: $amountPaidText)
+                                .keyboardType(.decimalPad)
+                        }
+                        paymentStatusRow
+                    }
+                } footer: {
+                    Text("Most cleans are paid in full. Turn this on if the customer paid more or less than charged.")
+                }
+                Section {
+                    LabeledField(label: "Notes") {
+                        TextField("Reason for a different price, if any", text: $notes, axis: .vertical)
+                            .lineLimit(2...5)
+                    }
                 }
             }
             .navigationTitle("Log a Clean")
@@ -78,7 +94,7 @@ struct AddCleanLogView: View {
         let log = CleanLog(
             date: date,
             amountCharged: amountCharged ?? customer.suggestedNextPrice,
-            amountPaid: amountPaid ?? customer.suggestedNextPrice,
+            amountPaid: amountPaid ?? amountCharged ?? customer.suggestedNextPrice,
             notes: notes,
             customer: customer
         )

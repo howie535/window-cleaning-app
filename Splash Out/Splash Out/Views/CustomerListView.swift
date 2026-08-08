@@ -1,11 +1,21 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct CustomerListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Customer.name) private var customers: [Customer]
 
     @State private var isShowingAddCustomer = false
+    @State private var isShowingFileImporter = false
+    @State private var pendingImport: PendingImport?
+    @State private var importErrorMessage: String?
+
+    private struct PendingImport: Identifiable {
+        let id = UUID()
+        let headers: [String]
+        let rows: [[String]]
+    }
 
     var body: some View {
         NavigationStack {
@@ -32,6 +42,9 @@ struct CustomerListView: View {
                             isShowingAddCustomer = true
                         }
                         .buttonStyle(.borderedProminent)
+                        Button("Import from Spreadsheet") {
+                            isShowingFileImporter = true
+                        }
                     }
                 }
             }
@@ -43,9 +56,32 @@ struct CustomerListView: View {
                         Label("Add Customer", systemImage: "plus")
                     }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isShowingFileImporter = true
+                    } label: {
+                        Label("Import from Spreadsheet", systemImage: "square.and.arrow.down")
+                    }
+                }
             }
             .sheet(isPresented: $isShowingAddCustomer) {
                 AddEditCustomerView(customer: nil)
+            }
+            .sheet(item: $pendingImport) { pending in
+                ImportCustomersView(headers: pending.headers, rows: pending.rows)
+            }
+            .fileImporter(
+                isPresented: $isShowingFileImporter,
+                allowedContentTypes: [.commaSeparatedText, .plainText],
+                onCompletion: handleFileImport
+            )
+            .alert("Couldn't Import File", isPresented: Binding(
+                get: { importErrorMessage != nil },
+                set: { if !$0 { importErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(importErrorMessage ?? "")
             }
         }
     }
@@ -53,6 +89,32 @@ struct CustomerListView: View {
     private func deleteCustomers(at offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(customers[index])
+        }
+    }
+
+    private func handleFileImport(_ result: Result<URL, Error>) {
+        switch result {
+        case .failure:
+            importErrorMessage = "Couldn't open that file. Try picking it again."
+        case .success(let url):
+            guard url.startAccessingSecurityScopedResource() else {
+                importErrorMessage = "Couldn't access that file."
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+
+            guard let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) else {
+                importErrorMessage = "Couldn't read that file as text. Make sure it's a CSV export."
+                return
+            }
+
+            let parsed = CSVParser.parse(text)
+            guard let firstRow = parsed.first, !parsed.isEmpty else {
+                importErrorMessage = "That file appears to be empty."
+                return
+            }
+
+            pendingImport = PendingImport(headers: firstRow, rows: Array(parsed.dropFirst()))
         }
     }
 }

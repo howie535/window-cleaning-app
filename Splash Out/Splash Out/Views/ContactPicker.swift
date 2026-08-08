@@ -35,7 +35,8 @@ extension CNContact {
     }
 
     var splashOutPhoneDigits: String {
-        phoneNumbers.first?.value.stringValue.filter(\.isNumber) ?? ""
+        guard let raw = phoneNumbers.first?.value.stringValue else { return "" }
+        return UKPhoneNumber.toNationalFormat(raw)
     }
 
     var splashOutFormattedAddress: String {

@@ -33,14 +33,22 @@ struct AddEditCustomerView: View {
                     }
                 }
                 Section("Customer") {
-                    TextField("Name", text: $name)
-                    TextField("Address", text: $address, axis: .vertical)
-                    TextField("Phone (with country code, e.g. 447700900123)", text: $phone)
-                        .keyboardType(.phonePad)
+                    LabeledField(label: "Name") {
+                        TextField("", text: $name)
+                    }
+                    LabeledField(label: "Address") {
+                        TextField("", text: $address, axis: .vertical)
+                    }
+                    LabeledField(label: "Phone") {
+                        TextField("07700 900123", text: $phone)
+                            .keyboardType(.phonePad)
+                    }
                 }
                 Section("Cleaning") {
-                    TextField("Price per clean", text: $priceText)
-                        .keyboardType(.decimalPad)
+                    LabeledField(label: "Price per Clean") {
+                        TextField("0.00", text: $priceText)
+                            .keyboardType(.decimalPad)
+                    }
                     Stepper("Every \(frequencyWeeks) week\(frequencyWeeks == 1 ? "" : "s")", value: $frequencyWeeks, in: 1...52)
                 }
                 Section("Access Notes") {

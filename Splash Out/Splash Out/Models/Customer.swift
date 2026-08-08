@@ -51,9 +51,9 @@ final class Customer {
         return nextDueDate <= Date()
     }
 
-    /// Digits-only phone number, required by WhatsApp's wa.me link format (country code + number, no symbols).
+    /// International-format digits, required by WhatsApp's wa.me link (country code, no leading 0).
     var whatsAppDigits: String {
-        phone.filter(\.isNumber)
+        UKPhoneNumber.toWhatsAppDigits(phone)
     }
 
     /// Running total of over/underpayment across all logged cleans. Positive means the customer
