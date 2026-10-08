@@ -6,16 +6,24 @@ struct CustomerDetailView: View {
     @Bindable var customer: Customer
 
     @State private var isShowingEdit = false
-    @State private var isShowingLogClean = false
+    @State private var isShowingPayment = false
 
     private var sortedLogs: [Visit] {
         customer.allVisits.sorted { $0.date > $1.date }
     }
 
+    private var sortedPriceChanges: [PriceChange] {
+        (customer.priceChanges ?? []).sorted { $0.date > $1.date }
+    }
+
+    private var owed: (amount: Decimal, cleans: Int) {
+        RoundMetrics.moneyOwed([customer])
+    }
+
     private var balanceDescription: String {
         let balance = customer.outstandingBalance
         let formatted = abs(balance).formatted(.currency(code: "GBP"))
-        return balance > 0 ? "In credit \(formatted)" : "Owed \(formatted)"
+        return balance > 0 ? "In credit \(formatted)" : "Short by \(formatted)"
     }
 
     var body: some View {
@@ -35,6 +43,12 @@ struct CustomerDetailView: View {
                     LabeledContent("Round", value: [customer.round, customer.area].filter { !$0.isEmpty }.joined(separator: ", "))
                 }
                 LabeledContent("Status", value: customer.status.label + (customer.everyOther ? " (every other)" : ""))
+                if customer.frontOnly {
+                    LabeledContent("Front only", value: "Yes")
+                }
+                if let method = customer.payMethod {
+                    LabeledContent("Pays by", value: method.label)
+                }
                 if let lastClean = customer.lastCleanDate {
                     LabeledContent("Last Clean") {
                         Text(lastClean, style: .date)
@@ -45,18 +59,47 @@ struct CustomerDetailView: View {
                 }
             }
 
-            Section {
-                Button {
-                    isShowingLogClean = true
-                } label: {
-                    Label("Log a Clean", systemImage: "checkmark.circle")
+            if owed.cleans > 0 {
+                Section("Owed") {
+                    LabeledContent("\(owed.cleans) clean\(owed.cleans == 1 ? "" : "s")") {
+                        Text(owed.amount, format: .currency(code: "GBP"))
+                            .font(.headline)
+                            .foregroundStyle(.red)
+                    }
+                    Button {
+                        isShowingPayment = true
+                    } label: {
+                        Label("Record payment...", systemImage: "sterlingsign.circle")
+                            .font(.title3)
+                            .padding(.vertical, 6)
+                    }
                 }
-                WhatsAppButton(customer: customer)
             }
 
-            Section("Clean History") {
+            Section("Log") {
+                VisitQuickActions(customer: customer)
+            }
+
+            Section("Contact") {
+                ContactButton(customer: customer)
+            }
+
+            if !sortedPriceChanges.isEmpty {
+                Section("Price history") {
+                    ForEach(sortedPriceChanges) { change in
+                        HStack {
+                            Text(change.date, format: .dateTime.day().month().year())
+                            Spacer()
+                            Text("\(change.oldPrice.formatted(.currency(code: "GBP"))) to \(change.newPrice.formatted(.currency(code: "GBP")))")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Section("History") {
                 if sortedLogs.isEmpty {
-                    Text("No cleans logged yet.")
+                    Text("No visits yet.")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedLogs) { log in
@@ -76,14 +119,36 @@ struct CustomerDetailView: View {
         .sheet(isPresented: $isShowingEdit) {
             AddEditCustomerView(customer: customer)
         }
-        .sheet(isPresented: $isShowingLogClean) {
-            AddCleanLogView(customer: customer)
+        .sheet(isPresented: $isShowingPayment) {
+            RecordPaymentView(customer: customer)
         }
     }
 
     private func deleteLogs(at offsets: IndexSet) {
         for index in offsets {
-            modelContext.delete(sortedLogs[index])
+            VisitLogger.remove(sortedLogs[index], in: modelContext)
+        }
+    }
+}
+
+/// WhatsApp for most customers; a phone call for those marked "ring".
+struct ContactButton: View {
+    let customer: Customer
+
+    var body: some View {
+        if customer.contact == .ring {
+            if let url = URL(string: "tel:\(customer.phone.filter(\.isNumber))"), !customer.phone.isEmpty {
+                Link(destination: url) {
+                    Label("Ring \(customer.name)", systemImage: "phone")
+                        .font(.title3)
+                        .padding(.vertical, 6)
+                }
+            } else {
+                Label("Ring (no number yet)", systemImage: "phone")
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            WhatsAppButton(customer: customer)
         }
     }
 }

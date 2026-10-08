@@ -46,7 +46,8 @@ enum ExportService {
                     paid: Money.double(visit.paid),
                     paidDate: visit.paidDate.map(RoundCalendar.dayString),
                     note: visit.note,
-                    dateEstimated: visit.dateEstimated ? true : nil
+                    dateEstimated: visit.dateEstimated ? true : nil,
+                    creditApplied: visit.creditApplied == 0 ? nil : Money.double(visit.creditApplied)
                 )
             }
             return RoundFile.CustomerRecord(

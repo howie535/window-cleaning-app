@@ -88,7 +88,8 @@ enum ImportService {
                     paid: Money.decimal(visitRecord.paid),
                     paidDate: visitRecord.paidDate.flatMap(RoundCalendar.parseDay),
                     note: visitRecord.note,
-                    dateEstimated: visitRecord.dateEstimated ?? false
+                    dateEstimated: visitRecord.dateEstimated ?? false,
+                    creditApplied: Money.decimal(visitRecord.creditApplied ?? 0)
                 )
                 context.insert(visit)
                 visit.customer = customer

@@ -67,6 +67,7 @@ struct RoundFile: Codable {
         var paidDate: String?
         var note: String?
         var dateEstimated: Bool?
+        var creditApplied: Double?
     }
 
     struct DiaryRecord: Codable {

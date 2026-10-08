@@ -26,6 +26,10 @@ enum RoundCalendar {
         london.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
+    static func startOfDay(_ date: Date = Date()) -> Date {
+        london.startOfDay(for: date)
+    }
+
     /// "2026-04-21" -> start of that day in London. Nil if it isn't a valid date.
     static func parseDay(_ string: String) -> Date? {
         dayFormatter.date(from: string)

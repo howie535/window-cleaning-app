@@ -13,6 +13,9 @@ final class Visit {
     var paid: Decimal = 0
     var paidDate: Date?
     var note: String?
+    /// Customer credit (+) or debt (-) netted into this charge: listPrice minus the suggested price used.
+    /// Lets the running balance use up a credit once it has been taken off a charge.
+    var creditApplied: Decimal = 0
     /// Skipped / not-due dates in the workbook are estimates (it only recorded a dash).
     var dateEstimated: Bool = false
     var customer: Customer?
@@ -26,6 +29,7 @@ final class Visit {
         paidDate: Date? = nil,
         note: String? = nil,
         dateEstimated: Bool = false,
+        creditApplied: Decimal = 0,
         customer: Customer? = nil
     ) {
         self.date = date
@@ -36,6 +40,7 @@ final class Visit {
         self.paidDate = paidDate
         self.note = note
         self.dateEstimated = dateEstimated
+        self.creditApplied = creditApplied
         self.customer = customer
     }
 
@@ -52,5 +57,10 @@ final class Visit {
     /// Positive when the customer paid more than charged, negative when less.
     var paymentDifference: Decimal {
         paid - charged
+    }
+
+    /// What this visit adds to the customer's running balance (see Customer.outstandingBalance).
+    var balanceEffect: Decimal {
+        paid - charged - creditApplied
     }
 }

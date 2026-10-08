@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct RootTabView: View {
+    @State private var undoCenter = UndoCenter()
+
     var body: some View {
         TabView {
             CustomerListView()
@@ -18,6 +20,12 @@ struct RootTabView: View {
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
+        }
+        .environment(undoCenter)
+        .overlay(alignment: .bottom) {
+            UndoBanner(undoCenter: undoCenter)
+                .padding(.bottom, 90) // clears the tab bar
+                .animation(.default, value: undoCenter.entry?.id)
         }
     }
 }

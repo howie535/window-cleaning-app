@@ -8,6 +8,8 @@ struct AddEditCustomerView: View {
 
     let customer: Customer?
 
+    @Query(sort: \Customer.sequence) private var allCustomers: [Customer]
+
     @State private var name: String = ""
     @State private var address: String = ""
     @State private var phone: String = ""
@@ -15,6 +17,13 @@ struct AddEditCustomerView: View {
     @State private var round: String = ""
     @State private var area: String = ""
     @State private var notesText: String = ""
+    @State private var status: CustomerStatus = .notStarted
+    @State private var everyOther = false
+    @State private var frontOnly = false
+    @State private var contact: ContactMethod = .whatsapp
+    @State private var payMethod: PayMethod?
+    @State private var placeAfter: Customer?
+    @State private var isShowingPlace = false
     @State private var isShowingContactPicker = false
 
     private var isEditing: Bool { customer != nil }
@@ -57,6 +66,36 @@ struct AddEditCustomerView: View {
                             .keyboardType(.decimalPad)
                     }
                 }
+                Section("Round") {
+                    Picker("Status", selection: $status) {
+                        ForEach(CustomerStatus.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.navigationLink)
+                    Toggle("Every other clean", isOn: $everyOther)
+                    Toggle("Front only", isOn: $frontOnly)
+                    Picker("Contact by", selection: $contact) {
+                        Text("WhatsApp").tag(ContactMethod.whatsapp)
+                        Text("Ring").tag(ContactMethod.ring)
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Pays by", selection: $payMethod) {
+                        Text("Not set").tag(PayMethod?.none)
+                        ForEach(PayMethod.allCases) { Text($0.label).tag(PayMethod?.some($0)) }
+                    }
+                    .pickerStyle(.navigationLink)
+                    if !isEditing {
+                        Button {
+                            isShowingPlace = true
+                        } label: {
+                            HStack {
+                                Text("Place in round").foregroundStyle(.primary)
+                                Spacer()
+                                Text(placeAfter.map { "After \($0.name)" } ?? "At the end")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
                 Section("Notes") {
                     TextField("Gate code, key location, pets, parking, etc. One note per line.", text: $notesText, axis: .vertical)
                         .lineLimit(3...6)
@@ -74,6 +113,9 @@ struct AddEditCustomerView: View {
                 }
             }
             .onAppear(perform: populateFieldsIfEditing)
+            .sheet(isPresented: $isShowingPlace) {
+                PlaceInRoundView(customers: allCustomers, placeAfter: $placeAfter)
+            }
             .sheet(isPresented: $isShowingContactPicker) {
                 ContactPicker { contact in
                     name = contact.splashOutFullName
@@ -95,6 +137,11 @@ struct AddEditCustomerView: View {
         round = customer.round
         area = customer.area
         notesText = customer.notesText
+        status = customer.status
+        everyOther = customer.everyOther
+        frontOnly = customer.frontOnly
+        contact = customer.contact
+        payMethod = customer.payMethod
     }
 
     private func save() {
@@ -114,6 +161,11 @@ struct AddEditCustomerView: View {
             customer.round = round
             customer.area = area
             customer.notesText = notesText
+            customer.status = status
+            customer.everyOther = everyOther
+            customer.frontOnly = frontOnly
+            customer.contact = contact
+            customer.payMethod = payMethod
             target = customer
         } else {
             let newCustomer = Customer(
@@ -121,12 +173,17 @@ struct AddEditCustomerView: View {
                 address: address,
                 phone: phone,
                 price: price,
-                sequence: nextSequence(),
                 round: round,
-                area: area
+                area: area,
+                status: status
             )
             newCustomer.notesText = notesText
+            newCustomer.everyOther = everyOther
+            newCustomer.frontOnly = frontOnly
+            newCustomer.contact = contact
+            newCustomer.payMethod = payMethod
             modelContext.insert(newCustomer)
+            RoundOrder.place(newCustomer, after: placeAfter, among: allCustomers)
             target = newCustomer
         }
 
@@ -139,13 +196,6 @@ struct AddEditCustomerView: View {
         }
 
         dismiss()
-    }
-
-    /// New customers go at the end of the round until placed elsewhere.
-    private func nextSequence() -> Int {
-        var descriptor = FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence, order: .reverse)])
-        descriptor.fetchLimit = 1
-        return ((try? modelContext.fetch(descriptor))?.first?.sequence ?? 0) + 1
     }
 }
 

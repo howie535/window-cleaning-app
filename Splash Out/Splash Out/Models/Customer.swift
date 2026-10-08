@@ -96,7 +96,7 @@ final class Customer {
     var outstandingBalance: Decimal {
         allVisits
             .filter { $0.kind == .cleaned && $0.paid > 0 }
-            .reduce(0) { $0 + $1.paymentDifference }
+            .reduce(0) { $0 + $1.balanceEffect }
     }
 
     /// The regular price adjusted to claw back a credit or recoup a shortfall from past cleans.

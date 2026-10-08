@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct CustomerListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(UndoCenter.self) private var undoCenter
     @Query(sort: \Customer.sequence) private var customers: [Customer]
 
     @State private var isShowingAddCustomer = false
@@ -24,8 +25,23 @@ struct CustomerListView: View {
                     NavigationLink(value: customer) {
                         CustomerRow(customer: customer)
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button { log(.cleanedPaid, for: customer) } label: {
+                            Label("Paid", systemImage: "checkmark.circle.fill")
+                        }
+                        .tint(.green)
+                        Button { log(.cleanedNotPaid, for: customer) } label: {
+                            Label("Not paid", systemImage: "clock.badge.exclamationmark")
+                        }
+                        .tint(.orange)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button { log(.skipped, for: customer) } label: {
+                            Label("Skipped", systemImage: "forward.circle")
+                        }
+                        .tint(.red)
+                    }
                 }
-                .onDelete(perform: deleteCustomers)
             }
             .navigationTitle("Customers")
             .navigationDestination(for: Customer.self) { customer in
@@ -86,10 +102,9 @@ struct CustomerListView: View {
         }
     }
 
-    private func deleteCustomers(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(customers[index])
-        }
+    private func log(_ action: VisitLogger.Action, for customer: Customer) {
+        let undo = VisitLogger.perform(action, for: customer, in: modelContext)
+        undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
     }
 
     private func handleFileImport(_ result: Result<URL, Error>) {

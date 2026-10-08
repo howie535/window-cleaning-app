@@ -4,6 +4,7 @@ import SwiftData
 struct AddCleanLogView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(UndoCenter.self) private var undoCenter
 
     let customer: Customer
 
@@ -93,17 +94,15 @@ struct AddCleanLogView: View {
     private func save() {
         let charged = amountCharged ?? customer.suggestedNextPrice
         let paid = amountPaid ?? charged
-        let log = Visit(
+        let undo = VisitLogger.logCustomClean(
+            for: customer,
             date: date,
-            kind: .cleaned,
-            listPrice: customer.price,
             charged: charged,
             paid: paid,
-            paidDate: paid > 0 ? date : nil,
             note: notes.isEmpty ? nil : notes,
-            customer: customer
+            in: modelContext
         )
-        modelContext.insert(log)
+        undoCenter.offer("\(customer.name): clean logged", undo: undo)
         dismiss()
     }
 }
