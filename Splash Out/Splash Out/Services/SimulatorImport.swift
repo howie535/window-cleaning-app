@@ -31,6 +31,14 @@ enum SimulatorImport {
                 try report.write(toFile: reportPath, atomically: true, encoding: .utf8)
             }
 
+            if let planPath = value(after: "-PlanFile") {
+                // `-Today yyyy-MM-dd` pins the date so the plan can be compared with the workbook's saved one.
+                let todayText = arguments.firstIndex(of: "-Today").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+                let today = todayText.flatMap(RoundCalendar.parseDay) ?? RoundCalendar.startOfDay()
+                try PlanDump.write(to: planPath, today: today, in: context)
+                print("PLAN OK")
+            }
+
             if let exportPath = value(after: "-ExportFile") {
                 try ExportService.data(from: context).write(to: URL(fileURLWithPath: exportPath), options: .atomic)
                 print("EXPORT OK")

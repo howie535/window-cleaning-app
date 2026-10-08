@@ -11,6 +11,16 @@ struct RootTabView: View {
                     Label("Customers", systemImage: "person.2")
                 }
 
+            NextUpView()
+                .tabItem {
+                    Label("Round", systemImage: "list.bullet.clipboard")
+                }
+
+            MoneyOwedView()
+                .tabItem {
+                    Label("Owed", systemImage: "sterlingsign.circle")
+                }
+
             RouteBuilderView()
                 .tabItem {
                     Label("Route", systemImage: "map")

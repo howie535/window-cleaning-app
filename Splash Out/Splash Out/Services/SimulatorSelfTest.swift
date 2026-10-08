@@ -138,6 +138,36 @@ enum SimulatorSelfTest {
         RoundOrder.place(atEnd, after: nil, among: all + [newcomer, atEnd])
         check("placing at the end uses the next number", atEnd.sequence == (all + [newcomer]).map(\.sequence).max()! + 1)
 
+        // Next Up reacts to logging
+        let crews = try context.fetch(FetchDescriptor<Crew>())
+        let workDays = try context.fetch(FetchDescriptor<WorkDay>())
+        let settings = try context.fetch(FetchDescriptor<AppSettings>()).first
+        func plan() -> RoundPlanner.Plan {
+            RoundPlanner.plan(customers: all, settings: settings, crews: crews, workDays: workDays, today: today)
+        }
+        func listed(_ customer: Customer) -> Bool {
+            let p = plan()
+            return p.days.contains { $0.customers.contains { $0 === customer } } || p.later.contains { $0 === customer }
+        }
+        if let dueNow = plan().days.first?.customers.first(where: { !$0.everyOther }) {
+            check("a customer on the round is listed", listed(dueNow))
+            let skip = VisitLogger.perform(.skipped, for: dueNow, in: context)
+            check("skipping keeps them on the round", listed(dueNow))
+            skip()
+            let done = VisitLogger.perform(.cleanedPaid, for: dueNow, in: context)
+            check("cleaning them takes them off the round", !listed(dueNow))
+            check("the round now carries on from them", plan().pointer === dueNow)
+            done()
+            check("undo puts them back on the round", listed(dueNow))
+        } else {
+            check("found a customer on today's round", false)
+        }
+        if let eo = all.first(where: { $0.everyOther && $0.status == .active && listed($0) }) {
+            let off = VisitLogger.perform(.notDue, for: eo, in: context)
+            check("'not due' takes an every-other customer off the round", !listed(eo))
+            off()
+        }
+
         lines.append(failures == 0 ? "SELFTEST: ALL \(lines.count) CHECKS PASSED" : "SELFTEST: \(failures) FAILED")
         return lines.joined(separator: "\n")
     }

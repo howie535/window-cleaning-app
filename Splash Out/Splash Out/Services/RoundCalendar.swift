@@ -19,6 +19,9 @@ enum RoundCalendar {
     }
 
     private static let dayFormatter = formatter("yyyy-MM-dd")
+    private static let shortFormatter = formatter("d-MMM")
+    private static let shortYearFormatter = formatter("d-MMM-yy")
+    private static let weekdayFormatter = formatter("EEE d-MMM")
     private static let timestampFormatter = formatter("yyyy-MM-dd'T'HH:mm:ss")
     private static let fileStampFormatter = formatter("yyyyMMdd-HHmmss")
 
@@ -34,6 +37,13 @@ enum RoundCalendar {
     static func parseDay(_ string: String) -> Date? {
         dayFormatter.date(from: string)
     }
+
+    /// "6-Oct"
+    static func short(_ date: Date) -> String { shortFormatter.string(from: date) }
+    /// "6-Oct-26", for where the year matters.
+    static func shortWithYear(_ date: Date) -> String { shortYearFormatter.string(from: date) }
+    /// "Tue 6-Oct"
+    static func weekdayShort(_ date: Date) -> String { weekdayFormatter.string(from: date) }
 
     static func dayString(_ date: Date) -> String {
         dayFormatter.string(from: date)

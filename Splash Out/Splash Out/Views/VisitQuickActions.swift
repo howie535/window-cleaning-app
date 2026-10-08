@@ -5,6 +5,8 @@ import SwiftData
 /// Meant to sit inside a List section.
 struct VisitQuickActions: View {
     let customer: Customer
+    /// Called after an action is logged, e.g. so a sheet can close itself.
+    var onLogged: () -> Void = {}
 
     @Environment(\.modelContext) private var modelContext
     @Environment(UndoCenter.self) private var undoCenter
@@ -36,7 +38,7 @@ struct VisitQuickActions: View {
             }
         }
         .sheet(isPresented: $isShowingExtra) {
-            ExtraCleanSheet(customer: customer)
+            ExtraCleanSheet(customer: customer, onSaved: onLogged)
         }
         .sheet(isPresented: $isShowingCustom) {
             AddCleanLogView(customer: customer)
@@ -64,12 +66,14 @@ struct VisitQuickActions: View {
     private func run(_ action: VisitLogger.Action) {
         let undo = VisitLogger.perform(action, for: customer, in: modelContext)
         undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        onLogged()
     }
 }
 
 /// "Cleaned + extra": asks for the extra amount (negative for less, e.g. front only) and a note.
 struct ExtraCleanSheet: View {
     let customer: Customer
+    var onSaved: () -> Void = {}
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -124,5 +128,6 @@ struct ExtraCleanSheet: View {
         let undo = VisitLogger.perform(action, for: customer, in: modelContext)
         undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         dismiss()
+        onSaved()
     }
 }
