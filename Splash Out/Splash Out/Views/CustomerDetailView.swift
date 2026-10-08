@@ -8,8 +8,8 @@ struct CustomerDetailView: View {
     @State private var isShowingEdit = false
     @State private var isShowingLogClean = false
 
-    private var sortedLogs: [CleanLog] {
-        customer.cleanLogs.sorted { $0.date > $1.date }
+    private var sortedLogs: [Visit] {
+        customer.allVisits.sorted { $0.date > $1.date }
     }
 
     private var balanceDescription: String {
@@ -31,18 +31,17 @@ struct CustomerDetailView: View {
                     }
                     LabeledContent("Next Price", value: customer.suggestedNextPrice, format: .currency(code: "GBP"))
                 }
-                LabeledContent("Frequency", value: "Every \(customer.frequencyWeeks) week\(customer.frequencyWeeks == 1 ? "" : "s")")
-                if let nextDueDate = customer.nextDueDate {
-                    LabeledContent("Next Due") {
-                        Text(nextDueDate, style: .date)
-                            .foregroundStyle(customer.isDue ? .orange : .primary)
+                if !customer.round.isEmpty || !customer.area.isEmpty {
+                    LabeledContent("Round", value: [customer.round, customer.area].filter { !$0.isEmpty }.joined(separator: ", "))
+                }
+                LabeledContent("Status", value: customer.status.label + (customer.everyOther ? " (every other)" : ""))
+                if let lastClean = customer.lastCleanDate {
+                    LabeledContent("Last Clean") {
+                        Text(lastClean, style: .date)
                     }
                 }
-                if !customer.accessNotes.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Access Notes").foregroundStyle(.secondary)
-                        Text(customer.accessNotes)
-                    }
+                ForEach(customer.notes, id: \.self) { note in
+                    Text(note)
                 }
             }
 
@@ -90,29 +89,35 @@ struct CustomerDetailView: View {
 }
 
 private struct CleanLogRow: View {
-    let log: CleanLog
+    let log: Visit
 
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
                 Text(log.date, style: .date)
-                if !log.notes.isEmpty {
-                    Text(log.notes)
+                if let note = log.note, !note.isEmpty {
+                    Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            VStack(alignment: .trailing) {
-                Text(log.amountCharged, format: .currency(code: "GBP"))
-                Text(paymentStatusText)
-                    .font(.caption)
-                    .foregroundStyle(paymentStatusColor)
+            if log.kind == .cleaned {
+                VStack(alignment: .trailing) {
+                    Text(log.charged, format: .currency(code: "GBP"))
+                    Text(paymentStatusText)
+                        .font(.caption)
+                        .foregroundStyle(paymentStatusColor)
+                }
+            } else {
+                Text(log.kind == .skipped ? "Skipped" : "Not due")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     private var paymentStatusText: String {
+        if log.paid == 0 { return "Unpaid" }
         let difference = log.paymentDifference
         if difference == 0 { return "Paid in full" }
         let formatted = abs(difference).formatted(.currency(code: "GBP"))
@@ -120,6 +125,7 @@ private struct CleanLogRow: View {
     }
 
     private var paymentStatusColor: Color {
+        if log.paid == 0 { return .red }
         let difference = log.paymentDifference
         if difference == 0 { return .green }
         return difference > 0 ? .blue : .orange
@@ -128,7 +134,7 @@ private struct CleanLogRow: View {
 
 #Preview {
     NavigationStack {
-        CustomerDetailView(customer: Customer(name: "Jane Doe", address: "1 High Street", phone: "447700900123", price: 15, frequencyWeeks: 4, accessNotes: "Side gate code 1234"))
+        CustomerDetailView(customer: Customer(name: "Jane Doe", address: "1 High Street", phone: "447700900123", price: 15, notes: ["Side gate code 1234"]))
     }
     .modelContainer(for: Customer.self, inMemory: true)
 }

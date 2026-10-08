@@ -3,7 +3,7 @@ import SwiftData
 import CoreLocation
 
 enum ImportField: String, CaseIterable, Identifiable {
-    case ignore, name, address, price, phone, frequencyWeeks, accessNotes
+    case ignore, name, address, price, phone, accessNotes
 
     var id: String { rawValue }
 
@@ -14,8 +14,7 @@ enum ImportField: String, CaseIterable, Identifiable {
         case .address: "Address"
         case .price: "Price"
         case .phone: "Phone"
-        case .frequencyWeeks: "Frequency (weeks)"
-        case .accessNotes: "Access Notes"
+        case .accessNotes: "Notes"
         }
     }
 }
@@ -109,8 +108,6 @@ struct ImportCustomersView: View {
                 mapping[index] = .price
             } else if lower.contains("phone") {
                 mapping[index] = .phone
-            } else if lower.contains("freq") || lower.contains("week") {
-                mapping[index] = .frequencyWeeks
             } else if lower.contains("note") {
                 mapping[index] = .accessNotes
             }
@@ -118,9 +115,16 @@ struct ImportCustomersView: View {
         return mapping
     }
 
+    private var maxSequenceDescriptor: FetchDescriptor<Customer> {
+        var descriptor = FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence, order: .reverse)])
+        descriptor.fetchLimit = 1
+        return descriptor
+    }
+
     private func performImport() {
         var imported = 0
         var skipped = 0
+        var nextSequence = ((try? modelContext.fetch(maxSequenceDescriptor))?.first?.sequence ?? 0) + 1
 
         for row in rows {
             var name = ""
@@ -128,7 +132,6 @@ struct ImportCustomersView: View {
             var phone = ""
             var notes = ""
             var price: Decimal = 0
-            var frequencyWeeks = 5
 
             for (index, field) in mapping {
                 guard index < row.count else { continue }
@@ -138,7 +141,6 @@ struct ImportCustomersView: View {
                 case .address: address = value
                 case .price: price = CSVParser.parsePrice(value) ?? 0
                 case .phone: phone = UKPhoneNumber.toNationalFormat(value)
-                case .frequencyWeeks: frequencyWeeks = CSVParser.parseFrequencyWeeks(value) ?? 5
                 case .accessNotes: notes = value
                 case .ignore: break
                 }
@@ -154,11 +156,12 @@ struct ImportCustomersView: View {
                 address: address,
                 phone: phone,
                 price: price,
-                frequencyWeeks: frequencyWeeks,
-                accessNotes: notes
+                sequence: nextSequence,
+                notes: notes.isEmpty ? [] : [notes]
             )
             modelContext.insert(customer)
             imported += 1
+            nextSequence += 1
 
             if !address.isEmpty {
                 Task {

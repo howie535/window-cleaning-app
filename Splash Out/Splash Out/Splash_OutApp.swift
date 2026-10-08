@@ -10,10 +10,18 @@ import SwiftData
 
 @main
 struct Splash_OutApp: App {
+    private let container: ModelContainer
+
+    init() {
+        container = Persistence.makeContainer()
+        SimulatorImport.runIfRequested(container: container)
+        Persistence.seedDefaultsIfNeeded(in: container.mainContext)
+    }
+
     var body: some Scene {
         WindowGroup {
             RootTabView()
         }
-        .modelContainer(for: Customer.self)
+        .modelContainer(container)
     }
 }

@@ -11,7 +11,7 @@ struct RouteView: View {
 
     var body: some View {
         List {
-            ForEach(Array(orderedStops.enumerated()), id: \.element.persistentModelID) { index, customer in
+            ForEach(Array(orderedStops.enumerated()), id: \.element.id) { index, customer in
                 RouteStopRow(
                     index: index + 1,
                     customer: customer,

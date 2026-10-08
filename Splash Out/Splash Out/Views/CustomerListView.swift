@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 struct CustomerListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Customer.name) private var customers: [Customer]
+    @Query(sort: \Customer.sequence) private var customers: [Customer]
 
     @State private var isShowingAddCustomer = false
     @State private var isShowingFileImporter = false
@@ -133,14 +133,18 @@ private struct CustomerRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            if customer.isDue {
-                Text("Due")
+            if customer.status != .active {
+                Text(customer.status.label)
                     .font(.caption.bold())
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.orange.opacity(0.2))
-                    .foregroundStyle(.orange)
+                    .background(.secondary.opacity(0.15))
+                    .foregroundStyle(.secondary)
                     .clipShape(Capsule())
+            } else if !customer.area.isEmpty {
+                Text(customer.area)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

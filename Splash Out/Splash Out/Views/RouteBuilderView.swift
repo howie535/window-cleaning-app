@@ -10,7 +10,9 @@ struct RouteBuilderView: View {
     @State private var isBuildingRoute = false
 
     private var sortedCustomers: [Customer] {
-        customers.sorted { ($0.nextDueDate ?? .distantPast) < ($1.nextDueDate ?? .distantPast) }
+        customers
+            .filter { $0.status == .active || $0.status == .leaving }
+            .sorted { $0.sequence < $1.sequence }
     }
 
     private var selectedCustomers: [Customer] {
@@ -79,13 +81,13 @@ struct RouteBuilderView: View {
         if let text = priceOverrides[id], let value = Decimal(string: text) {
             return value
         }
-        return customer.suggestedNextPrice
+        return customer.price
     }
 
     private func priceBinding(for customer: Customer) -> Binding<String> {
         let id = ObjectIdentifier(customer)
         return Binding(
-            get: { priceOverrides[id] ?? NSDecimalNumber(decimal: customer.suggestedNextPrice).stringValue },
+            get: { priceOverrides[id] ?? NSDecimalNumber(decimal: customer.price).stringValue },
             set: { priceOverrides[id] = $0 }
         )
     }
@@ -110,14 +112,10 @@ private struct CustomerSelectionRow: View {
                             Text(customer.name)
                                 .font(.headline)
                                 .foregroundStyle(.primary)
-                            if customer.isDue {
-                                Text("Due")
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.orange.opacity(0.2))
-                                    .foregroundStyle(.orange)
-                                    .clipShape(Capsule())
+                            if !customer.area.isEmpty {
+                                Text(customer.area)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                         Text(customer.address)
@@ -137,7 +135,7 @@ private struct CustomerSelectionRow: View {
                     .multilineTextAlignment(.trailing)
                     .frame(width: 70)
             } else {
-                Text(customer.suggestedNextPrice, format: .currency(code: "GBP"))
+                Text(customer.price, format: .currency(code: "GBP"))
                     .foregroundStyle(.secondary)
             }
         }

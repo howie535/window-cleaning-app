@@ -6,11 +6,7 @@ struct WhatsAppButton: View {
     @State private var showsUnavailableAlert = false
 
     private var message: String {
-        if customer.isDue {
-            "Hi \(customer.name), your windows are due for a clean — what day works well this week?"
-        } else {
-            "Hi \(customer.name), just checking in about your windows."
-        }
+        "Hi \(customer.name), your windows are next on our round. What day works well this week?"
     }
 
     private var whatsAppURL: URL? {

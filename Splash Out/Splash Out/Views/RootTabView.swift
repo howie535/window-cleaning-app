@@ -13,6 +13,11 @@ struct RootTabView: View {
                 .tabItem {
                     Label("Route", systemImage: "map")
                 }
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape")
+                }
         }
     }
 }

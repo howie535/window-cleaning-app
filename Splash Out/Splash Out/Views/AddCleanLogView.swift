@@ -91,11 +91,16 @@ struct AddCleanLogView: View {
     }
 
     private func save() {
-        let log = CleanLog(
+        let charged = amountCharged ?? customer.suggestedNextPrice
+        let paid = amountPaid ?? charged
+        let log = Visit(
             date: date,
-            amountCharged: amountCharged ?? customer.suggestedNextPrice,
-            amountPaid: amountPaid ?? amountCharged ?? customer.suggestedNextPrice,
-            notes: notes,
+            kind: .cleaned,
+            listPrice: customer.price,
+            charged: charged,
+            paid: paid,
+            paidDate: paid > 0 ? date : nil,
+            note: notes.isEmpty ? nil : notes,
             customer: customer
         )
         modelContext.insert(log)
@@ -104,6 +109,6 @@ struct AddCleanLogView: View {
 }
 
 #Preview {
-    AddCleanLogView(customer: Customer(name: "Jane Doe", address: "1 High Street", phone: "447700900123", price: 15, frequencyWeeks: 4, accessNotes: ""))
+    AddCleanLogView(customer: Customer(name: "Jane Doe", address: "1 High Street", phone: "447700900123", price: 15))
         .modelContainer(for: Customer.self, inMemory: true)
 }

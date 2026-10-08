@@ -12,8 +12,9 @@ struct AddEditCustomerView: View {
     @State private var address: String = ""
     @State private var phone: String = ""
     @State private var priceText: String = ""
-    @State private var frequencyWeeks: Int = 5
-    @State private var accessNotes: String = ""
+    @State private var round: String = ""
+    @State private var area: String = ""
+    @State private var notesText: String = ""
     @State private var isShowingContactPicker = false
 
     private var isEditing: Bool { customer != nil }
@@ -43,16 +44,21 @@ struct AddEditCustomerView: View {
                         TextField("07700 900123", text: $phone)
                             .keyboardType(.phonePad)
                     }
+                    LabeledField(label: "Round") {
+                        TextField("e.g. Rhyl", text: $round)
+                    }
+                    LabeledField(label: "Area") {
+                        TextField("e.g. Kinmel Bay", text: $area)
+                    }
                 }
                 Section("Cleaning") {
                     LabeledField(label: "Price per Clean") {
                         TextField("0.00", text: $priceText)
                             .keyboardType(.decimalPad)
                     }
-                    Stepper("Every \(frequencyWeeks) week\(frequencyWeeks == 1 ? "" : "s")", value: $frequencyWeeks, in: 1...52)
                 }
-                Section("Access Notes") {
-                    TextField("Gate code, key location, pets, parking, etc.", text: $accessNotes, axis: .vertical)
+                Section("Notes") {
+                    TextField("Gate code, key location, pets, parking, etc. One note per line.", text: $notesText, axis: .vertical)
                         .lineLimit(3...6)
                 }
             }
@@ -86,8 +92,9 @@ struct AddEditCustomerView: View {
         address = customer.address
         phone = customer.phone
         priceText = NSDecimalNumber(decimal: customer.price).stringValue
-        frequencyWeeks = customer.frequencyWeeks
-        accessNotes = customer.accessNotes
+        round = customer.round
+        area = customer.area
+        notesText = customer.notesText
     }
 
     private func save() {
@@ -96,12 +103,17 @@ struct AddEditCustomerView: View {
         let target: Customer
 
         if let customer {
+            if price != customer.price {
+                modelContext.insert(PriceChange(date: .now, oldPrice: customer.price, newPrice: price, reason: .correction, customer: customer))
+                customer.priceSince = .now
+            }
             customer.name = name
             customer.address = address
             customer.phone = phone
             customer.price = price
-            customer.frequencyWeeks = frequencyWeeks
-            customer.accessNotes = accessNotes
+            customer.round = round
+            customer.area = area
+            customer.notesText = notesText
             target = customer
         } else {
             let newCustomer = Customer(
@@ -109,9 +121,11 @@ struct AddEditCustomerView: View {
                 address: address,
                 phone: phone,
                 price: price,
-                frequencyWeeks: frequencyWeeks,
-                accessNotes: accessNotes
+                sequence: nextSequence(),
+                round: round,
+                area: area
             )
+            newCustomer.notesText = notesText
             modelContext.insert(newCustomer)
             target = newCustomer
         }
@@ -125,6 +139,13 @@ struct AddEditCustomerView: View {
         }
 
         dismiss()
+    }
+
+    /// New customers go at the end of the round until placed elsewhere.
+    private func nextSequence() -> Int {
+        var descriptor = FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence, order: .reverse)])
+        descriptor.fetchLimit = 1
+        return ((try? modelContext.fetch(descriptor))?.first?.sequence ?? 0) + 1
     }
 }
 

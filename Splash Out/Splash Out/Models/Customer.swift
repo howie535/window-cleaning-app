@@ -2,35 +2,73 @@ import CoreLocation
 import Foundation
 import SwiftData
 
+// CloudKit-compatible: every property has a default or is optional, no unique constraints,
+// relationships are optional with inverses.
 @Model
 final class Customer {
-    var name: String
-    var address: String
-    var phone: String
-    var price: Decimal
-    var frequencyWeeks: Int
-    var accessNotes: String
+    var id: UUID = UUID()
+    /// Position in round order (the "conveyor belt").
+    var sequence: Int = 0
+    var round: String = ""
+    var area: String = ""
+    var statusRaw: String = CustomerStatus.active.rawValue
+    var name: String = ""
+    var address: String = ""
+    var phone: String = ""
+    var price: Decimal = 0
+    var priceSince: Date?
+    var everyOther: Bool = false
+    var frontOnly: Bool = false
+    var contactRaw: String = ContactMethod.whatsapp.rawValue
+    var payMethodRaw: String?
+    var notes: [String] = []
     var latitude: Double?
     var longitude: Double?
 
-    @Relationship(deleteRule: .cascade, inverse: \CleanLog.customer)
-    var cleanLogs: [CleanLog] = []
+    @Relationship(deleteRule: .cascade, inverse: \Visit.customer)
+    var visits: [Visit]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \PriceChange.customer)
+    var priceChanges: [PriceChange]? = []
 
     init(
         name: String,
-        address: String,
-        phone: String,
-        price: Decimal,
-        frequencyWeeks: Int,
-        accessNotes: String
+        address: String = "",
+        phone: String = "",
+        price: Decimal = 0,
+        sequence: Int = 0,
+        round: String = "",
+        area: String = "",
+        status: CustomerStatus = .active,
+        notes: [String] = []
     ) {
         self.name = name
         self.address = address
         self.phone = phone
         self.price = price
-        self.frequencyWeeks = frequencyWeeks
-        self.accessNotes = accessNotes
+        self.sequence = sequence
+        self.round = round
+        self.area = area
+        self.statusRaw = status.rawValue
+        self.notes = notes
     }
+
+    var status: CustomerStatus {
+        get { CustomerStatus(rawValue: statusRaw) ?? .active }
+        set { statusRaw = newValue.rawValue }
+    }
+
+    var contact: ContactMethod {
+        get { ContactMethod(rawValue: contactRaw) ?? .whatsapp }
+        set { contactRaw = newValue.rawValue }
+    }
+
+    var payMethod: PayMethod? {
+        get { payMethodRaw.flatMap(PayMethod.init(rawValue:)) }
+        set { payMethodRaw = newValue?.rawValue }
+    }
+
+    var allVisits: [Visit] { visits ?? [] }
 
     var coordinate: CLLocationCoordinate2D? {
         guard let latitude, let longitude else { return nil }
@@ -38,17 +76,13 @@ final class Customer {
     }
 
     var lastCleanDate: Date? {
-        cleanLogs.map(\.date).max()
+        allVisits.filter { $0.kind == .cleaned }.map(\.date).max()
     }
 
-    var nextDueDate: Date? {
-        guard let lastCleanDate else { return nil }
-        return Calendar.current.date(byAdding: .weekOfYear, value: frequencyWeeks, to: lastCleanDate)
-    }
-
-    var isDue: Bool {
-        guard let nextDueDate else { return true }
-        return nextDueDate <= Date()
+    /// Notes as one block of text, for editing.
+    var notesText: String {
+        get { notes.joined(separator: "\n") }
+        set { notes = newValue.split(separator: "\n", omittingEmptySubsequences: true).map(String.init) }
     }
 
     /// International-format digits, required by WhatsApp's wa.me link (country code, no leading 0).
@@ -56,10 +90,13 @@ final class Customer {
         UKPhoneNumber.toWhatsAppDigits(phone)
     }
 
-    /// Running total of over/underpayment across all logged cleans. Positive means the customer
-    /// is in credit (they've paid more than charged overall); negative means they owe money.
+    /// Running total of over/underpayment across cleans that have actually been paid.
+    /// Positive: the customer is in credit. Negative: they've underpaid.
+    /// Unpaid cleans (paid == 0) are deliberately excluded: those are "money owed", handled separately.
     var outstandingBalance: Decimal {
-        cleanLogs.reduce(0) { $0 + $1.paymentDifference }
+        allVisits
+            .filter { $0.kind == .cleaned && $0.paid > 0 }
+            .reduce(0) { $0 + $1.paymentDifference }
     }
 
     /// The regular price adjusted to claw back a credit or recoup a shortfall from past cleans.
