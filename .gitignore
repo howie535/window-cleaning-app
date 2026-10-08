@@ -7,3 +7,9 @@ xcuserdata/
 
 # Swift Package Manager
 .swiftpm/
+
+# Customer data: never commit (see Splash Out/Docs/SPEC.md section 6)
+splash-out-import.json
+import-report.txt
+*.xlsx
+Backups/
