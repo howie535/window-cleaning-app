@@ -45,6 +45,6 @@ Nothing in the data model needs to change for any of this.
 
 ## 4. Known loose ends
 
-- Landscape layouts haven't been checked yet (see section 1).
+- Landscape (checked on an iPad Pro 11 in the Simulator: Today, Round, Customers): everything works and is usable. Today is good (five tiles across, full-width chart). Round and Customers are a single very wide column, with the price or area far from the name. That is the case for the two-column layout in section 1. Diary, Owed, More and the sheets haven't been checked in landscape yet.
 - Record payment: a brief red "more than is owed" message can flash while the sheet closes after saving a partial payment. Harmless, but untidy.
 - Customers priced at £0 aren't flagged anywhere; look through the list for them before the switchover.
