@@ -52,7 +52,7 @@ struct TodayView: View {
                     Tile(title: "This month", value: pounds(stats.work(from: stats.thisMonthStart, through: today)),
                          detail: "so far · \(stats.houses(from: stats.thisMonthStart, through: today)) houses")
                     Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
-                         detail: "per cycle" + (stats.cycleWeeks.map { " · about \($0.formatted(.number.precision(.fractionLength(1)))) weeks round" } ?? ""))
+                         detail: "per cycle")
                     Tile(title: "Average per house",
                          value: yearTotals.cleans > 0 ? pounds2(yearTotals.work / Decimal(yearTotals.cleans)) : pounds2(listAverage),
                          detail: yearTotals.cleans > 0
