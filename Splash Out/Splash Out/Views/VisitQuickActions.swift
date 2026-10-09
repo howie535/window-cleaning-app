@@ -1,18 +1,38 @@
 import SwiftUI
 import SwiftData
 
+/// The two logging options that open a form. The screen showing the quick actions owns the sheet
+/// (see `visitLogSheets`), not the rows: a sheet attached to each row of a list fights with its neighbours
+/// and closes straight after opening.
+enum VisitSheet: Identifiable {
+    case extra, custom
+
+    var id: Int { self == .extra ? 0 : 1 }
+}
+
+extension View {
+    /// Put this on the List (or other screen) that contains `VisitQuickActions`.
+    func visitLogSheets(customer: Customer, selection: Binding<VisitSheet?>, onLogged: @escaping () -> Void = {}) -> some View {
+        sheet(item: selection) { kind in
+            switch kind {
+            case .extra: ExtraCleanSheet(customer: customer, onSaved: onLogged)
+            case .custom: AddCleanLogView(customer: customer)
+            }
+        }
+    }
+}
+
 /// The one-tap options for logging a customer (Docs/SPEC.md section 3). Big rows for wet hands.
 /// Meant to sit inside a List section.
 struct VisitQuickActions: View {
     let customer: Customer
     /// Called after an action is logged, e.g. so a sheet can close itself.
     var onLogged: () -> Void = {}
+    /// Set when "Cleaned + extra" or "Other date or amount" is tapped; the screen shows the form.
+    @Binding var sheet: VisitSheet?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(UndoCenter.self) private var undoCenter
-
-    @State private var isShowingExtra = false
-    @State private var isShowingCustom = false
 
     var body: some View {
         Group {
@@ -23,7 +43,7 @@ struct VisitQuickActions: View {
                 run(.cleanedNotPaid)
             }
             row("Cleaned + extra...", systemImage: "plus.circle", tint: .blue) {
-                isShowingExtra = true
+                sheet = .extra
             }
             row("Skipped", systemImage: "forward.circle", tint: .red) {
                 run(.skipped)
@@ -34,14 +54,8 @@ struct VisitQuickActions: View {
                 }
             }
             row("Other date or amount...", systemImage: "slider.horizontal.3", tint: .secondary) {
-                isShowingCustom = true
+                sheet = .custom
             }
-        }
-        .sheet(isPresented: $isShowingExtra) {
-            ExtraCleanSheet(customer: customer, onSaved: onLogged)
-        }
-        .sheet(isPresented: $isShowingCustom) {
-            AddCleanLogView(customer: customer)
         }
     }
 

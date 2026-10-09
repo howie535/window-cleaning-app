@@ -7,6 +7,7 @@ struct CustomerDetailView: View {
 
     @State private var isShowingEdit = false
     @State private var isShowingPayment = false
+    @State private var logSheet: VisitSheet?
 
     private var sortedLogs: [Visit] {
         customer.allVisits.sorted { $0.date > $1.date }
@@ -77,7 +78,7 @@ struct CustomerDetailView: View {
             }
 
             Section("Log") {
-                VisitQuickActions(customer: customer)
+                VisitQuickActions(customer: customer, sheet: $logSheet)
             }
 
             Section("Contact") {
@@ -116,6 +117,7 @@ struct CustomerDetailView: View {
                 Button("Edit") { isShowingEdit = true }
             }
         }
+        .visitLogSheets(customer: customer, selection: $logSheet)
         .sheet(isPresented: $isShowingEdit) {
             AddEditCustomerView(customer: customer)
         }

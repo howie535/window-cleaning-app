@@ -180,6 +180,8 @@ struct CustomerLogPanel: View {
     let customer: Customer
     var onLogged: () -> Void = {}
 
+    @State private var logSheet: VisitSheet?
+
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
     var body: some View {
@@ -196,7 +198,7 @@ struct CustomerLogPanel: View {
             }
 
             Section("Log") {
-                VisitQuickActions(customer: customer, onLogged: onLogged)
+                VisitQuickActions(customer: customer, onLogged: onLogged, sheet: $logSheet)
             }
 
             Section {
@@ -208,6 +210,7 @@ struct CustomerLogPanel: View {
         }
         .navigationTitle(customer.name)
         .navigationBarTitleDisplayMode(.inline)
+        .visitLogSheets(customer: customer, selection: $logSheet, onLogged: onLogged)
     }
 }
 
