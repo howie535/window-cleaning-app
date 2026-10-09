@@ -311,7 +311,7 @@ enum SimulatorSelfTest {
         let yearTotals = RoundMetrics.totals(for: exportable, in: TaxYear.range(startYear: 2026))
         check("income list has a line per clean", ledgerRows.filter { $0.first.map { $0.hasPrefix("20") } ?? false }.count == yearTotals.cleans)
         check("income list total matches the tax year work", ledgerRows.first { $0.first == "Total charged" }?[1] == NSDecimalNumber(decimal: yearTotals.work).stringValue)
-        let anonymous = try String(contentsOf: DataExports.analysisReport(includeNames: false, context: context), encoding: .utf8)
+        let anonymous = try String(contentsOf: DataExports.analysisReport(includeNames: false, includeNotes: false, context: context), encoding: .utf8)
         var identifying = 0
         for person in exportable.prefix(80) where person.name.count > 5 {
             if anonymous.contains(person.name) { identifying += 1 }
@@ -326,7 +326,10 @@ enum SimulatorSelfTest {
         check("named analysis report includes names", named.contains(exportable[0].name))
         var longNote: String?
         for person in exportable { if let note = person.notes.first(where: { $0.count > 12 }) { longNote = note; break } }
-        check("analysis report never includes notes", longNote.map { !named.contains($0) && !anonymous.contains($0) } ?? true)
+        let withNotes = try String(contentsOf: DataExports.analysisReport(includeNames: false, includeNotes: true, context: context), encoding: .utf8)
+        let withoutNotes = try String(contentsOf: DataExports.analysisReport(includeNames: false, includeNotes: false, context: context), encoding: .utf8)
+        check("analysis report includes notes when asked", longNote.map { withNotes.contains($0) && named.contains($0) } ?? true)
+        check("analysis report leaves notes out when switched off", longNote.map { !withoutNotes.contains($0) } ?? true)
 
         // customer CSV round trip: export, delete two, import the file back
         let roundTrip = CSVParser.parse(csvText).filter { !$0.allSatisfy(\.isEmpty) }

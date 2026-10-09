@@ -1,29 +1,71 @@
-# Running the app on your iPhone (free Apple account)
+# Putting the app on your iPhone (free Apple account)
 
-You don't need the paid Apple Developer Program for this. You need the Mac, the iPhone, a cable and Xcode.
+You need: the Mac, your iPhone, a charging cable, and Xcode. No paid Apple account.
 
-## First time
+## One-off setup
 
-1. On the iPhone: Settings > Privacy & Security > Developer Mode > on. The phone restarts. (If you don't see Developer Mode, plug the phone into the Mac and open Xcode first; it appears after that.)
-2. Plug the iPhone into the Mac with a cable. Unlock it and tap **Trust** if asked.
-3. Open the project in Xcode (`Splash Out.xcodeproj`).
-4. At the top of Xcode, next to the Run button, choose your iPhone instead of a Simulator.
-5. Click the project (blue icon, top of the left list) > **Signing & Capabilities**. Check "Automatically manage signing" is ticked and the Team is your Personal Team (your Apple ID).
-6. Press **Run** (the play button). Xcode builds the app, registers the phone and installs it.
-7. The first time, the phone says "Untrusted Developer". Go to Settings > General > VPN & Device Management > your Apple ID > **Trust**. Then open Splash Out.
+**A. Check Xcode knows your Apple ID**
+1. Open Xcode. In the menu bar choose **Xcode > Settings...** (or press Command-comma).
+2. Click **Accounts**. You should see your Apple ID listed. If not, click **+** at the bottom left, choose **Apple ID**, and sign in.
+3. Close the window.
 
-## Every 7 days
+**B. Open the project**
+1. In Finder open `Documents > Test iOS app > Splash Out`.
+2. Double-click **Splash Out.xcodeproj**. Xcode opens it.
 
-The free account's signing expires after 7 days. When it does, the app won't open (it shows a message that it can't be verified). Fix: plug in, press Run again. Your data stays, as long as you don't delete the app. Xcode installs over the top.
+**C. Connect the phone**
+1. Plug the iPhone into the Mac. Unlock it.
+2. If the phone asks "Trust This Computer?", tap **Trust** and enter your passcode.
+3. In Xcode, the phone appears in the device menu at the very top, in the middle of the toolbar (it says "iPhone 17 Pro" or similar, next to "Splash Out"). Click it and pick your iPhone from the list under "Devices". If it says it is preparing the device, wait a minute.
 
-Xcode can't refresh this by itself. Two things help:
-- Xcode > Window > Devices and Simulators > tick "Connect via network" for the phone, so you can press Run without the cable (Mac and phone on the same Wi-Fi).
-- Third-party refreshers such as AltStore can re-sign automatically in the background. They need an Apple ID login and a helper app on the Mac, so only use one you're comfortable with.
+**D. Turn on Developer Mode (phone)**
+1. On the iPhone: **Settings > Privacy & Security**, scroll to the bottom, tap **Developer Mode**, switch it on.
+2. The phone restarts. Unlock it and tap **Turn On** when asked, then enter your passcode.
+3. (Developer Mode only appears once the phone has been connected to Xcode, so do C first.)
 
-The paid programme (a year at a time) removes the 7-day limit and is also what iCloud sync needs.
+**E. Check signing**
+1. In Xcode, click the blue **Splash Out** icon at the top of the left-hand list.
+2. In the middle, under TARGETS click **Splash Out**, then the **Signing & Capabilities** tab.
+3. Make sure **Automatically manage signing** is ticked and **Team** shows your name followed by "(Personal Team)".
+4. Don't change the Bundle Identifier (`com.splashout.Splash-Out`). It is what ties the app to its data. If Xcode says that identifier isn't available, tell Claude before changing anything.
 
-## Keep your data safe
+**F. Install**
+1. Press the **Run** button (the play triangle at the top left) or press Command-R.
+2. Xcode builds the app (a minute or two the first time) and installs it on the phone.
+3. On the phone you'll see "Untrusted Developer". Go to **Settings > General > VPN & Device Management**, tap your Apple ID under "Developer App", tap **Trust**, then **Trust** again.
+4. Open **Splash Out** from the home screen. It starts empty: no customers.
 
-- Never delete the app from the phone to "fix" something: deleting it deletes all its data.
-- Without iCloud, the data lives only on that phone. Export a backup (More > Settings > Export backup) after each week of real use and save it to Files / OneDrive.
-- The iPhone and iPad don't share data until iCloud sync is switched on.
+**G. Load your customers**
+1. Get the round file onto the phone: AirDrop it, or save it in Files / OneDrive.
+2. In the app: **More > Settings > Import customers only...** (or **Import round data...** if the file has cleaning history too), pick the file and confirm.
+
+## Every 7 days (free account)
+
+The free account's signing runs out after 7 days. When it does, the app won't open ("no longer available" or it just bounces). To renew:
+1. Plug the phone in, unlock it, open the project in Xcode.
+2. Make sure your iPhone is selected at the top, and press **Run** (Command-R).
+
+It installs over the top, so **your data stays**. Don't delete the app first.
+
+To skip the cable: with the phone plugged in, choose **Window > Devices and Simulators**, select the phone, and tick **Connect via network**. After that, Run works over Wi-Fi when the Mac and phone are on the same network. It still needs you to press Run.
+
+Nothing in Xcode renews it automatically. Third-party tools such as AltStore can re-sign in the background, but they need your Apple ID and a helper app on the Mac, so only use one you're happy with. The paid Apple Developer Program (a year at a time) removes the 7-day limit.
+
+## What keeps and what loses your data
+
+| What happens | Data |
+|---|---|
+| Press Run again in Xcode (re-sign, or a new build of the app) | Kept |
+| An app update from the App Store or TestFlight later | Kept |
+| Phone restart, iOS update | Kept |
+| Delete the app, then install again | **Gone** (starts empty) |
+| Install on a different phone or the iPad | Starts empty (no sync until iCloud is on) |
+| Change the Bundle Identifier or Team | Counts as a different app: **starts empty** |
+
+Safety nets built in:
+- Before the database is opened, the app copies it into a "Store snapshots" folder whenever its version changes, and at least weekly. The newest four are kept. If an update ever changed the database in a way that couldn't be converted, the data from just before is still there.
+- Importing or clearing history first saves a JSON backup of the current data.
+- Both live in the Files app: **Files > On My iPhone > Splash Out > Backups**.
+- Export a backup yourself (**More > Settings > Export backup**) after each week of real use and save it in OneDrive. That's the one that survives losing the phone.
+
+Before ever changing Apple team (for example when you join the paid programme), export a backup first, and import it afterwards.

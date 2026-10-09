@@ -83,8 +83,8 @@ enum DataExports {
 
     /// One Markdown file with everything needed to analyse the round: a short description of the business and the
     /// columns, the main figures, then the customers and every visit as tables. Customers are "C001"-style IDs;
-    /// names and addresses are only included when asked for, and notes are never included (they hold gate codes and the like).
-    static func analysisReport(includeNames: Bool, context: ModelContext) throws -> URL {
+    /// names and addresses and customer notes (gate codes and the like) are only included when asked for.
+    static func analysisReport(includeNames: Bool, includeNotes: Bool = true, context: ModelContext) throws -> URL {
         let all = try customers(context)
         let settings = try context.fetch(FetchDescriptor<AppSettings>()).first
         let crews = try context.fetch(FetchDescriptor<Crew>(sortBy: [SortDescriptor(\.name)]))
@@ -98,7 +98,8 @@ enum DataExports {
             "# Window cleaning round: data for analysis",
             "",
             "Exported \(RoundCalendar.dayString(today)) from the Splash Out app. All dates are UK dates, all money is in pounds.",
-            includeNames ? "Customer names and addresses are included in this file." : "Customers are anonymous IDs (C001 and so on). There are no names, addresses, phone numbers or notes in this file.",
+            includeNames ? "Customer names and addresses are included in this file." : "Customers are anonymous IDs (C001 and so on). There are no names, addresses or phone numbers in this file.",
+            includeNotes ? "Customer notes are included (access and other notes the crew keep on each customer)." : "Customer notes are not included.",
             "",
             "## About the business",
             "",
@@ -152,15 +153,16 @@ enum DataExports {
         if !workDays.isEmpty {
             out += ["", "## Diary (days that differ from the usual week)", "", "| Date | Day off | Crew | Note |", "|---|---|---|---|"]
             for entry in workDays {
-                out.append("| \(day(entry.date)) | \(entry.dayOff ? "yes" : "") | \(entry.crewMembers.joined(separator: " + ")) | \(includeNames ? (entry.note ?? "") : "") |")
+                out.append("| \(day(entry.date)) | \(entry.dayOff ? "yes" : "") | \(entry.crewMembers.joined(separator: " + ")) | \(includeNotes ? (entry.note ?? "") : "") |")
             }
         }
 
         out += ["", "## Customers", ""]
         var header = ["id"]
         if includeNames { header += ["name", "address"] }
-        header += ["round", "area", "status", "price", "price_since", "every_other", "front_only", "contact", "pay_method", "has_notes",
-                   "cleans", "skips", "last_clean", "owed"]
+        header += ["round", "area", "status", "price", "price_since", "every_other", "front_only", "contact", "pay_method"]
+        header += [includeNotes ? "notes" : "has_notes"]
+        header += ["cleans", "skips", "last_clean", "owed"]
         out.append("| " + header.joined(separator: " | ") + " |")
         out.append("|" + String(repeating: "---|", count: header.count))
         for customer in all {
@@ -170,7 +172,8 @@ enum DataExports {
             fields += [
                 customer.round, customer.area, customer.status.rawValue, n(customer.price), day(customer.priceSince),
                 customer.everyOther ? "yes" : "no", customer.frontOnly ? "yes" : "no", customer.contact.rawValue,
-                customer.payMethod?.rawValue ?? "", customer.notes.isEmpty ? "no" : "yes",
+                customer.payMethod?.rawValue ?? "",
+                includeNotes ? customer.notes.joined(separator: " / ") : (customer.notes.isEmpty ? "no" : "yes"),
                 "\(visits.filter { $0.kind == .cleaned }.count)", "\(visits.filter { $0.kind == .skipped }.count)",
                 day(customer.lastCleanDate), n(RoundMetrics.moneyOwed([customer]).amount),
             ]

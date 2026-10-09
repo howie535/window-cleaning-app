@@ -9,6 +9,7 @@ struct ExportsView: View {
     @State private var taxYear = TaxYear.startYear(containing: Date())
     @State private var ledgerNames = true
     @State private var analysisNames = true
+    @State private var analysisNotes = true
 
     private var years: [Int] {
         let current = TaxYear.startYear(containing: Date())
@@ -43,16 +44,15 @@ struct ExportsView: View {
 
             Section {
                 Toggle("Include customer names and addresses", isOn: $analysisNames)
+                Toggle("Include customer notes", isOn: $analysisNotes)
                 ExportRow(title: "Analysis report (Markdown)", prepare: {
-                    try DataExports.analysisReport(includeNames: analysisNames, context: modelContext)
+                    try DataExports.analysisReport(includeNames: analysisNames, includeNotes: analysisNotes, context: modelContext)
                 })
-                .id(analysisNames)
+                .id("\(analysisNames)-\(analysisNotes)")
             } header: {
                 Text("For analysis")
             } footer: {
-                Text(analysisNames
-                     ? "Names and addresses are in the file, with the weekly, monthly and round figures, every customer and every visit. Notes (gate codes and so on) are never included. Switch names off first if you'd rather share it anonymously."
-                     : "One file with the weekly, monthly and round figures, every customer and every visit, written so you can drop it into Claude and ask questions. Customers are anonymous IDs: no names, addresses, phone numbers or notes.")
+                Text("One file with the weekly, monthly and round figures, every customer and every visit, written so you can drop it into Claude and ask questions. Names, addresses and notes (gate codes and so on) are in it by default: switch them off first if you'd rather share it anonymously. Customers then appear as IDs like C001.")
             }
 
             Section {
