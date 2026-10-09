@@ -31,6 +31,13 @@ enum SimulatorImport {
                 try report.write(toFile: reportPath, atomically: true, encoding: .utf8)
             }
 
+            if arguments.contains("-Stage5") {
+                let todayText = arguments.firstIndex(of: "-Today").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+                let pinned = todayText.flatMap(RoundCalendar.parseDay) ?? RoundCalendar.startOfDay()
+                let text = try AcceptanceReport.stage5(in: context, today: pinned)
+                if let path = value(after: "-Stage5File") { try text.write(toFile: path, atomically: true, encoding: .utf8) }
+            }
+
             if let planPath = value(after: "-PlanFile") {
                 // `-Today yyyy-MM-dd` pins the date so the plan can be compared with the workbook's saved one.
                 let todayText = arguments.firstIndex(of: "-Today").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }

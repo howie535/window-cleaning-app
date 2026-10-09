@@ -30,6 +30,39 @@ enum AcceptanceReport {
         return lines.joined(separator: "\n")
     }
 
+    /// Machine-readable lines for comparing Weekly, Today and Tax Year figures with the workbook.
+    static func stage5(in context: ModelContext, today: Date) throws -> String {
+        let customers = try context.fetch(FetchDescriptor<Customer>())
+        let crews = try context.fetch(FetchDescriptor<Crew>())
+        let workDays = try context.fetch(FetchDescriptor<WorkDay>())
+        let settings = try context.fetch(FetchDescriptor<AppSettings>()).first
+        let stats = RoundStats(customers: customers, settings: settings, crews: crews, workDays: workDays, today: today)
+        func n(_ value: Decimal) -> String { NSDecimalNumber(decimal: value).stringValue }
+
+        var lines = ["STAGE5 today=\(RoundCalendar.dayString(today))"]
+        for week in stats.weeks {
+            lines.append("WEEK \(RoundCalendar.dayString(week.start)) work=\(n(week.work)) houses=\(week.houses) target=\(n(week.target)) worked=\(week.daysWorked)")
+        }
+        let ahead = stats.aheadBehind()
+        lines.append("AHEAD done=\(n(ahead.done)) expected=\(n(ahead.expected)) diff=\(n(ahead.difference))")
+        lines.append("THISWEEK work=\(n(stats.thisWeek.work)) target=\(n(stats.thisWeek.target)) houses=\(stats.thisWeek.houses)")
+        lines.append("TODAY work=\(n(stats.work(from: today, through: today)))")
+        lines.append("THISMONTH work=\(n(stats.work(from: stats.thisMonthStart, through: today))) houses=\(stats.houses(from: stats.thisMonthStart, through: today))")
+        for month in stats.months(taxYear: stats.currentTaxYear) {
+            lines.append("MONTH \(month.label) work=\(n(month.work)) paid=\(n(month.paid)) notpaid=\(n(month.notYetPaid)) cleans=\(month.cleans) extras=\(n(month.extras))")
+        }
+        for round in stats.rounds(taxYear: stats.currentTaxYear) {
+            lines.append("ROUND \(round.round) work=\(n(round.work)) paid=\(n(round.paid)) notpaid=\(n(round.notYetPaid)) cleans=\(round.cleans)")
+        }
+        for crew in stats.crewAverages() {
+            lines.append("CREW \(crew.crew) days=\(crew.days) avg=\(n(crew.averagePerDay)) houses=\(n(crew.housesPerDay)) perhouse=\(n(crew.perHouse))")
+        }
+        lines.append("CYCLE weeks=\(stats.cycleWeeks.map(n) ?? "-")")
+        lines.append("NEWLOST new=\(stats.newCustomers(taxYear: stats.currentTaxYear)) lost=\(stats.lostCustomers(taxYear: stats.currentTaxYear))")
+        lines.append("SKIPRATE \(stats.skipRate)")
+        return lines.joined(separator: "\n")
+    }
+
     private static func format(_ value: Decimal) -> String {
         "£" + (NumberFormatter.report.string(from: value as NSDecimalNumber) ?? "\(value)")
     }

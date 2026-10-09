@@ -22,6 +22,7 @@ struct RoundBackupDocument: FileDocument {
 
 /// Import and export of the whole round (Docs/SPEC.md section 6). More settings arrive in later stages.
 struct SettingsView: View {
+    var embedded = false
     @Environment(\.modelContext) private var modelContext
     @Query private var customers: [Customer]
 
@@ -32,7 +33,7 @@ struct SettingsView: View {
     @State private var message: String?
 
     var body: some View {
-        NavigationStack {
+        OptionalNavigationStack(embedded: embedded) {
             List {
                 Section("Your data") {
                     LabeledContent("Customers", value: "\(customers.count)")

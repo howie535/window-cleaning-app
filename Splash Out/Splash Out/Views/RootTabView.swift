@@ -6,30 +6,20 @@ struct RootTabView: View {
 
     var body: some View {
         TabView {
-            CustomerListView()
-                .tabItem {
-                    Label("Customers", systemImage: "person.2")
-                }
+            TodayView()
+                .tabItem { Label("Today", systemImage: "chart.bar.xaxis") }
 
             NextUpView()
-                .tabItem {
-                    Label("Round", systemImage: "list.bullet.clipboard")
-                }
+                .tabItem { Label("Round", systemImage: "list.bullet.clipboard") }
+
+            CustomerListView()
+                .tabItem { Label("Customers", systemImage: "person.2") }
 
             MoneyOwedView()
-                .tabItem {
-                    Label("Owed", systemImage: "sterlingsign.circle")
-                }
+                .tabItem { Label("Owed", systemImage: "sterlingsign.circle") }
 
-            RouteBuilderView()
-                .tabItem {
-                    Label("Route", systemImage: "map")
-                }
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
-                }
+            MoreView()
+                .tabItem { Label("More", systemImage: "ellipsis.circle") }
         }
         .environment(undoCenter)
         .overlay(alignment: .bottom) {

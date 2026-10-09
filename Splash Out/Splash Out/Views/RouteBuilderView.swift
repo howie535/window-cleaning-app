@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct RouteBuilderView: View {
+    var embedded = false
     @Query private var customers: [Customer]
     @StateObject private var locationManager = LocationManager()
 
@@ -28,7 +29,7 @@ struct RouteBuilderView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        OptionalNavigationStack(embedded: embedded) {
             VStack(spacing: 0) {
                 HStack {
                     Text(selectedTotal, format: .currency(code: "GBP"))
