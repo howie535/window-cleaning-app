@@ -3,6 +3,7 @@ import SwiftData
 
 struct RootTabView: View {
     @State private var undoCenter = UndoCenter()
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         TabView {
@@ -25,7 +26,8 @@ struct RootTabView: View {
         .environment(undoCenter)
         .overlay(alignment: .bottom) {
             UndoBanner(undoCenter: undoCenter)
-                .padding(.bottom, 90) // clears the tab bar
+                .frame(maxWidth: 560)
+                .padding(.bottom, sizeClass == .regular ? 24 : 90) // iPhone: clears the tab bar
                 .animation(.default, value: undoCenter.entry?.id)
         }
     }

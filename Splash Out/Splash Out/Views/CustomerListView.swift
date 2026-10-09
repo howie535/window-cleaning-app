@@ -5,7 +5,11 @@ import UniformTypeIdentifiers
 struct CustomerListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(UndoCenter.self) private var undoCenter
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Query(sort: \Customer.sequence) private var customers: [Customer]
+
+    /// Regular width (iPad): the chosen customer is shown in the right-hand panel.
+    @State private var selectedID: UUID?
 
     @State private var criteria = CustomerFilter.Criteria()
     @State private var editMode: EditMode = .inactive
@@ -27,38 +31,81 @@ struct CustomerListView: View {
 
     var body: some View {
         let shown = CustomerFilter.apply(criteria, to: customers)
-        NavigationStack {
-            List {
-                Section {
-                    Picker("Round", selection: $criteria.round) {
-                        Text("All rounds").tag(String?.none)
-                        ForEach(rounds, id: \.self) { Text($0).tag(String?.some($0)) }
-                    }
-                    Picker("Area", selection: $criteria.area) {
-                        Text("All areas").tag(String?.none)
-                        ForEach(areas, id: \.self) { Text($0).tag(String?.some($0)) }
-                    }
-                    Picker("Status", selection: $criteria.status) {
-                        Text("Any status").tag(CustomerStatus?.none)
-                        ForEach(CustomerStatus.allCases) { Text($0.label).tag(CustomerStatus?.some($0)) }
-                    }
-                    Toggle("Reorder round", isOn: Binding(
-                        get: { editMode == .active },
-                        set: { editMode = $0 ? .active : .inactive }
-                    ))
-                    .disabled(criteria.isActive)
-                } footer: {
-                    if criteria.isActive {
-                        Text("\(shown.count) of \(customers.count) customers. Clear the search and filters to reorder the round.")
-                    } else {
-                        Text("Reorder round lets you drag customers into their place. The round order decides who's next.")
+        Group {
+            if sizeClass == .regular {
+                NavigationSplitView {
+                    configured(customerList(shown))
+                } detail: {
+                    NavigationStack {
+                        if let customer = customers.first(where: { $0.id == selectedID }) {
+                            CustomerDetailView(customer: customer).id(customer.id)
+                        } else {
+                            ContentUnavailableView("Choose a customer", systemImage: "person.crop.circle",
+                                                   description: Text("Pick someone from the list to see their details and history."))
+                        }
                     }
                 }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                NavigationStack {
+                    configured(customerList(shown))
+                        .navigationDestination(for: Customer.self) { customer in
+                            CustomerDetailView(customer: customer)
+                        }
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingAddCustomer) {
+            AddEditCustomerView(customer: nil)
+        }
+        .sheet(item: $pendingImport) { pending in
+            ImportCustomersView(headers: pending.headers, rows: pending.rows)
+        }
+        .fileImporter(
+            isPresented: $isShowingFileImporter,
+            allowedContentTypes: [.commaSeparatedText, .plainText],
+            onCompletion: handleFileImport
+        )
+        .alert("Couldn't Import File", isPresented: Binding(
+            get: { importErrorMessage != nil },
+            set: { if !$0 { importErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importErrorMessage ?? "")
+        }
+    }
 
-                ForEach(shown) { customer in
-                    NavigationLink(value: customer) {
-                        CustomerRow(customer: customer)
-                    }
+    private func customerList(_ shown: [Customer]) -> some View {
+        List(selection: $selectedID) {
+            Section {
+                Picker("Round", selection: $criteria.round) {
+                    Text("All rounds").tag(String?.none)
+                    ForEach(rounds, id: \.self) { Text($0).tag(String?.some($0)) }
+                }
+                Picker("Area", selection: $criteria.area) {
+                    Text("All areas").tag(String?.none)
+                    ForEach(areas, id: \.self) { Text($0).tag(String?.some($0)) }
+                }
+                Picker("Status", selection: $criteria.status) {
+                    Text("Any status").tag(CustomerStatus?.none)
+                    ForEach(CustomerStatus.allCases) { Text($0.label).tag(CustomerStatus?.some($0)) }
+                }
+                Toggle("Reorder round", isOn: Binding(
+                    get: { editMode == .active },
+                    set: { editMode = $0 ? .active : .inactive }
+                ))
+                .disabled(criteria.isActive)
+            } footer: {
+                if criteria.isActive {
+                    Text("\(shown.count) of \(customers.count) customers. Clear the search and filters to reorder the round.")
+                } else {
+                    Text("Reorder round lets you drag customers into their place. The round order decides who's next.")
+                }
+            }
+
+            ForEach(shown) { customer in
+                customerRow(customer)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         Button { log(.cleanedPaid, for: customer) } label: {
                             Label("Paid", systemImage: "checkmark.circle.fill")
@@ -75,20 +122,33 @@ struct CustomerListView: View {
                         }
                         .tint(.red)
                     }
-                }
-                .onMove { offsets, destination in
-                    // Only meaningful for the whole round, so it's switched off while filtering.
-                    guard !criteria.isActive else { return }
-                    RoundOrder.move(customers, from: offsets, to: destination)
-                }
             }
+            .onMove { offsets, destination in
+                // Only meaningful for the whole round, so it's switched off while filtering.
+                guard !criteria.isActive else { return }
+                RoundOrder.move(customers, from: offsets, to: destination)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func customerRow(_ customer: Customer) -> some View {
+        if sizeClass == .regular {
+            CustomerRow(customer: customer).tag(customer.id)
+        } else {
+            NavigationLink(value: customer) {
+                CustomerRow(customer: customer)
+            }
+        }
+    }
+
+    /// Search, title, toolbar and empty state shared by both layouts.
+    private func configured<Content: View>(_ list: Content) -> some View {
+        list
             .environment(\.editMode, $editMode)
             .searchable(text: $criteria.search, prompt: "Name, address, area or note")
             .onChange(of: criteria.isActive) { _, active in if active { editMode = .inactive } }
             .navigationTitle("Customers")
-            .navigationDestination(for: Customer.self) { customer in
-                CustomerDetailView(customer: customer)
-            }
             .overlay {
                 if customers.isEmpty {
                     ContentUnavailableView {
@@ -122,26 +182,6 @@ struct CustomerListView: View {
                     }
                 }
             }
-            .sheet(isPresented: $isShowingAddCustomer) {
-                AddEditCustomerView(customer: nil)
-            }
-            .sheet(item: $pendingImport) { pending in
-                ImportCustomersView(headers: pending.headers, rows: pending.rows)
-            }
-            .fileImporter(
-                isPresented: $isShowingFileImporter,
-                allowedContentTypes: [.commaSeparatedText, .plainText],
-                onCompletion: handleFileImport
-            )
-            .alert("Couldn't Import File", isPresented: Binding(
-                get: { importErrorMessage != nil },
-                set: { if !$0 { importErrorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(importErrorMessage ?? "")
-            }
-        }
     }
 
     private func log(_ action: VisitLogger.Action, for customer: Customer) {

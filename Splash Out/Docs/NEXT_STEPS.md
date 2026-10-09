@@ -4,17 +4,18 @@ Where things stand: all seven build stages in `SPEC.md` are in place. The app ho
 
 ## 1. iPad build (landscape first)
 
-The iPad is where the round spreadsheet is used today, in landscape, so this build is worth doing properly and should be done before the switchover. The app already runs on iPad (top tab bar, sidebar toggle, four-column Today tiles, Customers search/filter/reorder, Diary calendar with wider cells), but it has only been checked in portrait. Roughly 2 to 3 sessions:
+The iPad is where the round spreadsheet is used today, in landscape.
 
-- **Landscape check of every screen** on a real iPad or a hand-rotated Simulator (the Simulator tools used so far can't rotate the device).
-- **Two-column Round and Customers.** List on the left, customer detail or logging panel on the right (`NavigationSplitView`), so working down the round doesn't push full screens.
-- **Today and Weekly in landscape:** tiles and the chart side by side.
-- **Sheet sizing.** Record payment, Add clean and Place in round as centred, medium-sized sheets rather than full-screen.
-- **Keyboard shortcuts** for a keyboard case: new customer, search, move between tabs.
-- **Larger tap targets** on the Round and Owed lists if the iPad is used on a ladder or in the van.
-- **Weekly and Tax Year tables** laid out to use the extra width.
+**Done:**
+- **Two-column Round, Customers and Owed** on iPad. List on the left; on the right the one-tap logging panel (Round), the customer page (Customers) or the customer page with Record payment (Owed). On Round, logging a clean moves the selection on to the next customer in the round. iPhone is unchanged (sheet on Round, push on Customers, sheet on Owed).
+- Top tab bar with a sidebar toggle, five-tile Today in landscape, Customers search/filter/reorder, Diary calendar with wider cells, undo banner kept to a sensible width.
 
-Nothing in the data model needs to change for any of this.
+**Still to do (about 1 session):**
+- Check Diary, More, Weekly, Tax Year and the sheets (Record payment, Add clean, Place in round) in landscape.
+- Today and Weekly: tiles and chart side by side where there's room.
+- Keyboard shortcuts for a keyboard case: new customer, search, move between tabs.
+- Larger tap targets on the Round and Owed lists if the iPad is used on a ladder or in the van.
+- Real-iPad check (the Simulator can't tell you about glare, gloves or one-handed use).
 
 ## 2. Switchover checklist (target 6 April 2027)
 
@@ -45,6 +46,5 @@ Nothing in the data model needs to change for any of this.
 
 ## 4. Known loose ends
 
-- Landscape (checked on an iPad Pro 11 in the Simulator: Today, Round, Customers): everything works and is usable. Today is good (five tiles across, full-width chart). Round and Customers are a single very wide column, with the price or area far from the name. That is the case for the two-column layout in section 1. Diary, Owed, More and the sheets haven't been checked in landscape yet.
 - Record payment: a brief red "more than is owed" message can flash while the sheet closes after saving a partial payment. Harmless, but untidy.
 - Customers priced at £0 aren't flagged anywhere; look through the list for them before the switchover.

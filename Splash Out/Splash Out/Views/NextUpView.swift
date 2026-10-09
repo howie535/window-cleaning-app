@@ -7,54 +7,97 @@ struct NextUpView: View {
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
+    /// Compact width (iPhone): tapping a customer opens a sheet.
     @State private var selected: Customer?
+    /// Regular width (iPad): the list on the left, the logging panel for this customer on the right.
+    @State private var selectedID: UUID?
 
     var body: some View {
         let today = RoundCalendar.startOfDay()
         let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
 
-        NavigationStack {
-            List {
-                if let pointer = plan.pointer {
-                    Section {
-                        LabeledContent("Carrying on from") {
-                            Text(pointer.name)
-                        }
-                        .font(.subheadline)
-                    }
-                }
-
-                if plan.days.isEmpty {
-                    ContentUnavailableView("No working days", systemImage: "calendar.badge.exclamationmark",
-                                           description: Text("There are no working days coming up. Check the usual week in Settings."))
-                }
-
-                ForEach(plan.days) { day in
-                    Section {
-                        ForEach(day.customers) { customer in
-                            Button { selected = customer } label: {
-                                NextUpRow(customer: customer)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    } header: {
-                        DayHeader(day: day, isToday: day.date == today)
-                    }
-                }
-
-                if !plan.later.isEmpty {
-                    Section("Later") {
-                        Text("\(plan.later.count) more customers are due after these days.")
-                            .foregroundStyle(.secondary)
+        if sizeClass == .regular {
+            NavigationSplitView {
+                roundList(plan: plan, today: today)
+                    .navigationTitle("Round")
+            } detail: {
+                NavigationStack {
+                    if let customer = customers.first(where: { $0.id == selectedID }) {
+                        CustomerLogPanel(customer: customer, onLogged: { advance(from: customer, in: plan) })
+                            .id(customer.id)
+                    } else {
+                        ContentUnavailableView("Choose a customer", systemImage: "hand.tap",
+                                               description: Text("Pick someone from the round to log their clean."))
                     }
                 }
             }
-            .navigationTitle("Round")
-            .sheet(item: $selected) { customer in
-                QuickLogSheet(customer: customer)
+            .navigationSplitViewStyle(.balanced)
+        } else {
+            NavigationStack {
+                roundList(plan: plan, today: today)
+                    .navigationTitle("Round")
+                    .sheet(item: $selected) { customer in
+                        QuickLogSheet(customer: customer)
+                    }
             }
         }
+    }
+
+    private func roundList(plan: RoundPlanner.Plan, today: Date) -> some View {
+        List(selection: $selectedID) {
+            if let pointer = plan.pointer {
+                Section {
+                    LabeledContent("Carrying on from") {
+                        Text(pointer.name)
+                    }
+                    .font(.subheadline)
+                }
+            }
+
+            if plan.days.isEmpty {
+                ContentUnavailableView("No working days", systemImage: "calendar.badge.exclamationmark",
+                                       description: Text("There are no working days coming up. Check the usual week in Settings."))
+            }
+
+            ForEach(plan.days) { day in
+                Section {
+                    ForEach(day.customers) { customer in
+                        row(for: customer)
+                    }
+                } header: {
+                    DayHeader(day: day, isToday: day.date == today)
+                }
+            }
+
+            if !plan.later.isEmpty {
+                Section("Later") {
+                    Text("\(plan.later.count) more customers are due after these days.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(for customer: Customer) -> some View {
+        if sizeClass == .regular {
+            NextUpRow(customer: customer).tag(customer.id)
+        } else {
+            Button { selected = customer } label: {
+                NextUpRow(customer: customer)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// After logging, move on to whoever is next in the round.
+    private func advance(from customer: Customer, in plan: RoundPlanner.Plan) {
+        let flat = plan.days.flatMap(\.customers)
+        guard let index = flat.firstIndex(where: { $0.id == customer.id }) else { return }
+        let following = flat.dropFirst(index + 1).first
+        selectedID = following?.id
     }
 }
 
@@ -131,46 +174,56 @@ private struct NextUpRow: View {
     }
 }
 
+/// The one-tap logging options for a customer: shown in a sheet on iPhone and as the right-hand panel on iPad.
+struct CustomerLogPanel: View {
+    let customer: Customer
+    var onLogged: () -> Void = {}
+
+    private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
+
+    var body: some View {
+        List {
+            Section {
+                Text(customer.address)
+                if owed.cleans > 0 {
+                    LabeledContent("Owes", value: owed.amount, format: .currency(code: "GBP"))
+                        .foregroundStyle(.red)
+                }
+                ForEach(customer.notes, id: \.self) { note in
+                    Text(note).foregroundStyle(.orange)
+                }
+            }
+
+            Section("Log") {
+                VisitQuickActions(customer: customer, onLogged: onLogged)
+            }
+
+            Section {
+                ContactButton(customer: customer)
+                NavigationLink("Customer page") {
+                    CustomerDetailView(customer: customer)
+                }
+            }
+        }
+        .navigationTitle(customer.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 /// Tapping a customer on the round gives the one-tap options straight away.
 struct QuickLogSheet: View {
     let customer: Customer
 
     @Environment(\.dismiss) private var dismiss
 
-    private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
-
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Text(customer.address)
-                    if owed.cleans > 0 {
-                        LabeledContent("Owes", value: owed.amount, format: .currency(code: "GBP"))
-                            .foregroundStyle(.red)
-                    }
-                    ForEach(customer.notes, id: \.self) { note in
-                        Text(note).foregroundStyle(.orange)
+            CustomerLogPanel(customer: customer, onLogged: { dismiss() })
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
                     }
                 }
-
-                Section("Log") {
-                    VisitQuickActions(customer: customer, onLogged: { dismiss() })
-                }
-
-                Section {
-                    ContactButton(customer: customer)
-                    NavigationLink("Customer page") {
-                        CustomerDetailView(customer: customer)
-                    }
-                }
-            }
-            .navigationTitle(customer.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
         }
     }
 }
