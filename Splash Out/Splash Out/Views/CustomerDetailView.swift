@@ -55,6 +55,13 @@ struct CustomerDetailView: View {
                         Text(lastClean, style: .date)
                     }
                 }
+            }
+
+            Section("Notes") {
+                if customer.notes.isEmpty {
+                    Text("No notes yet. Add them with Edit.")
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(customer.notes, id: \.self) { note in
                     Text(note)
                 }
