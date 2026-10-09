@@ -25,6 +25,7 @@ struct TodayView: View {
         let todayHouses = stats.houses(from: today, through: today)
         let oldestOwed = customers.flatMap { VisitLogger.unpaidVisits(for: $0) }.map(\.date).min()
         let taxYear = stats.currentTaxYear
+        let yearTotals = RoundMetrics.totals(for: customers, in: TaxYear.range(startYear: taxYear))
         let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
 
         let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
@@ -35,9 +36,11 @@ struct TodayView: View {
                          detail: dayTarget > 0
                             ? "of \(pounds(dayTarget)) · \(resolver.crewName(on: today)) · \(todayHouses) houses"
                             : "Not a working day")
-                    Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))",
+                    Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))", value: pounds(yearTotals.work),
+                         detail: "\(pounds(yearTotals.paid)) paid · \(pounds(yearTotals.work - yearTotals.paid)) not yet paid · \(yearTotals.cleans) cleans")
+                    Tile(title: "Ahead / behind",
                          value: (ahead.difference >= 0 ? "+" : "-") + pounds(abs(ahead.difference)),
-                         detail: "\(pounds(ahead.done)) done vs \(pounds(ahead.expected)) target so far",
+                         detail: "\(pounds(ahead.done)) done vs \(pounds(ahead.expected)) expected so far this tax year",
                          tint: ahead.difference >= 0 ? .green : .red,
                          caption: ahead.difference >= 0 ? "Ahead" : "Behind")
                     Tile(title: "Money owed", value: pounds(owed.amount),
