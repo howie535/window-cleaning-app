@@ -25,6 +25,8 @@ struct AddEditCustomerView: View {
     @State private var placeAfter: Customer?
     @State private var isShowingPlace = false
     @State private var isShowingContactPicker = false
+    @State private var saveToContacts = true
+    @State private var contactsMessage: String?
 
     private var isEditing: Bool { customer != nil }
 
@@ -58,6 +60,9 @@ struct AddEditCustomerView: View {
                     }
                     LabeledField(label: "Area") {
                         TextField("e.g. Kinmel Bay", text: $area)
+                    }
+                    if !isEditing {
+                        Toggle("Also save to Contacts", isOn: $saveToContacts)
                     }
                 }
                 Section("Cleaning") {
@@ -113,11 +118,17 @@ struct AddEditCustomerView: View {
                 }
             }
             .onAppear(perform: populateFieldsIfEditing)
+            .alert("Contacts", isPresented: Binding(get: { contactsMessage != nil }, set: { if !$0 { contactsMessage = nil; dismiss() } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(contactsMessage ?? "")
+            }
             .sheet(isPresented: $isShowingPlace) {
                 PlaceInRoundView(customers: allCustomers, placeAfter: $placeAfter)
             }
             .sheet(isPresented: $isShowingContactPicker) {
                 ContactPicker { contact in
+                    saveToContacts = false   // already in Contacts
                     name = contact.splashOutFullName
                     let digits = contact.splashOutPhoneDigits
                     if !digits.isEmpty { phone = digits }
@@ -195,7 +206,22 @@ struct AddEditCustomerView: View {
             }
         }
 
-        dismiss()
+        if customer == nil, saveToContacts {
+            // The customer is already saved; Contacts is a bonus, so a problem there only gets a message.
+            let (savedName, savedPhone, savedAddress) = (name, phone, address)
+            Task {
+                switch await ContactsSaver.save(name: savedName, phone: savedPhone, address: savedAddress) {
+                case .saved, .alreadyThere:
+                    dismiss()
+                case .notAllowed:
+                    contactsMessage = "The customer is saved, but Splash Out isn't allowed to use Contacts. You can allow it in Settings > Privacy & Security > Contacts."
+                case .failed(let reason):
+                    contactsMessage = "The customer is saved, but couldn't be added to Contacts: \(reason)"
+                }
+            }
+        } else {
+            dismiss()
+        }
     }
 }
 

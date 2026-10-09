@@ -3,7 +3,7 @@ import SwiftData
 import CoreLocation
 
 enum ImportField: String, CaseIterable, Identifiable {
-    case ignore, name, address, price, phone, accessNotes
+    case ignore, name, firstName, lastName, address, price, phone, accessNotes, round, area, status, everyOther, frontOnly, contact, payMethod
 
     var id: String { rawValue }
 
@@ -11,10 +11,19 @@ enum ImportField: String, CaseIterable, Identifiable {
         switch self {
         case .ignore: "Don't Import"
         case .name: "Name"
+        case .firstName: "First name"
+        case .lastName: "Last name"
         case .address: "Address"
         case .price: "Price"
         case .phone: "Phone"
         case .accessNotes: "Notes"
+        case .round: "Round"
+        case .area: "Area"
+        case .status: "Status"
+        case .everyOther: "Every other"
+        case .frontOnly: "Front only"
+        case .contact: "Contact by"
+        case .payMethod: "Pays by"
         }
     }
 }
@@ -32,12 +41,14 @@ struct ImportCustomersView: View {
     private struct ImportResult {
         let imported: Int
         let skipped: Int
+        let duplicates: Int
     }
+
 
     init(headers: [String], rows: [[String]]) {
         self.headers = headers
         self.rows = rows
-        _mapping = State(initialValue: Self.autoDetectedMapping(for: headers))
+        _mapping = State(initialValue: CustomerCSVImport.autoDetectedMapping(for: headers))
     }
 
     var body: some View {
@@ -47,9 +58,7 @@ struct ImportCustomersView: View {
                     ContentUnavailableView {
                         Label("Import Complete", systemImage: "checkmark.circle")
                     } description: {
-                        Text(result.skipped > 0
-                            ? "Imported \(result.imported) customers. Skipped \(result.skipped) row\(result.skipped == 1 ? "" : "s") with no name."
-                            : "Imported \(result.imported) customers.")
+                        Text(summary(of: result))
                     }
                 } else {
                     mappingForm
@@ -69,6 +78,13 @@ struct ImportCustomersView: View {
                 }
             }
         }
+    }
+
+    private func summary(of result: ImportResult) -> String {
+        var text = "Imported \(result.imported) customers."
+        if result.duplicates > 0 { text += " \(result.duplicates) already in the app, so left alone." }
+        if result.skipped > 0 { text += " Skipped \(result.skipped) row\(result.skipped == 1 ? "" : "s") with no name." }
+        return text
     }
 
     private var mappingForm: some View {
@@ -96,83 +112,9 @@ struct ImportCustomersView: View {
         )
     }
 
-    private static func autoDetectedMapping(for headers: [String]) -> [Int: ImportField] {
-        var mapping: [Int: ImportField] = [:]
-        for (index, header) in headers.enumerated() {
-            let lower = header.lowercased()
-            if lower.contains("name") {
-                mapping[index] = .name
-            } else if lower.contains("address") {
-                mapping[index] = .address
-            } else if lower.contains("price") || lower.contains("cost") {
-                mapping[index] = .price
-            } else if lower.contains("phone") {
-                mapping[index] = .phone
-            } else if lower.contains("note") {
-                mapping[index] = .accessNotes
-            }
-        }
-        return mapping
-    }
-
-    private var maxSequenceDescriptor: FetchDescriptor<Customer> {
-        var descriptor = FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence, order: .reverse)])
-        descriptor.fetchLimit = 1
-        return descriptor
-    }
-
     private func performImport() {
-        var imported = 0
-        var skipped = 0
-        var nextSequence = ((try? modelContext.fetch(maxSequenceDescriptor))?.first?.sequence ?? 0) + 1
-
-        for row in rows {
-            var name = ""
-            var address = ""
-            var phone = ""
-            var notes = ""
-            var price: Decimal = 0
-
-            for (index, field) in mapping {
-                guard index < row.count else { continue }
-                let value = row[index].trimmingCharacters(in: .whitespacesAndNewlines)
-                switch field {
-                case .name: name = value
-                case .address: address = value
-                case .price: price = CSVParser.parsePrice(value) ?? 0
-                case .phone: phone = UKPhoneNumber.toNationalFormat(value)
-                case .accessNotes: notes = value
-                case .ignore: break
-                }
-            }
-
-            guard !name.isEmpty else {
-                skipped += 1
-                continue
-            }
-
-            let customer = Customer(
-                name: name,
-                address: address,
-                phone: phone,
-                price: price,
-                sequence: nextSequence,
-                notes: notes.isEmpty ? [] : [notes]
-            )
-            modelContext.insert(customer)
-            imported += 1
-            nextSequence += 1
-
-            if !address.isEmpty {
-                Task {
-                    let coordinate = await Geocoding.coordinate(for: address)
-                    customer.latitude = coordinate?.latitude
-                    customer.longitude = coordinate?.longitude
-                }
-            }
-        }
-
-        result = ImportResult(imported: imported, skipped: skipped)
+        let outcome = CustomerCSVImport.run(mapping: mapping, rows: rows, context: modelContext)
+        result = ImportResult(imported: outcome.imported, skipped: outcome.skipped, duplicates: outcome.duplicates)
     }
 }
 

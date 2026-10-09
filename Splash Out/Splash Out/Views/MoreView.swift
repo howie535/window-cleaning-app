@@ -15,6 +15,7 @@ struct MoreView: View {
                 Section("Records") {
                     NavigationLink { DiaryView() } label: { Label("Diary", systemImage: "book") }
                     NavigationLink { TipsView() } label: { Label("Tips", systemImage: "heart") }
+                    NavigationLink { ExportsView() } label: { Label("Exports", systemImage: "square.and.arrow.up") }
                 }
                 Section("Tools") {
                     NavigationLink { RouteBuilderView(embedded: true) } label: { Label("Route planner", systemImage: "map") }

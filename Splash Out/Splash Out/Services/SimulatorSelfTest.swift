@@ -297,6 +297,62 @@ enum SimulatorSelfTest {
         try context.save()
         check("team tidy-up leaves the original crews", try context.fetchCount(FetchDescriptor<Crew>()) == crewList.count && !appSettings.teamMembers.contains("Newcomer"))
 
+        // exports
+        let exportable = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
+        let csvText = try String(contentsOf: DataExports.customersCSV(context: context), encoding: .utf8)
+        let csvRows = CSVParser.parse(csvText).filter { !$0.allSatisfy(\.isEmpty) }
+        check("customer CSV has a header and a row per customer", csvRows.count == exportable.count + 1 && csvRows[0].first == "Name")
+        let sample = exportable.first { $0.notes.count > 0 } ?? exportable[0]
+        let sampleRow = csvRows.first { $0.first == sample.name }
+        check("customer CSV keeps address, price and notes", sampleRow?[1] == sample.address && sampleRow.flatMap { CSVParser.parsePrice($0[3]) } == sample.price
+              && sampleRow?.last == sample.notes.joined(separator: " | "))
+        let ledgerText = try String(contentsOf: DataExports.incomeListCSV(taxYear: 2026, includeNames: false, context: context), encoding: .utf8)
+        let ledgerRows = CSVParser.parse(ledgerText)
+        let yearTotals = RoundMetrics.totals(for: exportable, in: TaxYear.range(startYear: 2026))
+        check("income list has a line per clean", ledgerRows.filter { $0.first.map { $0.hasPrefix("20") } ?? false }.count == yearTotals.cleans)
+        check("income list total matches the tax year work", ledgerRows.first { $0.first == "Total charged" }?[1] == NSDecimalNumber(decimal: yearTotals.work).stringValue)
+        let anonymous = try String(contentsOf: DataExports.analysisReport(includeNames: false, context: context), encoding: .utf8)
+        var identifying = 0
+        for person in exportable.prefix(80) where person.name.count > 5 {
+            if anonymous.contains(person.name) { identifying += 1 }
+            else if person.address.count > 8, anonymous.contains(person.address) { identifying += 1 }
+        }
+        check("anonymous analysis report has no names or addresses", identifying == 0, "\(identifying) found")
+        let reportCleans = anonymous.components(separatedBy: "\n").filter { $0.hasPrefix("| C") && $0.contains("| cleaned |") }.count
+        var storedCleans = 0
+        for person in exportable { storedCleans += person.allVisits.filter { $0.kind == .cleaned }.count }
+        check("analysis report has every visit", reportCleans == storedCleans, "\(reportCleans) vs \(storedCleans)")
+        let named = try String(contentsOf: DataExports.analysisReport(includeNames: true, context: context), encoding: .utf8)
+        check("named analysis report includes names", named.contains(exportable[0].name))
+        var longNote: String?
+        for person in exportable { if let note = person.notes.first(where: { $0.count > 12 }) { longNote = note; break } }
+        check("analysis report never includes notes", longNote.map { !named.contains($0) && !anonymous.contains($0) } ?? true)
+
+        // customer CSV round trip: export, delete two, import the file back
+        let roundTrip = CSVParser.parse(csvText).filter { !$0.allSatisfy(\.isEmpty) }
+        let detected = CustomerCSVImport.autoDetectedMapping(for: roundTrip[0])
+        check("CSV columns are recognised from the export headings", Set(detected.values) == Set([.name, .address, .phone, .price, .round, .area, .status, .everyOther, .frontOnly, .contact, .payMethod, .accessNotes]))
+        let again = CustomerCSVImport.run(mapping: detected, rows: Array(roundTrip.dropFirst()), context: context)
+        check("importing the same customers again adds nobody", again.imported == 0 && again.duplicates == exportable.count - 0, "\(again.imported) added, \(again.duplicates) dupes")
+        let gone = exportable.filter { !$0.notes.isEmpty && $0.status == .active }.prefix(2).map { $0 }
+        let goneFacts = gone.map { ($0.name, $0.address, $0.price, $0.round, $0.area, $0.status, $0.everyOther, $0.frontOnly, $0.notes) }
+        for person in gone { context.delete(person) }
+        try context.save()
+        let back = CustomerCSVImport.run(mapping: detected, rows: Array(roundTrip.dropFirst()), context: context)
+        check("only the two deleted customers come back", back.imported == gone.count && back.duplicates == exportable.count - gone.count, "\(back.imported) added")
+        let restoredAll = try context.fetch(FetchDescriptor<Customer>())
+        var allMatch = !goneFacts.isEmpty
+        for fact in goneFacts {
+            let match = restoredAll.first { $0.name == fact.0 && $0.address == fact.1 }
+            if match?.price != fact.2 || match?.round != fact.3 || match?.area != fact.4 || match?.status != fact.5
+                || match?.everyOther != fact.6 || match?.frontOnly != fact.7 || match?.notes != fact.8 { allMatch = false }
+        }
+        check("their price, round, area, status, flags and notes survive", allMatch)
+        let nameOnly = CustomerCSVImport.run(mapping: [0: .firstName, 1: .lastName, 2: .price], rows: [["Zed", "Testington", "12"], ["Zed", "Testington", "12"]], context: context)
+        check("first and last name columns make one name, and a repeat is skipped", nameOnly.imported == 1 && nameOnly.duplicates == 1)
+        if let zed = try context.fetch(FetchDescriptor<Customer>()).first(where: { $0.name == "Zed Testington" }) { context.delete(zed) }
+        try context.save()
+
         // clear cleaning history (destructive, so last)
         for c in [skipper, oneSkip, eoCust, cancelled, beforeFirst, window, under, front, unpaid, recovered, dup, future, riser, recent, brandNew] { context.delete(c) }
         try context.save()
