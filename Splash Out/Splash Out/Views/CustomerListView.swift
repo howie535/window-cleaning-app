@@ -7,6 +7,8 @@ struct CustomerListView: View {
     @Environment(UndoCenter.self) private var undoCenter
     @Query(sort: \Customer.sequence) private var customers: [Customer]
 
+    @State private var criteria = CustomerFilter.Criteria()
+    @State private var editMode: EditMode = .inactive
     @State private var isShowingAddCustomer = false
     @State private var isShowingFileImporter = false
     @State private var pendingImport: PendingImport?
@@ -18,10 +20,42 @@ struct CustomerListView: View {
         let rows: [[String]]
     }
 
+    private var rounds: [String] { Set(customers.map(\.round).filter { !$0.isEmpty }).sorted() }
+    private var areas: [String] {
+        Set(customers.filter { criteria.round == nil || $0.round == criteria.round }.map(\.area).filter { !$0.isEmpty }).sorted()
+    }
+
     var body: some View {
+        let shown = CustomerFilter.apply(criteria, to: customers)
         NavigationStack {
             List {
-                ForEach(customers) { customer in
+                Section {
+                    Picker("Round", selection: $criteria.round) {
+                        Text("All rounds").tag(String?.none)
+                        ForEach(rounds, id: \.self) { Text($0).tag(String?.some($0)) }
+                    }
+                    Picker("Area", selection: $criteria.area) {
+                        Text("All areas").tag(String?.none)
+                        ForEach(areas, id: \.self) { Text($0).tag(String?.some($0)) }
+                    }
+                    Picker("Status", selection: $criteria.status) {
+                        Text("Any status").tag(CustomerStatus?.none)
+                        ForEach(CustomerStatus.allCases) { Text($0.label).tag(CustomerStatus?.some($0)) }
+                    }
+                    Toggle("Reorder round", isOn: Binding(
+                        get: { editMode == .active },
+                        set: { editMode = $0 ? .active : .inactive }
+                    ))
+                    .disabled(criteria.isActive)
+                } footer: {
+                    if criteria.isActive {
+                        Text("\(shown.count) of \(customers.count) customers. Clear the search and filters to reorder the round.")
+                    } else {
+                        Text("Reorder round lets you drag customers into their place. The round order decides who's next.")
+                    }
+                }
+
+                ForEach(shown) { customer in
                     NavigationLink(value: customer) {
                         CustomerRow(customer: customer)
                     }
@@ -42,7 +76,15 @@ struct CustomerListView: View {
                         .tint(.red)
                     }
                 }
+                .onMove { offsets, destination in
+                    // Only meaningful for the whole round, so it's switched off while filtering.
+                    guard !criteria.isActive else { return }
+                    RoundOrder.move(customers, from: offsets, to: destination)
+                }
             }
+            .environment(\.editMode, $editMode)
+            .searchable(text: $criteria.search, prompt: "Name, address, area or note")
+            .onChange(of: criteria.isActive) { _, active in if active { editMode = .inactive } }
             .navigationTitle("Customers")
             .navigationDestination(for: Customer.self) { customer in
                 CustomerDetailView(customer: customer)
@@ -58,7 +100,7 @@ struct CustomerListView: View {
                             isShowingAddCustomer = true
                         }
                         .buttonStyle(.borderedProminent)
-                        Button("Import from Spreadsheet") {
+                        Button("Import Customers from File") {
                             isShowingFileImporter = true
                         }
                     }
@@ -76,7 +118,7 @@ struct CustomerListView: View {
                     Button {
                         isShowingFileImporter = true
                     } label: {
-                        Label("Import from Spreadsheet", systemImage: "square.and.arrow.down")
+                        Label("Import Customers from File", systemImage: "square.and.arrow.down")
                     }
                 }
             }
@@ -119,7 +161,7 @@ struct CustomerListView: View {
             defer { url.stopAccessingSecurityScopedResource() }
 
             guard let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) else {
-                importErrorMessage = "Couldn't read that file as text. Make sure it's a CSV export."
+                importErrorMessage = "Couldn't read that file as text. Make sure it's a CSV file."
                 return
             }
 

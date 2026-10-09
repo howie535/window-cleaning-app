@@ -39,7 +39,7 @@ enum SimulatorImport {
             }
 
             if let planPath = value(after: "-PlanFile") {
-                // `-Today yyyy-MM-dd` pins the date so the plan can be compared with the workbook's saved one.
+                // `-Today yyyy-MM-dd` pins the date so the plan can be compared against a known date.
                 let todayText = arguments.firstIndex(of: "-Today").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
                 let today = todayText.flatMap(RoundCalendar.parseDay) ?? RoundCalendar.startOfDay()
                 try PlanDump.write(to: planPath, today: today, in: context)

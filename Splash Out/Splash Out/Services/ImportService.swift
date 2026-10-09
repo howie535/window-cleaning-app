@@ -25,7 +25,7 @@ enum ImportService {
         }
     }
 
-    /// Dates before this can't be real (the workbook had a few 1900-era mistakes).
+    /// Dates before this can't be real (older systems produced a few 1900-era mistakes).
     private static let earliestRealDate = RoundCalendar.date(year: 2000, month: 1, day: 1)
 
     /// Replace, don't merge: wipes customers, visits, diary, tips and settings, then loads the file.

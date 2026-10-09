@@ -1,7 +1,7 @@
 import Foundation
 
-/// Weekly targets, ahead/behind, and tax-year month totals (Docs/SPEC.md 4.2 to 4.5), following the
-/// workbook's Weekly, Today and Tax Year sheets. Pure logic on plain values, so it can be tested alone.
+/// Weekly targets, ahead/behind, and tax-year month totals (Docs/SPEC.md 4.2 to 4.5), used by the Weekly,
+/// Today and Tax Year screens. Pure logic on plain values, so it can be tested alone.
 enum WeekMetrics {
     struct Config {
         /// Usual day target in pounds, Monday = index 0 ... Sunday = 6 (0 means not a working day).

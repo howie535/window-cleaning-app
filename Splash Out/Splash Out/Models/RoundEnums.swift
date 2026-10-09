@@ -51,7 +51,7 @@ enum PayMethod: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The workbook uses "so" for standing order.
+    /// Imported files may write standing order as "so".
     static func fromImport(_ raw: String?) -> PayMethod? {
         guard let raw = raw?.trimmingCharacters(in: .whitespaces).lowercased(), !raw.isEmpty else { return nil }
         if raw == "so" { return .standingOrder }

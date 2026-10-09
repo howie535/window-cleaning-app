@@ -114,7 +114,7 @@ extension RoundStats {
     }
 
     /// Visits that look wrong: dated in the future, or two on the same day for one customer.
-    /// (Impossible dates from the spreadsheet are left out at import and listed in its import report.)
+    /// (Impossible dates are left out when a file is imported.)
     func dataIssues() -> [DataIssue] {
         var issues: [DataIssue] = []
         for customer in customers {

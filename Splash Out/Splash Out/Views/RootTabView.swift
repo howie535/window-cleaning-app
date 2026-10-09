@@ -21,6 +21,7 @@ struct RootTabView: View {
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
         }
+        .tabViewStyle(.sidebarAdaptable)
         .environment(undoCenter)
         .overlay(alignment: .bottom) {
             UndoBanner(undoCenter: undoCenter)

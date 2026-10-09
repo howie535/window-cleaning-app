@@ -1,6 +1,6 @@
 import Foundation
 
-/// Who's next on the round (Docs/SPEC.md section 4.6), following the workbook's Next Up sheet.
+/// Who's next on the round (Docs/SPEC.md section 4.6).
 /// Pure logic on plain values, no storage, so it can be tested on its own.
 enum NextUp {
     struct Candidate: Equatable {

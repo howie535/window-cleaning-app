@@ -1,6 +1,6 @@
 import Foundation
 
-/// Price rise rules (Docs/SPEC.md 4.10), following the workbook's Price Rise sheet.
+/// Price rise rules (Docs/SPEC.md 4.10).
 /// Pure logic on plain values, so it can be tested alone.
 enum PriceRise {
     /// round(price x (1 + percent)) to the nearest pound, with exactly 50p going down.
@@ -8,7 +8,7 @@ enum PriceRise {
     static func newPrice(_ price: Decimal, percent: Decimal) -> Decimal {
         var raised = price * (1 + percent)
         var rounded = Decimal()
-        NSDecimalRound(&rounded, &raised, 2, .plain)       // to the penny first, as the workbook does
+        NSDecimalRound(&rounded, &raised, 2, .plain)       // to the penny first
         var shifted = rounded - Decimal(string: "0.5")!
         var result = Decimal()
         NSDecimalRound(&result, &shifted, 0, .up)           // then ceiling: x.5 goes down, x.51 goes up

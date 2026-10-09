@@ -55,7 +55,7 @@ struct ChecksView: View {
             } header: {
                 Text("Visits to check (\(issues.count))")
             } footer: {
-                Text("Visits dated in the future, or two on the same day. Dates that weren't real dates in the spreadsheet were left out at import and are listed in its import report.")
+                Text("Visits dated in the future, or two on the same day for one customer. Worth a look in case a date was typed wrongly.")
             }
         }
         .navigationTitle("Checks")

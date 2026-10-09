@@ -16,7 +16,7 @@ final class Visit {
     /// Customer credit (+) or debt (-) netted into this charge: listPrice minus the suggested price used.
     /// Lets the running balance use up a credit once it has been taken off a charge.
     var creditApplied: Decimal = 0
-    /// Skipped / not-due dates in the workbook are estimates (it only recorded a dash).
+    /// True when a skipped or not-due date was estimated rather than recorded on the day.
     var dateEstimated: Bool = false
     var customer: Customer?
 

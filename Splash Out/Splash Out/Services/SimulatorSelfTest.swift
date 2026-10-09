@@ -233,6 +233,35 @@ enum SimulatorSelfTest {
         check("applying twice does nothing more", RoundStats.applyRises(stats().risePreview().filter { $0.customer === riser }, in: context) == 0 && riser.price == 16)
         settings?.priceRiseDate = savedRiseDate
 
+        // ---- Customers screen: filters and reordering
+        let everyone = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
+        if let sample = everyone.first(where: { !$0.round.isEmpty && !$0.area.isEmpty && !$0.address.isEmpty }) {
+            var c = CustomerFilter.Criteria()
+            check("no filter shows everyone", CustomerFilter.apply(c, to: everyone).count == everyone.count && !c.isActive)
+            c.round = sample.round
+            let byRound = CustomerFilter.apply(c, to: everyone)
+            check("round filter keeps only that round", !byRound.isEmpty && byRound.allSatisfy { $0.round == sample.round } && byRound.count == everyone.filter { $0.round == sample.round }.count)
+            c.area = sample.area
+            check("round and area together narrow further", CustomerFilter.apply(c, to: everyone).allSatisfy { $0.round == sample.round && $0.area == sample.area })
+            c = .init(); c.status = .cancelled
+            check("status filter", CustomerFilter.apply(c, to: everyone).count == everyone.filter { $0.status == .cancelled }.count)
+            c = .init(); c.search = String(sample.address.prefix(6)).uppercased()
+            check("search ignores case and matches the address", CustomerFilter.apply(c, to: everyone).contains { $0 === sample })
+            c = .init(); c.search = "   "
+            check("a blank search is not a filter", !c.isActive && CustomerFilter.apply(c, to: everyone).count == everyone.count)
+            c = .init(); c.search = "zzzz-no-such-customer-zzzz"
+            check("no match shows nothing", CustomerFilter.apply(c, to: everyone).isEmpty)
+        }
+        let originalOrder = everyone.map(\.id)
+        RoundOrder.move(everyone, from: IndexSet(integer: 0), to: 6)   // first customer to position 6
+        let afterMove = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
+        check("dragging the first customer to position 6 puts them there", afterMove[5].id == originalOrder[0])
+        check("the others slide up one place and keep their order", Array(afterMove.prefix(5)).map(\.id) == Array(originalOrder[1...5]) && afterMove.dropFirst(6).map(\.id) == Array(originalOrder.dropFirst(6)))
+        check("round numbers stay 1...n with no gaps", afterMove.map(\.sequence) == Array(1...afterMove.count))
+        RoundOrder.move(afterMove, from: IndexSet(integer: 5), to: 0)  // and back to the front
+        let restored = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
+        check("moving back to the front restores the original order", restored.map(\.id) == originalOrder)
+
         // clear cleaning history (destructive, so last)
         for c in [skipper, oneSkip, eoCust, cancelled, beforeFirst, window, under, front, unpaid, recovered, dup, future, riser, recent, brandNew] { context.delete(c) }
         try context.save()

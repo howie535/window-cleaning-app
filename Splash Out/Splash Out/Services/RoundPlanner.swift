@@ -77,7 +77,7 @@ enum RoundPlanner {
         return Plan(days: dayPlans, later: later, pointer: pointer)
     }
 
-    /// Day targets and crews (Docs/SPEC.md 4.4, as the workbook does it).
+    /// Day targets and crews (Docs/SPEC.md 4.4).
     struct DayResolver {
         private let settings: AppSettings
         private let crews: [Crew]

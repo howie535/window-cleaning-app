@@ -117,11 +117,12 @@ private struct WeeksChart: View {
                             y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue))
                         .foregroundStyle(week.work >= week.target ? Color.green : Color.orange)
                     if week.target > 0 {
-                        RuleMark(x: .value("Week", RoundCalendar.short(week.start)),
-                                 yStart: .value("Target", NSDecimalNumber(decimal: week.target).doubleValue - 8),
-                                 yEnd: .value("Target", NSDecimalNumber(decimal: week.target).doubleValue + 8))
+                        let target = NSDecimalNumber(decimal: week.target).doubleValue
+                        RectangleMark(x: .value("Week", RoundCalendar.short(week.start)),
+                                      yStart: .value("Target", target - 14),
+                                      yEnd: .value("Target", target + 14),
+                                      width: .ratio(0.9))
                             .foregroundStyle(.primary)
-                            .lineStyle(StrokeStyle(lineWidth: 3))
                     }
                 }
             }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 /// The one-tap logging actions from Docs/SPEC.md section 3, plus recording payments.
 /// Every action returns what's needed to undo it.
@@ -162,5 +163,44 @@ enum RoundOrder {
             other.sequence += 1
         }
         customer.sequence = after.sequence + 1
+    }
+}
+
+extension RoundOrder {
+    /// Moves customers within the full round (as list offsets, like SwiftUI's onMove) and renumbers everyone 1...n.
+    @MainActor
+    static func move(_ ordered: [Customer], from offsets: IndexSet, to destination: Int) {
+        var list = ordered
+        list.move(fromOffsets: offsets, toOffset: destination)
+        for (index, customer) in list.enumerated() where customer.sequence != index + 1 {
+            customer.sequence = index + 1
+        }
+    }
+}
+
+/// Search and filters for the Customers screen (Docs/SPEC.md section 5).
+enum CustomerFilter {
+    struct Criteria: Equatable {
+        var search = ""
+        var round: String?
+        var area: String?
+        var status: CustomerStatus?
+        var isActive: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty || round != nil || area != nil || status != nil }
+    }
+
+    @MainActor
+    static func apply(_ criteria: Criteria, to customers: [Customer]) -> [Customer] {
+        let term = criteria.search.trimmingCharacters(in: .whitespaces)
+        return customers.filter { customer in
+            if let round = criteria.round, customer.round != round { return false }
+            if let area = criteria.area, customer.area != area { return false }
+            if let status = criteria.status, customer.status != status { return false }
+            guard !term.isEmpty else { return true }
+            return customer.name.localizedCaseInsensitiveContains(term)
+                || customer.address.localizedCaseInsensitiveContains(term)
+                || customer.area.localizedCaseInsensitiveContains(term)
+                || customer.round.localizedCaseInsensitiveContains(term)
+                || customer.notes.contains { $0.localizedCaseInsensitiveContains(term) }
+        }
     }
 }

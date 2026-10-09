@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// Aggregate figures only (no names or addresses), for checking an import against the
-/// workbook and Docs/SPEC.md section 7.
+/// the expected figures in Docs/SPEC.md section 7.
 @MainActor
 enum AcceptanceReport {
     static func make(in context: ModelContext) throws -> String {
@@ -30,7 +30,7 @@ enum AcceptanceReport {
         return lines.joined(separator: "\n")
     }
 
-    /// Machine-readable lines for comparing Weekly, Today and Tax Year figures with the workbook.
+    /// Machine-readable lines for checking the Weekly, Today and Tax Year figures.
     static func stage5(in context: ModelContext, today: Date) throws -> String {
         let customers = try context.fetch(FetchDescriptor<Customer>())
         let crews = try context.fetch(FetchDescriptor<Crew>())

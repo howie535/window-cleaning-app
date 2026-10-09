@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 #if targetEnvironment(simulator)
-/// Development aid: writes the Next Up plan as plain lines so it can be compared with the workbook.
+/// Development aid: writes the Next Up plan as plain lines so it can be compared against a reference.
 /// DAY lines list the working days; each customer line is `id,date` (or `later`).
 @MainActor
 enum PlanDump {
