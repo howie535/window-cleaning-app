@@ -53,15 +53,15 @@ enum RoundPlanner {
 
         let resolver = DayResolver(settings: settings, crews: crews, workDays: workDays, customers: customers)
         let days = NextUp.workingDays(from: today, calendar: calendar) { resolver.target(on: $0) }
-        let queue = NextUp.queue(
-            candidates,
-            today: today,
+        let overbook = Money.decimal(settings.overbook * 100) / 100
+        let assignments = NextUp.assignProjected(
+            NextUp.rotated(candidates),
+            to: days,
+            overbook: overbook,
             hideWeeks: settings.nextUpHideWeeks,
             hideWeeksEveryOther: settings.nextUpHideWeeksEveryOther,
             calendar: calendar
         )
-        let overbook = Money.decimal(settings.overbook * 100) / 100
-        let assignments = NextUp.assign(queue, to: days, overbook: overbook)
 
         var dayPlans = days.map {
             DayPlan(date: $0.date, target: $0.target, bookTo: $0.target * (1 + overbook),

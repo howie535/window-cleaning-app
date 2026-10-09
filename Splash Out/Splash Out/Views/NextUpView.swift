@@ -79,6 +79,11 @@ struct NextUpView: View {
                 }
             }
         }
+        // Plain style keeps each day's header pinned at the top until the next day's replaces it.
+        // The bar above and the header share one frosted look, so rows fade out the same way under both.
+        .listStyle(.plain)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(.bar, for: .navigationBar)
     }
 
     @ViewBuilder
@@ -115,6 +120,11 @@ private struct DayHeader: View {
                 .font(.caption)
                 .textCase(nil)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .listRowInsets(EdgeInsets())
     }
 }
 

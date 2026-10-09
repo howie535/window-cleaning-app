@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import Charts
 
-/// The dashboard (Docs/SPEC.md section 5): tiles for the week, today, ahead/behind, money owed and so on.
+/// The dashboard (Docs/SPEC.md section 5): tiles for the week, today, money owed and so on.
 struct TodayView: View {
     @Query private var customers: [Customer]
     @Query private var crews: [Crew]
@@ -17,7 +17,6 @@ struct TodayView: View {
         let today = RoundCalendar.startOfDay()
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let week = stats.thisWeek
-        let ahead = stats.aheadBehind()
         let owed = RoundMetrics.moneyOwed(customers)
         let resolver = RoundPlanner.DayResolver(settings: settings.first ?? AppSettings(), crews: crews, workDays: workDays, customers: customers)
         let dayTarget = resolver.target(on: today)
@@ -38,11 +37,6 @@ struct TodayView: View {
                             : "Not a working day")
                     Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))", value: pounds(yearTotals.work),
                          detail: "\(pounds(yearTotals.paid)) paid · \(pounds(yearTotals.work - yearTotals.paid)) not yet paid · \(yearTotals.cleans) cleans")
-                    Tile(title: "Ahead / behind",
-                         value: (ahead.difference >= 0 ? "+" : "-") + pounds(abs(ahead.difference)),
-                         detail: "\(pounds(ahead.done)) done vs \(pounds(ahead.expected)) expected so far this tax year",
-                         tint: ahead.difference >= 0 ? .green : .red,
-                         caption: ahead.difference >= 0 ? "Ahead" : "Behind")
                     Tile(title: "Money owed", value: pounds(owed.amount),
                          detail: "\(owed.cleans) cleans" + (oldestOwed.map { " · oldest \(RoundCalendar.short($0))" } ?? ""),
                          tint: owed.amount > 0 ? .red : .primary)

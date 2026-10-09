@@ -39,6 +39,10 @@ The iPad is where the round spreadsheet is used today, in landscape.
 9. **Stop using the spreadsheet** once two weeks match.
 10. **Weekly backup** for the first month: Settings > Export backup, saved to OneDrive.
 
+## 2b. Round planning
+
+The Round list plans ahead: it walks the round in order from whoever was cleaned last and puts each customer on the day their turn comes, provided they'll be due by then (3 weeks after their last clean, 8 for every-other). A customer skipped last time stays in their place among their neighbours instead of being swept into a day of stragglers. Each customer appears once, so days past one full lap are empty.
+
 ## 3. Sync notes (for when iCloud is switched on)
 
 - **Speed:** CloudKit sync is push-driven, not a constant stream. Changes normally show up on the other device within seconds to a minute when both are online, but Apple doesn't guarantee a time, and it can lag in Low Power Mode or with a weak connection. Edits made offline sync when the device is back online.

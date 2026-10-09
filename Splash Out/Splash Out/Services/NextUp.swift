@@ -57,7 +57,14 @@ enum NextUp {
         return true
     }
 
-    /// Customers in round order starting just after the pointer and wrapping, limited to those due.
+    /// Everyone listable in round order, starting just after the pointer and wrapping.
+    static func rotated(_ all: [Candidate]) -> [Candidate] {
+        let ordered = all.sorted { $0.sequence < $1.sequence }
+        guard let pointer = pointer(in: all) else { return ordered }
+        return ordered.filter { $0.sequence > pointer.sequence } + ordered.filter { $0.sequence <= pointer.sequence }
+    }
+
+    /// Customers in round order starting just after the pointer and wrapping, limited to those due today.
     static func queue(
         _ all: [Candidate],
         today: Date,
@@ -65,14 +72,7 @@ enum NextUp {
         hideWeeksEveryOther: Int,
         calendar: Calendar
     ) -> [Candidate] {
-        let ordered = all.sorted { $0.sequence < $1.sequence }
-        let rotated: [Candidate]
-        if let pointer = pointer(in: all) {
-            rotated = ordered.filter { $0.sequence > pointer.sequence } + ordered.filter { $0.sequence <= pointer.sequence }
-        } else {
-            rotated = ordered
-        }
-        return rotated.filter { isDue($0, today: today, hideWeeks: hideWeeks, hideWeeksEveryOther: hideWeeksEveryOther, calendar: calendar) }
+        rotated(all).filter { isDue($0, today: today, hideWeeks: hideWeeks, hideWeeksEveryOther: hideWeeksEveryOther, calendar: calendar) }
     }
 
     /// The next working days from `today`: those with a target above zero, within a look-ahead window.
@@ -108,5 +108,40 @@ enum NextUp {
             let index = capacities.filter { $0 < total }.count
             return Assignment(key: candidate.key, dayIndex: index < days.count ? index : nil, cumulative: total)
         }
+    }
+
+    /// Plans ahead: walks the whole round in order and puts each customer on the day their turn comes, provided
+    /// they will be due by then (not cleaned within 3 weeks of that day, 8 for every-other customers).
+    /// This keeps a skipped customer in their place among their neighbours, instead of being swept into a day of
+    /// stragglers at the end because their neighbours aren't due *yet*. Customers who won't be due by the time
+    /// their turn comes are left out of this pass; each customer appears at most once.
+    /// `dayIndex` is nil for those due but beyond the days available ("later").
+    static func assignProjected(
+        _ rotated: [Candidate],
+        to days: [Day],
+        overbook: Decimal,
+        hideWeeks: Int,
+        hideWeeksEveryOther: Int,
+        calendar: Calendar
+    ) -> [Assignment] {
+        guard let lastDay = days.last else { return [] }
+        var capacities: [Decimal] = []
+        var running: Decimal = 0
+        for day in days {
+            running += day.target * (1 + overbook)
+            capacities.append(running)
+        }
+
+        var total: Decimal = 0
+        var result: [Assignment] = []
+        for candidate in rotated where candidate.isListable {
+            let after = total + candidate.price
+            let index = capacities.filter { $0 < after }.count
+            let when = index < days.count ? days[index].date : lastDay.date
+            guard isDue(candidate, today: when, hideWeeks: hideWeeks, hideWeeksEveryOther: hideWeeksEveryOther, calendar: calendar) else { continue }
+            total = after
+            result.append(Assignment(key: candidate.key, dayIndex: index < days.count ? index : nil, cumulative: total))
+        }
+        return result
     }
 }
