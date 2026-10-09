@@ -22,7 +22,7 @@ Nothing in the data model needs to change for any of this.
 
 **Now to March (can be done any time, no rush)**
 1. **Enrol in the paid Apple Developer Program.** This unlocks iCloud sync between your iPhone and iPad. In Xcode, add the iCloud (CloudKit) capability, then the app's database is switched from "this device only" to "iCloud". Test it: add a customer on the iPhone, check it appears on the iPad.
-2. **Add a Git remote** (a private copy of the code on GitHub). One-off, about 10 minutes. See below if not done yet.
+2. **Git remote:** done. The code is pushed to a private GitHub repo (`howie535/window-cleaning-app`) over SSH. Run `git push` after each session.
 3. **Fill in test data** (fake cleans, payments, skips, a holiday in the diary, a tip). Work out a few totals by hand and check Weekly, Tax Year, Money Owed, Price Rise and Frequent Skips agree. Then clear the test history (Settings > Clear all cleaning history) so the customers are left alone.
 4. **Check prices.** Look through Customers for any with a £0 price.
 
