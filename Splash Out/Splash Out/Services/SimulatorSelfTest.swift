@@ -145,10 +145,11 @@ enum SimulatorSelfTest {
         func plan() -> RoundPlanner.Plan {
             RoundPlanner.plan(customers: all, settings: settings, crews: crews, workDays: workDays, today: today)
         }
-        /// On the round for a day inside the next three weeks. (Further out is fine: they come round again.)
-        func listedSoon(_ customer: Customer) -> Bool {
-            let limit = RoundCalendar.london.date(byAdding: .day, value: 21, to: today)!
-            return plan().days.contains { $0.date < limit && $0.customers.contains { $0 === customer } }
+        /// Last in the plan: dealt with, so they go to the back of the round and come round again in order.
+        func atBackOfRound(_ customer: Customer) -> Bool {
+            let p = plan()
+            let flat = p.days.flatMap(\.customers) + p.later
+            return flat.last === customer
         }
         func listed(_ customer: Customer) -> Bool {
             let p = plan()
@@ -160,7 +161,7 @@ enum SimulatorSelfTest {
             check("skipping keeps them on the round", listed(dueNow))
             skip()
             let done = VisitLogger.perform(.cleanedPaid, for: dueNow, in: context)
-            check("cleaning them takes them off the round for three weeks", !listedSoon(dueNow))
+            check("cleaning them sends them to the back of the round", atBackOfRound(dueNow))
             check("the round now carries on from them", plan().pointer === dueNow)
             done()
             check("undo puts them back on the round", listed(dueNow))
@@ -169,7 +170,7 @@ enum SimulatorSelfTest {
         }
         if let eo = all.first(where: { $0.everyOther && $0.status == .active && listed($0) }) {
             let off = VisitLogger.perform(.notDue, for: eo, in: context)
-            check("'not due' takes an every-other customer off the round for three weeks", !listedSoon(eo))
+            check("'not due' sends an every-other customer to the back of the round", atBackOfRound(eo))
             off()
         }
 
@@ -278,29 +279,31 @@ enum SimulatorSelfTest {
             check("plan: nobody appears twice", Set(placed.map(\.id)).count == placed.count)
             // first day is what the old "due today" logic gave
             let candidates = allNow.enumerated().map { index, customer -> NextUp.Candidate in
-                var lastCleaned: Date?, lastNotDue: Date?
+                var lastCleaned: Date?, lastNotDue: Date?, lastVisit: Date?
                 for visit in customer.allVisits {
+                    if lastVisit.map({ visit.date > $0 }) ?? true { lastVisit = visit.date }
                     if visit.kind == .cleaned, lastCleaned.map({ visit.date > $0 }) ?? true { lastCleaned = visit.date }
                     if visit.kind == .notDue, lastNotDue.map({ visit.date > $0 }) ?? true { lastNotDue = visit.date }
                 }
                 return NextUp.Candidate(key: index, sequence: customer.sequence, isListable: customer.status == .active || customer.status == .leaving,
-                                        price: customer.price, everyOther: customer.everyOther, lastCleaned: lastCleaned, lastNotDue: lastNotDue)
+                                        price: customer.price, everyOther: customer.everyOther, lastCleaned: lastCleaned, lastNotDue: lastNotDue, lastVisit: lastVisit)
             }
-            let hide = planSettings?.nextUpHideWeeks ?? 3, hideEO = planSettings?.nextUpHideWeeksEveryOther ?? 8
-            let dueToday = NextUp.queue(candidates, today: today, hideWeeks: hide, hideWeeksEveryOther: hideEO, calendar: RoundCalendar.london)
+            let hide = planSettings?.nextUpHideWeeks ?? 5
+            let dueToday = NextUp.queue(candidates, today: today, hideWeeks: hide, calendar: RoundCalendar.london)
             if let first = planned.days.first {
                 let oldDay = NextUp.assign(dueToday, to: NextUp.workingDays(from: today, calendar: RoundCalendar.london) { _ in first.target }, overbook: Money.decimal((planSettings?.overbook ?? 0.1) * 100) / 100)
                 let oldFirst = oldDay.filter { $0.dayIndex == 0 }.map { allNow[$0.key].id }
                 check("plan: today's list is the same as before", oldFirst == first.customers.map(\.id), "\(oldFirst.count) vs \(first.customers.count)")
             }
             var dueByTheirDay = true
+            let pointerSeq = NextUp.pointer(in: candidates)?.sequence
             for day in planned.days {
-                for customer in day.customers {
+                for customer in day.customers where pointerSeq.map({ customer.sequence > $0 }) ?? true {
                     let c = candidates[allNow.firstIndex { $0.id == customer.id }!]
-                    if !NextUp.isDue(c, today: day.date, hideWeeks: hide, hideWeeksEveryOther: hideEO, calendar: RoundCalendar.london) { dueByTheirDay = false }
+                    if !NextUp.isDue(c, today: day.date, hideWeeks: hide, calendar: RoundCalendar.london) { dueByTheirDay = false }
                 }
             }
-            check("plan: everyone is due by the day they're listed", dueByTheirDay)
+            check("plan: anyone ahead of the pointer is due by the day they're listed", dueByTheirDay)
             let rotatedSequences = NextUp.rotated(candidates).map(\.sequence)
             let placedSequences = placed.map(\.sequence)
             var cursor = 0, inOrder = true
@@ -351,6 +354,27 @@ enum SimulatorSelfTest {
         appSettings.extraDayCrew = extraBefore
         try context.save()
         check("team tidy-up leaves the original crews", try context.fetchCount(FetchDescriptor<Crew>()) == crewList.count && !appSettings.teamMembers.contains("Newcomer"))
+
+        // calendar contents
+        do {
+            let calSettings = try context.fetch(FetchDescriptor<AppSettings>()).first!
+            let calCrews = try context.fetch(FetchDescriptor<Crew>())
+            let calDiary = try context.fetch(FetchDescriptor<WorkDay>())
+            let start = RoundCalendar.date(year: 2027, month: 1, day: 4)   // a Monday
+            let plain = CalendarPlan.entries(settings: calSettings, crews: calCrews, workDays: [], from: start, days: 14)
+            let usual = calSettings.usualWeek
+            let workingPerWeek = usual.prefix(7).filter { !$0.isEmpty }.count
+            check("calendar has one entry per usual working day", plain.count == workingPerWeek * 2, "\(plain.count) vs \(workingPerWeek * 2)")
+            check("calendar entries are crew names only, no money", plain.values.allSatisfy { title in !title.contains("£") && calCrews.contains { $0.name == title } })
+            let off = WorkDay(date: start, dayOff: true, crewMembers: [], note: "Dentist")
+            let withOff = CalendarPlan.entries(settings: calSettings, crews: calCrews, workDays: [off], from: start, days: 14)
+            check("a day off shows as Day off, without its note", withOff[start] == "Day off" && !withOff.values.contains { $0.contains("Dentist") })
+            let extra = calCrews.first { $0.name != usual[0] } ?? calCrews[0]
+            let swapped = WorkDay(date: start, dayOff: false, crewMembers: extra.members, note: nil)
+            let withSwap = CalendarPlan.entries(settings: calSettings, crews: calCrews, workDays: [swapped], from: start, days: 14)
+            check("a different crew in the diary shows that crew", withSwap[start] == extra.name)
+            _ = calDiary
+        }
 
         // exports
         let exportable = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))

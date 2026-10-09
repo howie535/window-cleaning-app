@@ -9,6 +9,8 @@ struct RootTabView: View {
     @State private var undoCenter = UndoCenter()
     @State private var selection: AppTab = .today
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         TabView(selection: $selection) {
@@ -34,6 +36,9 @@ struct RootTabView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .environment(undoCenter)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await CalendarSync.syncIfEnabled(context: modelContext) } }
+        }
         .background {
             // Keyboard shortcuts for a keyboard case: Command-1 to Command-5 switch tab.
             ForEach(AppTab.allCases, id: \.self) { tab in

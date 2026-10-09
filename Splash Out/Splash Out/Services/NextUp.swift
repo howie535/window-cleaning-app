@@ -14,6 +14,8 @@ enum NextUp {
         var everyOther: Bool
         var lastCleaned: Date?
         var lastNotDue: Date?
+        /// The latest visit of any kind (cleaned, skipped or not due). A skip moves the round on just like a clean.
+        var lastVisit: Date?
     }
 
     struct Day: Equatable {
@@ -30,10 +32,12 @@ enum NextUp {
         var cumulative: Decimal
     }
 
-    /// The customer with the latest cleaned visit; on a tie, the one furthest along the round.
+    /// The customer most recently dealt with: the latest visit of any kind (cleaned, skipped or not due);
+    /// on a tie, the one furthest along the round.
     static func pointer(in all: [Candidate]) -> Candidate? {
-        all.filter { $0.lastCleaned != nil }.max { a, b in
-            if a.lastCleaned! != b.lastCleaned! { return a.lastCleaned! < b.lastCleaned! }
+        func date(_ c: Candidate) -> Date? { c.lastVisit ?? c.lastCleaned }
+        return all.filter { date($0) != nil }.max { a, b in
+            if date(a)! != date(b)! { return date(a)! < date(b)! }
             return a.sequence < b.sequence
         }
     }
@@ -43,17 +47,12 @@ enum NextUp {
         calendar.dateComponents([.day], from: from, to: to).day ?? 0
     }
 
-    /// Hidden if cleaned too recently: 3 weeks normally, 8 for every-other customers
-    /// (who are also hidden for 3 weeks after an off-cycle "not due").
-    static func isDue(_ c: Candidate, today: Date, hideWeeks: Int, hideWeeksEveryOther: Int, calendar: Calendar) -> Bool {
+    /// Due when it's their turn, unless they were cleaned (or marked not due) less than `hideWeeks` weeks before that day.
+    /// Every-other customers follow the same rule: whoever is on their off round is marked "not due" when the crew reaches them.
+    static func isDue(_ c: Candidate, today: Date, hideWeeks: Int, calendar: Calendar) -> Bool {
         guard c.isListable else { return false }
-        if let last = c.lastCleaned {
-            let gapWeeks = c.everyOther ? hideWeeksEveryOther : hideWeeks
-            if days(from: last, to: today, calendar: calendar) < 7 * gapWeeks { return false }
-        }
-        if c.everyOther, let notDue = c.lastNotDue, days(from: notDue, to: today, calendar: calendar) < 7 * hideWeeks {
-            return false
-        }
+        if let last = c.lastCleaned, days(from: last, to: today, calendar: calendar) < 7 * hideWeeks { return false }
+        if let notDue = c.lastNotDue, days(from: notDue, to: today, calendar: calendar) < 7 * hideWeeks { return false }
         return true
     }
 
@@ -69,17 +68,16 @@ enum NextUp {
         _ all: [Candidate],
         today: Date,
         hideWeeks: Int,
-        hideWeeksEveryOther: Int,
         calendar: Calendar
     ) -> [Candidate] {
-        rotated(all).filter { isDue($0, today: today, hideWeeks: hideWeeks, hideWeeksEveryOther: hideWeeksEveryOther, calendar: calendar) }
+        rotated(all).filter { isDue($0, today: today, hideWeeks: hideWeeks, calendar: calendar) }
     }
 
     /// The next working days from `today`: those with a target above zero, within a look-ahead window.
     static func workingDays(
         from today: Date,
-        maxDays: Int = 20,
-        windowDays: Int = 49,
+        maxDays: Int = 40,
+        windowDays: Int = 150,
         calendar: Calendar,
         target: (Date) -> Decimal
     ) -> [Day] {
@@ -111,7 +109,7 @@ enum NextUp {
     }
 
     /// Plans ahead: walks the whole round in order and puts each customer on the day their turn comes, provided
-    /// they will be due by then (not cleaned within 3 weeks of that day, 8 for every-other customers).
+    /// they will be due by then (not cleaned less than 5 weeks before that day).
     /// This keeps a skipped customer in their place among their neighbours, instead of being swept into a day of
     /// stragglers at the end because their neighbours aren't due *yet*. Customers who won't be due by the time
     /// their turn comes are left out of this pass; each customer appears at most once.
@@ -121,10 +119,13 @@ enum NextUp {
         to days: [Day],
         overbook: Decimal,
         hideWeeks: Int,
-        hideWeeksEveryOther: Int,
         calendar: Calendar
     ) -> [Assignment] {
         guard let lastDay = days.last else { return [] }
+        // Customers at or behind the pointer are on the next lap (already dealt with this lap), so their turn comes
+        // round in order whatever the dates say. The "less than 5 weeks" check only guards those still ahead of
+        // the pointer, who may have been cleaned out of order.
+        let pointerSequence = pointer(in: rotated)?.sequence
         var capacities: [Decimal] = []
         var running: Decimal = 0
         for day in days {
@@ -138,7 +139,8 @@ enum NextUp {
             let after = total + candidate.price
             let index = capacities.filter { $0 < after }.count
             let when = index < days.count ? days[index].date : lastDay.date
-            guard isDue(candidate, today: when, hideWeeks: hideWeeks, hideWeeksEveryOther: hideWeeksEveryOther, calendar: calendar) else { continue }
+            let nextLap = pointerSequence.map { candidate.sequence <= $0 } ?? false
+            guard candidate.isListable, nextLap || isDue(candidate, today: when, hideWeeks: hideWeeks, calendar: calendar) else { continue }
             total = after
             result.append(Assignment(key: candidate.key, dayIndex: index < days.count ? index : nil, cumulative: total))
         }

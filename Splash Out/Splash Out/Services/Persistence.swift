@@ -64,5 +64,12 @@ enum Persistence {
         if (try? context.fetchCount(FetchDescriptor<AppSettings>())) == 0 {
             context.insert(AppSettings())
         }
+        // One-off: the round rule changed from "hide for 3 weeks" to "due again after 5 weeks".
+        if !UserDefaults.standard.bool(forKey: "migration.dueAfter5Weeks") {
+            if let settings = try? context.fetch(FetchDescriptor<AppSettings>()).first, settings.nextUpHideWeeks == 3 {
+                settings.nextUpHideWeeks = 5
+            }
+            UserDefaults.standard.set(true, forKey: "migration.dueAfter5Weeks")
+        }
     }
 }

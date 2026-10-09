@@ -122,7 +122,8 @@ enum ImportService {
         settings.extraDayCrew = record.extraDayCrew
         settings.minHousesForWorkingDay = record.minHousesForWorkingDay
         settings.overbook = record.overbook
-        settings.nextUpHideWeeks = record.nextUpHideWeeks
+        // Older files carry the old 3-week rule; the round is now due again after 5 weeks.
+        settings.nextUpHideWeeks = record.nextUpHideWeeks == 3 ? 5 : record.nextUpHideWeeks
         settings.nextUpHideWeeksEveryOther = record.nextUpHideWeeksEveryOther
         settings.priceRiseDate = record.priceRise.date.flatMap(RoundCalendar.parseDay)
         settings.priceRisePercent = record.priceRise.percent

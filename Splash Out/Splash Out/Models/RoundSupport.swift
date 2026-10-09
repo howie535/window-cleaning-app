@@ -82,7 +82,9 @@ final class AppSettings {
     var extraDayCrew: String = ""
     var minHousesForWorkingDay: Int = 5
     var overbook: Double = 0.10
-    var nextUpHideWeeks: Int = 3
+    /// A customer is due again when it's their turn, unless cleaned less than this many weeks before.
+    var nextUpHideWeeks: Int = 5
+    /// No longer used: every-other customers follow the same rule. Kept so existing files and data still load.
     var nextUpHideWeeksEveryOther: Int = 8
     var priceRiseDate: Date?
     var priceRisePercent: Double = 0.10

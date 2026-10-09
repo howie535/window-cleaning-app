@@ -39,9 +39,11 @@ The iPad is where the round spreadsheet is used today, in landscape.
 9. **Stop using the spreadsheet** once two weeks match.
 10. **Weekly backup** for the first month: Settings > Export backup, saved to OneDrive.
 
-## 2b. Round planning
+## 2b. Round planning and calendar
 
-The Round list plans ahead: it walks the round in order from whoever was cleaned last and puts each customer on the day their turn comes, provided they'll be due by then (3 weeks after their last clean, 8 for every-other). A customer skipped last time stays in their place among their neighbours instead of being swept into a day of stragglers. Each customer appears once, so days past one full lap are empty.
+**Round list.** It shows one whole round in order, starting just after whoever was dealt with last (a clean, a skip or a "not due" all move it on). Each customer goes on the day their turn comes. Someone cleaned less than 5 weeks before that day is passed over, so a customer cleaned out of order isn't done twice. Every-other customers follow the same rule: when the crew reaches an off-round customer they are marked "Not due" and go to the back. As customers are cleaned or skipped they drop to the back of the round, so the list keeps refilling and there are no empty days at the end.
+
+**Calendar (Settings > Calendar).** Keeps a "Splash Out" calendar in the phone's Calendar app up to date: the crew for each working day, or "Day off", for four months ahead. No targets, notes or customers. One way: the app writes, nothing is read back. Share it from the Calendar app (Calendars > i > Add Person) with iPhone users. For someone on Android, make it a Public Calendar and send her the link to add to Google Calendar. It refreshes whenever the app opens and after each diary change.
 
 ## 3. Sync notes (for when iCloud is switched on)
 

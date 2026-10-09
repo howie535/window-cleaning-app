@@ -48,6 +48,8 @@ struct SettingsView: View {
                     RoundSettingsSections(settings: settings, crews: crews)
                 }
 
+                CalendarSection()
+
                 Section {
                     Button("Import round data...") {
                         importCustomersOnly = false
@@ -161,6 +163,49 @@ struct SettingsView: View {
             message = "Removed \(summary.visits) visits, \(summary.diary) diary entries and \(summary.tips) tips. Customers were kept. A backup was saved first."
         } catch {
             message = "Couldn't clear the history: \(error.localizedDescription)"
+        }
+    }
+}
+
+/// Shares the working diary through the phone's Calendar app.
+private struct CalendarSection: View {
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(CalendarSync.enabledKey) private var enabled = false
+    @State private var message: String?
+    @State private var working = false
+
+    var body: some View {
+        Section {
+            Toggle("Keep a calendar up to date", isOn: $enabled)
+                .onChange(of: enabled) { _, on in
+                    guard on else { return }
+                    run { await CalendarSync.sync(context: modelContext) }
+                }
+            if enabled {
+                Button(working ? "Updating..." : "Update calendar now") {
+                    run { await CalendarSync.sync(context: modelContext) }
+                }
+                .disabled(working)
+            }
+        } header: {
+            Text("Calendar")
+        } footer: {
+            Text("Puts a \"Splash Out\" calendar in your Calendar app with who is working each day (the crew, or Day off), for the next four months. No targets, customers or notes. It's one way: change the diary here, not in Calendar. To share it, open Calendar > Calendars, tap the i next to Splash Out, then Add Person. For someone on Android, turn on Public Calendar there and send them the link: they can add it to Google Calendar from its address.")
+        }
+        .alert("Calendar", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(message ?? "")
+        }
+    }
+
+    private func run(_ work: @escaping () async -> CalendarSync.Outcome) {
+        working = true
+        Task {
+            let outcome = await work()
+            working = false
+            message = outcome.message
+            if outcome == .notAllowed { enabled = false }
         }
     }
 }
@@ -310,8 +355,7 @@ private struct RoundSettingsSections: View {
         Section("Counting and Next Up") {
             Stepper("Houses for a worked day: \(settings.minHousesForWorkingDay)", value: $settings.minHousesForWorkingDay, in: 1...30)
             Stepper("Overbook allowance: \(percentBinding(\.overbook).wrappedValue)%", value: percentBinding(\.overbook), in: 0...50, step: 5)
-            Stepper("Hide if cleaned within: \(settings.nextUpHideWeeks) weeks", value: $settings.nextUpHideWeeks, in: 1...12)
-            Stepper("Every-other: \(settings.nextUpHideWeeksEveryOther) weeks", value: $settings.nextUpHideWeeksEveryOther, in: 1...26)
+            Stepper("Due again after: \(settings.nextUpHideWeeks) weeks", value: $settings.nextUpHideWeeks, in: 1...12)
             DatePicker("Records start", selection: $settings.recordsStart, displayedComponents: .date)
         }
 

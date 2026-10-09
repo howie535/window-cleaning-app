@@ -36,7 +36,9 @@ enum RoundPlanner {
         let candidates = customers.enumerated().map { index, customer -> NextUp.Candidate in
             var lastCleaned: Date?
             var lastNotDue: Date?
+            var lastVisit: Date?
             for visit in customer.allVisits {
+                if lastVisit.map({ visit.date > $0 }) ?? true { lastVisit = visit.date }
                 if visit.kind == .cleaned, lastCleaned.map({ visit.date > $0 }) ?? true { lastCleaned = visit.date }
                 if visit.kind == .notDue, lastNotDue.map({ visit.date > $0 }) ?? true { lastNotDue = visit.date }
             }
@@ -47,7 +49,8 @@ enum RoundPlanner {
                 price: customer.price,
                 everyOther: customer.everyOther,
                 lastCleaned: lastCleaned,
-                lastNotDue: lastNotDue
+                lastNotDue: lastNotDue,
+                lastVisit: lastVisit
             )
         }
 
@@ -59,7 +62,6 @@ enum RoundPlanner {
             to: days,
             overbook: overbook,
             hideWeeks: settings.nextUpHideWeeks,
-            hideWeeksEveryOther: settings.nextUpHideWeeksEveryOther,
             calendar: calendar
         )
 
@@ -72,6 +74,9 @@ enum RoundPlanner {
             let customer = customers[assignment.key]
             if let index = assignment.dayIndex { dayPlans[index].customers.append(customer) } else { later.append(customer) }
         }
+
+        // One full round, no empty days on the end: they fill up as customers are cleaned or skipped.
+        while dayPlans.count > 1, dayPlans.last?.customers.isEmpty == true { dayPlans.removeLast() }
 
         let pointer = NextUp.pointer(in: candidates).map { customers[$0.key] }
         return Plan(days: dayPlans, later: later, pointer: pointer)

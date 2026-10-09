@@ -247,6 +247,7 @@ private struct DiaryDayEditor: View {
                     Section {
                         Button("Back to the usual week", role: .destructive) {
                             if let entry { modelContext.delete(entry) }
+                            updateCalendar()
                             dismiss()
                         }
                     }
@@ -261,6 +262,13 @@ private struct DiaryDayEditor: View {
             .onAppear(perform: prefill)
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// Keeps the shared calendar in step after a change (only if it's switched on).
+    private func updateCalendar() {
+        try? modelContext.save()
+        let context = modelContext
+        Task { await CalendarSync.syncIfEnabled(context: context) }
     }
 
     private func prefill() {
@@ -303,6 +311,7 @@ private struct DiaryDayEditor: View {
         } else {
             modelContext.insert(WorkDay(date: date, dayOff: off, crewMembers: members, note: noteValue))
         }
+        updateCalendar()
         dismiss()
     }
 }
