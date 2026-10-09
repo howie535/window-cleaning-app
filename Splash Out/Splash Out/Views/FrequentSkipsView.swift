@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Customers who skipped 2 or more of their last 6 visits (Docs/SPEC.md 4.9).
+/// Customers who skipped 2 or more times in the last 12 months.
 struct FrequentSkipsView: View {
     @Query private var customers: [Customer]
     @Query private var crews: [Crew]
@@ -14,7 +14,7 @@ struct FrequentSkipsView: View {
 
         List {
             Section {
-                if rows.isEmpty { Text("Nobody has skipped twice recently.").foregroundStyle(.secondary) }
+                if rows.isEmpty { Text("Nobody has skipped twice in the last year.").foregroundStyle(.secondary) }
                 ForEach(rows) { row in
                     NavigationLink {
                         CustomerDetailView(customer: row.customer)
@@ -30,12 +30,12 @@ struct FrequentSkipsView: View {
                                 }
                             }
                             Spacer()
-                            Text("\(row.skips) of last \(row.ofLast)").font(.headline).foregroundStyle(.orange)
+                            Text("\(row.skips) of \(row.ofLast) visits").font(.headline).foregroundStyle(.orange)
                         }
                     }
                 }
             } footer: {
-                Text("Active and leaving customers only. Every-other customers' off-cycle visits don't count as skips.")
+                Text("Skips in the last 12 months, counted from each customer's first clean. Active and leaving customers only. Every-other customers' off-cycle visits don't count as skips.")
             }
         }
         .navigationTitle("Frequent Skips")

@@ -73,14 +73,15 @@ extension RoundStats {
         var id: UUID { customer.id }
     }
 
-    /// Active or leaving customers who skipped 2 or more of their last 6 visits since their first clean.
+    /// Active or leaving customers who skipped 2 or more times in the last 12 months, counting from their first clean.
     /// Every-other customers' off-cycle visits ("not due") don't count.
     func frequentSkippers() -> [SkipRow] {
         var rows: [SkipRow] = []
         for customer in customers where customer.status == .active || customer.status == .leaving {
             let visits = customer.allVisits.filter { $0.kind != .notDue }.sorted { $0.date < $1.date }
             guard let first = visits.firstIndex(where: { $0.kind == .cleaned }) else { continue }
-            let recent = visits[first...].suffix(6)
+            let yearAgo = RoundCalendar.london.date(byAdding: .month, value: -12, to: today) ?? today
+            let recent = visits[first...].filter { $0.date >= yearAgo }
             let skips = recent.filter { $0.kind == .skipped }.count
             if skips >= 2 { rows.append(SkipRow(customer: customer, skips: skips, ofLast: recent.count)) }
         }

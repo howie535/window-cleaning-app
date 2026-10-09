@@ -47,7 +47,23 @@ The free account's signing runs out after 7 days. When it does, the app won't op
 
 It installs over the top, so **your data stays**. Don't delete the app first.
 
-To skip the cable: with the phone plugged in, choose **Window > Devices and Simulators**, select the phone, and tick **Connect via network**. After that, Run works over Wi-Fi when the Mac and phone are on the same network. It still needs you to press Run.
+### Renewing without a cable (wireless)
+
+Set up once, with the cable:
+1. Plug the iPhone into the Mac, unlock it, and trust the Mac if asked.
+2. In Xcode choose **Window > Devices and Simulators** (Shift-Command-2) and click the **Devices** tab.
+3. Click your iPhone in the left-hand list.
+4. Tick **Connect via network**. A small globe icon appears next to the phone's name once it works.
+5. Unplug the cable.
+
+Every 7 days after that, with the Mac and the phone on the **same Wi-Fi** and the phone awake and unlocked:
+1. Open the project in Xcode.
+2. In the device menu at the top, pick your iPhone. A wireless phone shows a small network icon beside its name. If it's greyed out, unlock the phone and wait a moment.
+3. Press **Run** (Command-R).
+
+Or just ask Claude: if the phone is visible on the network, it can build and install the renewal itself, with no Xcode.
+
+If the phone doesn't show up wirelessly, plug it in once, then try again. Wireless needs a recent iOS and a Mac that stays awake.
 
 Nothing in Xcode renews it automatically. Third-party tools such as AltStore can re-sign in the background, but they need your Apple ID and a helper app on the Mac, so only use one you're happy with. The paid Apple Developer Program (a year at a time) removes the 7-day limit.
 

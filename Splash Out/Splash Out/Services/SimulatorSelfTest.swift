@@ -221,6 +221,16 @@ enum SimulatorSelfTest {
         check("pace: 5 weeks since the last clean, scheduled a week later, is 6 weeks", pace?.weeks == 6 && pace?.customers == 2, "\(String(describing: pace))")
         context.delete(paceA); context.delete(paceB); context.delete(paceEO)
 
+        let longAgo = synthetic("ST year window"); add(longAgo, .cleaned, daysAgo: 500); add(longAgo, .skipped, daysAgo: 450); add(longAgo, .skipped, daysAgo: 400)
+        for n in 0..<4 { add(longAgo, .cleaned, daysAgo: 300 - n * 50) }
+        add(longAgo, .skipped, daysAgo: 100)
+        let yearly = stats().frequentSkippers()
+        check("skips older than a year are forgotten (1 skip inside the year)", !listed(yearly, longAgo))
+        let ninety = synthetic("ST two in a year"); add(ninety, .cleaned, daysAgo: 330); add(ninety, .skipped, daysAgo: 250); add(ninety, .cleaned, daysAgo: 200); add(ninety, .cleaned, daysAgo: 150)
+        add(ninety, .cleaned, daysAgo: 110); add(ninety, .cleaned, daysAgo: 80); add(ninety, .cleaned, daysAgo: 50); add(ninety, .skipped, daysAgo: 20)
+        check("two skips spread over the year are flagged (more than 6 visits apart)", listed(stats().frequentSkippers(), ninety))
+        context.delete(longAgo); context.delete(ninety)
+
         let window = synthetic("ST window"); add(window, .cleaned, daysAgo: 400); add(window, .skipped, daysAgo: 380); add(window, .skipped, daysAgo: 360)
         for n in 0..<6 { add(window, .cleaned, daysAgo: 300 - n * 40) }
         skippers = stats().frequentSkippers()

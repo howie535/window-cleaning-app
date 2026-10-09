@@ -56,7 +56,7 @@ struct TodayView: View {
                     Tile(title: "Average per house",
                          value: yearTotals.cleans > 0 ? pounds2(yearTotals.work / Decimal(yearTotals.cleans)) : pounds2(listAverage),
                          detail: yearTotals.cleans > 0
-                            ? "this tax year · list price average \(pounds2(listAverage))"
+                            ? "charged per clean this tax year, paid or not · list price average \(pounds2(listAverage))"
                             : "list price average across \(priced.count) customers")
                     Tile(title: "Houses per workday",
                          value: perDay.map { $0.average.formatted(.number.precision(.fractionLength(1))) } ?? "–",
