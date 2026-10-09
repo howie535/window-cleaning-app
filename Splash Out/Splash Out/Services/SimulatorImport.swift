@@ -20,7 +20,7 @@ enum SimulatorImport {
 
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: value(after: "-ImportFile") ?? ""))
-            let summary = try ImportService.replaceAll(data: data, context: context)
+            let summary = try ImportService.replaceAll(data: data, context: context, includeHistory: !arguments.contains("-CustomersOnly"))
             var report = "IMPORT OK: \(summary.customers) customers, \(summary.visits) visits, \(summary.skippedVisits) skipped for bad dates, backup written: \(summary.backupURL != nil)\n"
                 + (try AcceptanceReport.make(in: context))
             if arguments.contains("-SelfTest") {

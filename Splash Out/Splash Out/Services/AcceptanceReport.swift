@@ -60,6 +60,12 @@ enum AcceptanceReport {
         lines.append("CYCLE weeks=\(stats.cycleWeeks.map(n) ?? "-")")
         lines.append("NEWLOST new=\(stats.newCustomers(taxYear: stats.currentTaxYear)) lost=\(stats.lostCustomers(taxYear: stats.currentTaxYear))")
         lines.append("SKIPRATE \(stats.skipRate)")
+        let rise = stats.riseDateInUse
+        let preview = stats.risePreview()
+        lines.append("PRICERISE date=\(RoundCalendar.dayString(rise.date)) preview=\(rise.isPreview) rows=\(preview.count) withRise=\(preview.filter { $0.effective != nil }.count) extra=\(n(preview.reduce(Decimal(0)) { $0 + $1.extraPerCycle })) due=\(stats.risesDue().count)")
+        lines.append("FREQSKIP \(stats.frequentSkippers().count) \(stats.frequentSkippers().map { "\($0.skips)/\($0.ofLast)" }.joined(separator: ","))")
+        lines.append("UNDERPRICE \(stats.payingUnderPrice().count)")
+        lines.append("DATAISSUES \(stats.dataIssues().count)")
         return lines.joined(separator: "\n")
     }
 

@@ -53,6 +53,8 @@ struct TodayView: View {
                          detail: "\(customers.filter { $0.status == .notStarted }.count) not started · \(customers.filter { $0.status == .paused }.count) paused")
                     Tile(title: "New vs lost", value: "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))",
                          detail: "new / cancelled this tax year")
+                    Tile(title: "Price rises due", value: "\(stats.risesDue().count)",
+                         detail: "no rise in \((settings.first?.priceRiseDueAfterMonths ?? 24) / 12) years · see Price Rise")
                     Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))),
                          detail: "of each customer's last 6 visits")
                 }

@@ -30,7 +30,9 @@ enum ImportService {
 
     /// Replace, don't merge: wipes customers, visits, diary, tips and settings, then loads the file.
     /// A backup of what's there is written first (when there is anything to back up).
-    static func replaceAll(data: Data, context: ModelContext, backupDirectory: URL? = ExportService.backupDirectory) throws -> Summary {
+    /// - Parameter includeHistory: false loads only the customer database (names, addresses, prices, notes,
+    ///   round order, status) and the settings, leaving out every visit, diary entry and tip.
+    static func replaceAll(data: Data, context: ModelContext, backupDirectory: URL? = ExportService.backupDirectory, includeHistory: Bool = true) throws -> Summary {
         let file = try RoundFile.decode(data)
         guard file.schema == RoundFile.currentSchema else { throw ImportError.unsupportedSchema(file.schema) }
 
@@ -72,7 +74,7 @@ enum ImportService {
             summary.customers += 1
             summary.statusCounts[customer.statusRaw, default: 0] += 1
 
-            for visitRecord in record.visits {
+            for visitRecord in (includeHistory ? record.visits : []) {
                 guard let dateString = visitRecord.date,
                       let date = RoundCalendar.parseDay(dateString),
                       date >= earliestRealDate
@@ -97,13 +99,13 @@ enum ImportService {
             }
         }
 
-        for entry in file.diary {
+        for entry in (includeHistory ? file.diary : []) {
             guard let date = RoundCalendar.parseDay(entry.date) else { continue }
             context.insert(WorkDay(date: date, dayOff: entry.dayOff, crewMembers: entry.crew ?? [], note: entry.note))
             summary.diary += 1
         }
 
-        for tip in file.tips {
+        for tip in (includeHistory ? file.tips : []) {
             guard let date = RoundCalendar.parseDay(tip.date) else { continue }
             context.insert(Tip(date: date, name: tip.name, amount: Money.decimal(tip.amount)))
             summary.tips += 1
@@ -140,5 +142,30 @@ enum ImportService {
                 context.insert(Crew(name: crew.name, members: crew.members, dayTarget: Money.decimal(crew.dayTarget)))
             }
         }
+    }
+
+    struct ClearSummary {
+        var visits = 0
+        var diary = 0
+        var tips = 0
+        var backupURL: URL?
+    }
+
+    /// Removes every visit (so every payment and balance with it), diary entry and tip, keeping the customers,
+    /// their prices, price history, notes, round order and the settings. A backup is written first.
+    static func clearCleaningHistory(context: ModelContext, backupDirectory: URL? = ExportService.backupDirectory) throws -> ClearSummary {
+        var summary = ClearSummary()
+        if let backupDirectory {
+            summary.backupURL = try ExportService.writeBackup(from: context, to: backupDirectory)
+        }
+        summary.visits = try context.fetchCount(FetchDescriptor<Visit>())
+        summary.diary = try context.fetchCount(FetchDescriptor<WorkDay>())
+        summary.tips = try context.fetchCount(FetchDescriptor<Tip>())
+        for customer in try context.fetch(FetchDescriptor<Customer>()) { customer.visits = [] }
+        try context.delete(model: Visit.self)
+        try context.delete(model: WorkDay.self)
+        try context.delete(model: Tip.self)
+        try context.save()
+        return summary
     }
 }

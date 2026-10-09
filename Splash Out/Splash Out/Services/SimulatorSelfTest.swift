@@ -168,6 +168,90 @@ enum SimulatorSelfTest {
             off()
         }
 
+        // ---- Stage 6: price rise, frequent skips, checks (synthetic customers, removed afterwards)
+        func stats() -> RoundStats { RoundStats(customers: (try? context.fetch(FetchDescriptor<Customer>())) ?? [], settings: settings, crews: crews, workDays: workDays, today: today) }
+        func synthetic(_ name: String, price: Decimal = 20, status: CustomerStatus = .active, eo: Bool = false, frontOnly: Bool = false) -> Customer {
+            let c = Customer(name: name, price: price, status: status)
+            c.everyOther = eo; c.frontOnly = frontOnly
+            context.insert(c); return c
+        }
+        func add(_ c: Customer, _ kind: VisitKind, daysAgo: Int, charged: Decimal = 20, paid: Decimal = 20, listPrice: Decimal = 20) {
+            let v = Visit(date: RoundCalendar.london.date(byAdding: .day, value: -daysAgo, to: today)!, kind: kind, listPrice: listPrice, charged: kind == .cleaned ? charged : 0, paid: kind == .cleaned ? paid : 0)
+            context.insert(v); v.customer = c
+        }
+        func listed(_ rows: [RoundStats.SkipRow], _ c: Customer) -> Bool { rows.contains { $0.customer === c } }
+
+        let skipper = synthetic("ST skipper"); add(skipper, .cleaned, daysAgo: 100); add(skipper, .skipped, daysAgo: 70); add(skipper, .skipped, daysAgo: 40)
+        let oneSkip = synthetic("ST one skip"); add(oneSkip, .cleaned, daysAgo: 100); add(oneSkip, .skipped, daysAgo: 70); add(oneSkip, .cleaned, daysAgo: 40)
+        let eoCust = synthetic("ST eo", eo: true); add(eoCust, .cleaned, daysAgo: 150); add(eoCust, .notDue, daysAgo: 120); add(eoCust, .cleaned, daysAgo: 90); add(eoCust, .notDue, daysAgo: 60); add(eoCust, .skipped, daysAgo: 30)
+        let cancelled = synthetic("ST cancelled", status: .cancelled); add(cancelled, .cleaned, daysAgo: 100); add(cancelled, .skipped, daysAgo: 70); add(cancelled, .skipped, daysAgo: 40)
+        let beforeFirst = synthetic("ST early skips"); add(beforeFirst, .skipped, daysAgo: 200); add(beforeFirst, .skipped, daysAgo: 170); add(beforeFirst, .cleaned, daysAgo: 100)
+        var skippers = stats().frequentSkippers()
+        check("two skips in the last visits is flagged", listed(skippers, skipper) && skippers.first { $0.customer === skipper }?.skips == 2)
+        check("one skip is not flagged", !listed(skippers, oneSkip))
+        check("every-other off-cycle visits don't count (1 real skip)", !listed(skippers, eoCust))
+        check("cancelled customers are left out", !listed(skippers, cancelled))
+        check("skips before the first clean don't count", !listed(skippers, beforeFirst))
+        let window = synthetic("ST window"); add(window, .cleaned, daysAgo: 400); add(window, .skipped, daysAgo: 380); add(window, .skipped, daysAgo: 360)
+        for n in 0..<6 { add(window, .cleaned, daysAgo: 300 - n * 40) }
+        skippers = stats().frequentSkippers()
+        check("old skips outside the last 6 visits are forgotten", !listed(skippers, window))
+
+        // under price
+        let under = synthetic("ST under", price: 20); add(under, .cleaned, daysAgo: 10, paid: 15, listPrice: 20)
+        let front = synthetic("ST front", price: 20, frontOnly: true); add(front, .cleaned, daysAgo: 10, paid: 15, listPrice: 20)
+        let unpaid = synthetic("ST unpaid", price: 20); add(unpaid, .cleaned, daysAgo: 10, paid: 0, listPrice: 20)
+        let recovered = synthetic("ST recovered", price: 20); add(recovered, .cleaned, daysAgo: 40, paid: 15, listPrice: 20); add(recovered, .cleaned, daysAgo: 10, paid: 20, listPrice: 20)
+        let underRows = stats().payingUnderPrice()
+        check("last clean paid below price is flagged", underRows.contains { $0.customer === under && $0.lastPaid == 15 })
+        check("front-only customers are left out", !underRows.contains { $0.customer === front })
+        check("an unpaid clean isn't 'paying under'", !underRows.contains { $0.customer === unpaid })
+        check("only the latest payment counts", !underRows.contains { $0.customer === recovered })
+
+        // data issues
+        let dup = synthetic("ST dup"); add(dup, .cleaned, daysAgo: 5); add(dup, .cleaned, daysAgo: 5)
+        let future = synthetic("ST future"); add(future, .cleaned, daysAgo: -3)
+        let issues = stats().dataIssues()
+        check("two visits on one day is flagged", issues.contains { $0.customer === dup })
+        check("a visit dated in the future is flagged", issues.contains { $0.customer === future })
+        check("normal customers aren't flagged", !issues.contains { $0.customer === skipper })
+
+        // price rise end to end
+        let riser = synthetic("ST riser", price: 15)
+        let recent = synthetic("ST recent", price: 20); recent.priceSince = RoundCalendar.london.date(byAdding: .month, value: -6, to: today)
+        let brandNew = synthetic("ST brand new", price: 20); brandNew.priceSince = today
+        let savedRiseDate = settings?.priceRiseDate
+        settings?.priceRiseDate = today
+        let rows = stats().risePreview()
+        func row(_ c: Customer) -> RoundStats.RiseRow? { rows.first { $0.customer === c } }
+        check("15 rises to 16", row(riser)?.newPrice == 16 && row(riser)?.effective == today)
+        check("a price changed 6 months ago waits", row(recent)?.effective == RoundCalendar.london.date(byAdding: .month, value: 6, to: today))
+        check("a price that starts today gets no rise", row(brandNew)?.effective == nil && row(brandNew)?.extraPerCycle == 0)
+        let applied = RoundStats.applyRises(rows.filter { ($0.effective.map { $0 <= today } ?? false) && ($0.customer === riser || $0.customer === recent || $0.customer === brandNew) }, in: context)
+        check("apply changes only those whose rise has taken effect", applied == 1 && riser.price == 16 && recent.price == 20 && brandNew.price == 20, "\(applied) \(riser.price)")
+        check("apply records the price history and price since", riser.priceSince == today && (riser.priceChanges ?? []).contains { $0.oldPrice == 15 && $0.newPrice == 16 && $0.reason == .rise })
+        check("applying twice does nothing more", RoundStats.applyRises(stats().risePreview().filter { $0.customer === riser }, in: context) == 0 && riser.price == 16)
+        settings?.priceRiseDate = savedRiseDate
+
+        // clear cleaning history (destructive, so last)
+        for c in [skipper, oneSkip, eoCust, cancelled, beforeFirst, window, under, front, unpaid, recovered, dup, future, riser, recent, brandNew] { context.delete(c) }
+        try context.save()
+        let before = try context.fetch(FetchDescriptor<Customer>())
+        let prices = Dictionary(uniqueKeysWithValues: before.map { ($0.id, $0.price) })
+        let notes = Dictionary(uniqueKeysWithValues: before.map { ($0.id, $0.notes) })
+        let cleared = try ImportService.clearCleaningHistory(context: context, backupDirectory: nil)
+        let after = try context.fetch(FetchDescriptor<Customer>())
+        let visitsLeft = try context.fetchCount(FetchDescriptor<Visit>())
+        let diaryLeft = try context.fetchCount(FetchDescriptor<WorkDay>())
+        let tipsLeft = try context.fetchCount(FetchDescriptor<Tip>())
+        let settingsLeft = try context.fetchCount(FetchDescriptor<AppSettings>())
+        let crewsLeft = try context.fetchCount(FetchDescriptor<Crew>())
+        check("clear history removes the visits", cleared.visits > 0 && visitsLeft == 0)
+        check("clear history removes diary and tips", diaryLeft == 0 && tipsLeft == 0)
+        check("clear history keeps every customer, price and note", after.count == before.count && after.allSatisfy { prices[$0.id] == $0.price && notes[$0.id] == $0.notes })
+        check("no money owed or work left", RoundMetrics.moneyOwed(after).cleans == 0 && RoundMetrics.totals(for: after, in: TaxYear.range(startYear: 2026)).work == 0)
+        check("settings and crews are kept", settingsLeft == 1 && crewsLeft > 0)
+
         lines.append(failures == 0 ? "SELFTEST: ALL \(lines.count) CHECKS PASSED" : "SELFTEST: \(failures) FAILED")
         return lines.joined(separator: "\n")
     }
