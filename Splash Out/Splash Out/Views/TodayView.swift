@@ -27,9 +27,7 @@ struct TodayView: View {
         let taxYear = stats.currentTaxYear
         let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
 
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
+        let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
                     Tile(title: "This week", value: pounds(week.work),
                          detail: "of \(pounds(week.target)) target · \(week.houses) houses",
                          tint: week.work >= week.target ? .green : .primary)
@@ -58,10 +56,27 @@ struct TodayView: View {
                     Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))),
                          detail: "of each customer's last 6 visits")
                 }
-                .padding(.horizontal)
 
-                WeeksChart(weeks: Array(stats.weeks.suffix(12)))
-                    .padding()
+        NavigationStack {
+            GeometryReader { geometry in
+                // Wide enough (iPad landscape): tiles on the left, the chart beside them.
+                let sideBySide = geometry.size.width > 800
+                ScrollView {
+                    if sideBySide {
+                        HStack(alignment: .top, spacing: 12) {
+                            tiles
+                                .frame(width: geometry.size.width * 0.5)
+                            WeeksChart(weeks: Array(stats.weeks.suffix(12)), height: 420)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom)
+                    } else {
+                        tiles
+                            .padding(.horizontal)
+                        WeeksChart(weeks: Array(stats.weeks.suffix(12)))
+                            .padding()
+                    }
+                }
             }
             .navigationTitle("Today")
             .background(Color(.systemGroupedBackground))
@@ -105,6 +120,7 @@ private struct Tile: View {
 /// Last 12 weeks: work as bars, target as a marker, so a short week is obvious at a glance.
 private struct WeeksChart: View {
     let weeks: [WeekMetrics.Week]
+    var height: CGFloat = 200
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -113,12 +129,12 @@ private struct WeeksChart: View {
                 .foregroundStyle(.secondary)
             Chart {
                 ForEach(weeks, id: \.start) { week in
-                    BarMark(x: .value("Week", RoundCalendar.short(week.start)),
+                    BarMark(x: .value("Week", week.start, unit: .weekOfYear),
                             y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue))
                         .foregroundStyle(week.work >= week.target ? Color.green : Color.orange)
                     if week.target > 0 {
                         let target = NSDecimalNumber(decimal: week.target).doubleValue
-                        RectangleMark(x: .value("Week", RoundCalendar.short(week.start)),
+                        RectangleMark(x: .value("Week", week.start, unit: .weekOfYear),
                                       yStart: .value("Target", target - 14),
                                       yEnd: .value("Target", target + 14),
                                       width: .ratio(0.9))
@@ -126,7 +142,13 @@ private struct WeeksChart: View {
                     }
                 }
             }
-            .frame(height: 200)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: height > 200 ? 6 : 4)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                }
+            }
+            .frame(height: height)
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))

@@ -145,6 +145,7 @@ struct CustomerListView: View {
     /// Search, title, toolbar and empty state shared by both layouts.
     private func configured<Content: View>(_ list: Content) -> some View {
         list
+            .roomyRows()
             .environment(\.editMode, $editMode)
             .searchable(text: $criteria.search, prompt: "Name, address, area or note")
             .onChange(of: criteria.isActive) { _, active in if active { editMode = .inactive } }
@@ -173,6 +174,7 @@ struct CustomerListView: View {
                     } label: {
                         Label("Add Customer", systemImage: "plus")
                     }
+                    .keyboardShortcut("n", modifiers: .command)
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {

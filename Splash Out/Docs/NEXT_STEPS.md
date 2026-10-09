@@ -10,12 +10,14 @@ The iPad is where the round spreadsheet is used today, in landscape.
 - **Two-column Round, Customers and Owed** on iPad. List on the left; on the right the one-tap logging panel (Round), the customer page (Customers) or the customer page with Record payment (Owed). On Round, logging a clean moves the selection on to the next customer in the round. iPhone is unchanged (sheet on Round, push on Customers, sheet on Owed).
 - Top tab bar with a sidebar toggle, five-tile Today in landscape, Customers search/filter/reorder, Diary calendar with wider cells, undo banner kept to a sensible width.
 
-**Still to do (about 1 session):**
-- Check Diary, More, Weekly, Tax Year and the sheets (Record payment, Add clean, Place in round) in landscape.
-- Today and Weekly: tiles and chart side by side where there's room.
-- Keyboard shortcuts for a keyboard case: new customer, search, move between tabs.
-- Larger tap targets on the Round and Owed lists if the iPad is used on a ladder or in the van.
-- Real-iPad check (the Simulator can't tell you about glare, gloves or one-handed use).
+- Today in landscape: tiles on the left, a taller chart with readable date labels on the right.
+- Taller list rows on iPad (Round, Customers, Owed) for ladder and van use.
+- Keyboard shortcuts: Command-1 to Command-5 switch tabs, Command-N adds a customer. (Built but not tested: the Simulator tools here can't send key combinations. Try them on a real iPad with a keyboard.)
+- Checked in landscape: Today, Round, Customers, Owed, More, Weekly, Tax Year, Diary.
+
+**Still to do:**
+- Look at Record payment, Add clean and Place in round as sheets on iPad (they use the standard centred iPad sheet, but haven't been seen with real data).
+- Try everything on a real iPad.
 
 ## 2. Switchover checklist (target 6 April 2027)
 

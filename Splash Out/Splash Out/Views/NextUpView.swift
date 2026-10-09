@@ -21,6 +21,7 @@ struct NextUpView: View {
         if sizeClass == .regular {
             NavigationSplitView {
                 roundList(plan: plan, today: today)
+                    .roomyRows()
                     .navigationTitle("Round")
             } detail: {
                 NavigationStack {

@@ -41,6 +41,7 @@ struct MoneyOwedView: View {
         if sizeClass == .regular {
             NavigationSplitView {
                 owedList(rows: rows, total: total, cleans: cleans, today: today)
+                    .roomyRows()
                     .navigationTitle("Money Owed")
             } detail: {
                 NavigationStack {
