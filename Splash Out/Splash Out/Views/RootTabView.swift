@@ -16,7 +16,7 @@ struct RootTabView: View {
         TabView(selection: $selection) {
             TodayView()
                 .tag(AppTab.today)
-                .tabItem { Label("Today", systemImage: "chart.bar.xaxis") }
+                .tabItem { Label("Stats", systemImage: "chart.bar.xaxis") }
 
             NextUpView()
                 .tag(AppTab.round)

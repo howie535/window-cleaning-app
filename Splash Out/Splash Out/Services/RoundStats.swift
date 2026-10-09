@@ -150,19 +150,29 @@ struct RoundStats {
         return customers.filter { $0.status == .cancelled && ($0.lastCleanDate.map(range.contains) ?? false) }.count
     }
 
-    /// 4.12: skipped / (skipped + cleaned) over each active or leaving customer's last 6 visits since their first clean.
+    /// Skipped / (skipped + cleaned) across every visit ever recorded, for everyone except cancelled customers.
+    /// "Not due" visits (an every-other customer's off round) don't count either way.
     var skipRate: Double {
         var skipped = 0, total = 0
-        for customer in customers where customer.status == .active || customer.status == .leaving {
-            let visits = customer.allVisits
-                .filter { $0.kind != .notDue }
-                .sorted { $0.date < $1.date }
-            guard let firstCleanIndex = visits.firstIndex(where: { $0.kind == .cleaned }) else { continue }
-            let recent = visits[firstCleanIndex...].suffix(6)
-            skipped += recent.filter { $0.kind == .skipped }.count
-            total += recent.count
+        for customer in customers where customer.status != .cancelled {
+            for visit in customer.allVisits where visit.kind != .notDue {
+                total += 1
+                if visit.kind == .skipped { skipped += 1 }
+            }
         }
         return total == 0 ? 0 : Double(skipped) / Double(total)
+    }
+
+    /// Houses cleaned per worked day over a tax year so far (a worked day has at least the minimum houses).
+    func housesPerWorkedDay(taxYear: Int) -> (average: Decimal, days: Int)? {
+        let range = TaxYear.range(startYear: taxYear)
+        var houses = 0, days = 0
+        for (date, totals) in dayTotals where range.contains(date) && date <= today && totals.houses >= settings.minHousesForWorkingDay {
+            houses += totals.houses
+            days += 1
+        }
+        guard days > 0 else { return nil }
+        return (Decimal(houses) / Decimal(days), days)
     }
 
     // MARK: Crew averages (4.13)

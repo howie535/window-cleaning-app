@@ -124,7 +124,7 @@ enum DataExports {
             "- Ahead/behind weekly targets: £\(n(ahead.difference)) (£\(n(ahead.done)) done against £\(n(ahead.expected)) expected)",
             "- Money owed now: £\(n(owed.amount)) over \(owed.cleans) cleans",
             "- Round value per cycle: £\(n(RoundMetrics.roundValue(all))) (every-other customers at half)",
-            "- Skip rate (last 6 visits per active customer): \((stats.skipRate * 100).formatted(.number.precision(.fractionLength(1))))%",
+            "- Skip rate (all visits ever, cancelled customers left out): \((stats.skipRate * 100).formatted(.number.precision(.fractionLength(1))))%",
             "- New customers this tax year: \(stats.newCustomers(taxYear: year)), cancelled: \(stats.lostCustomers(taxYear: year))",
             "",
             "### By month",

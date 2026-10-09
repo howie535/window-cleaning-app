@@ -178,8 +178,8 @@ private struct CalendarSection: View {
         Section {
             Toggle("Keep a calendar up to date", isOn: $enabled)
                 .onChange(of: enabled) { _, on in
-                    guard on else { return }
-                    run { await CalendarSync.sync(context: modelContext) }
+                    if on { run { await CalendarSync.sync(context: modelContext) } }
+                    else { run { await CalendarSync.removeCalendar() } }
                 }
             if enabled {
                 Button(working ? "Updating..." : "Update calendar now") {
@@ -190,7 +190,7 @@ private struct CalendarSection: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Puts a \"Splash Out\" calendar in your Calendar app with who is working each day (the crew, or Day off), for the next four months. No targets, customers or notes. It's one way: change the diary here, not in Calendar. To share it, open Calendar > Calendars, tap the i next to Splash Out, then Add Person. For someone on Android, turn on Public Calendar there and send them the link: they can add it to Google Calendar from its address.")
+            Text("Puts a \"Splash Out\" calendar in your Calendar app with who is working each day (the crew, or Day off), for the next four months. No targets, customers or notes. Switching it off deletes the calendar. It's one way: change the diary here, not in Calendar. To share it, open Calendar > Calendars, tap the i next to Splash Out, then Add Person. For someone on Android, turn on Public Calendar there and send them the link: they can add it to Google Calendar from its address.")
         }
         .alert("Calendar", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}

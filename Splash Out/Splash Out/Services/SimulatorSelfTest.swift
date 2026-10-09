@@ -198,6 +198,29 @@ enum SimulatorSelfTest {
         check("every-other off-cycle visits don't count (1 real skip)", !listed(skippers, eoCust))
         check("cancelled customers are left out", !listed(skippers, cancelled))
         check("skips before the first clean don't count", !listed(skippers, beforeFirst))
+        // overall skip rate: every visit ever, cancelled customers left out
+        func manualSkipRate(includingCancelled: Bool) -> Double {
+            var skipped = 0, total = 0
+            let everyone = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
+            for person in everyone where includingCancelled || person.status != .cancelled {
+                for visit in person.allVisits where visit.kind != .notDue {
+                    total += 1
+                    if visit.kind == .skipped { skipped += 1 }
+                }
+            }
+            return total == 0 ? 0 : Double(skipped) / Double(total)
+        }
+        check("skip rate counts every visit ever, without cancelled customers", abs(stats().skipRate - manualSkipRate(includingCancelled: false)) < 0.000001)
+        check("a cancelled customer's skips would have changed it", abs(manualSkipRate(includingCancelled: true) - manualSkipRate(includingCancelled: false)) > 0.000001)
+        // pace: cleaned 5 weeks ago and not on the plan until next week is a 6-week gap
+        let paceA = synthetic("ST pace A"); add(paceA, .cleaned, daysAgo: 28)
+        let paceB = synthetic("ST pace B"); add(paceB, .cleaned, daysAgo: 42)
+        let paceEO = synthetic("ST pace EO", eo: true); add(paceEO, .cleaned, daysAgo: 100)
+        let paceDay = RoundPlanner.DayPlan(date: RoundCalendar.london.date(byAdding: .day, value: 7, to: today)!, target: 400, bookTo: 440, crewName: "", customers: [paceA, paceB, paceEO])
+        let pace = RoundPlanner.paceWeeks(of: RoundPlanner.Plan(days: [paceDay], later: [], pointer: nil))
+        check("pace: 5 weeks since the last clean, scheduled a week later, is 6 weeks", pace?.weeks == 6 && pace?.customers == 2, "\(String(describing: pace))")
+        context.delete(paceA); context.delete(paceB); context.delete(paceEO)
+
         let window = synthetic("ST window"); add(window, .cleaned, daysAgo: 400); add(window, .skipped, daysAgo: 380); add(window, .skipped, daysAgo: 360)
         for n in 0..<6 { add(window, .cleaned, daysAgo: 300 - n * 40) }
         skippers = stats().frequentSkippers()

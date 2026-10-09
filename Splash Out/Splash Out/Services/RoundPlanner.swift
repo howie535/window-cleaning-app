@@ -82,6 +82,24 @@ enum RoundPlanner {
         return Plan(days: dayPlans, later: later, pointer: pointer)
     }
 
+    /// The pace of the round: the average gap, in weeks, between a customer's last clean and the day the plan
+    /// has them next. A customer who was cleaned 5 weeks ago and isn't scheduled until next week counts as 6.
+    /// Every-other customers and anyone not cleaned before are left out.
+    static func paceWeeks(of plan: Plan) -> (weeks: Decimal, customers: Int)? {
+        var totalDays = 0, count = 0
+        for day in plan.days {
+            for customer in day.customers where !customer.everyOther {
+                guard let last = customer.lastCleanDate else { continue }
+                let gap = RoundCalendar.london.dateComponents([.day], from: last, to: day.date).day ?? 0
+                guard gap > 0 else { continue }
+                totalDays += gap
+                count += 1
+            }
+        }
+        guard count > 0 else { return nil }
+        return (Decimal(totalDays) / Decimal(count) / 7, count)
+    }
+
     /// Day targets and crews (Docs/SPEC.md 4.4).
     struct DayResolver {
         private let settings: AppSettings

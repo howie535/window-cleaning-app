@@ -9,6 +9,10 @@ struct TodayView: View {
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
 
+    private func pounds2(_ value: Decimal) -> String {
+        value.formatted(.currency(code: "GBP").precision(.fractionLength(2)))
+    }
+
     private func pounds(_ value: Decimal) -> String {
         value.formatted(.currency(code: "GBP").precision(.fractionLength(0)))
     }
@@ -25,6 +29,11 @@ struct TodayView: View {
         let oldestOwed = customers.flatMap { VisitLogger.unpaidVisits(for: $0) }.map(\.date).min()
         let taxYear = stats.currentTaxYear
         let yearTotals = RoundMetrics.totals(for: customers, in: TaxYear.range(startYear: taxYear))
+        let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
+        let pace = RoundPlanner.paceWeeks(of: plan)
+        let perDay = stats.housesPerWorkedDay(taxYear: taxYear)
+        let priced = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
+        let listAverage = priced.isEmpty ? Decimal(0) : priced.reduce(Decimal(0)) { $0 + $1.price } / Decimal(priced.count)
         let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
 
         let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
@@ -43,15 +52,26 @@ struct TodayView: View {
                     Tile(title: "This month", value: pounds(stats.work(from: stats.thisMonthStart, through: today)),
                          detail: "so far · \(stats.houses(from: stats.thisMonthStart, through: today)) houses")
                     Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
-                         detail: "per cycle (EO at half)" + (stats.cycleWeeks.map { " · about \($0.formatted(.number.precision(.fractionLength(1)))) weeks round" } ?? ""))
+                         detail: "per cycle" + (stats.cycleWeeks.map { " · about \($0.formatted(.number.precision(.fractionLength(1)))) weeks round" } ?? ""))
+                    Tile(title: "Average per house",
+                         value: yearTotals.cleans > 0 ? pounds2(yearTotals.work / Decimal(yearTotals.cleans)) : pounds2(listAverage),
+                         detail: yearTotals.cleans > 0
+                            ? "this tax year · list price average \(pounds2(listAverage))"
+                            : "list price average across \(priced.count) customers")
+                    Tile(title: "Houses per workday",
+                         value: perDay.map { $0.average.formatted(.number.precision(.fractionLength(1))) } ?? "–",
+                         detail: perDay.map { "over \($0.days) worked days this tax year" } ?? "no worked days yet this tax year")
+                    Tile(title: "Pace",
+                         value: pace.map { $0.weeks.formatted(.number.precision(.fractionLength(1))) + " weeks" } ?? "–",
+                         detail: pace == nil ? "needs customers who have been cleaned before"
+                                             : "between cleans on the current plan (every-other left out)")
                     Tile(title: "Customers", value: "\(listed)",
                          detail: "\(customers.filter { $0.status == .notStarted }.count) not started · \(customers.filter { $0.status == .paused }.count) paused")
                     Tile(title: "New vs lost", value: "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))",
                          detail: "new / cancelled this tax year")
                     Tile(title: "Price rises due", value: "\(stats.risesDue().count)",
                          detail: "no rise in \((settings.first?.priceRiseDueAfterMonths ?? 24) / 12) years · see Price Rise")
-                    Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))),
-                         detail: "of each customer's last 6 visits")
+                    Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))), detail: "")
                 }
 
         NavigationStack {
@@ -75,7 +95,7 @@ struct TodayView: View {
                     }
                 }
             }
-            .navigationTitle("Today")
+            .navigationTitle("Stats")
             .background(Color(.systemGroupedBackground))
         }
     }
@@ -103,10 +123,12 @@ private struct Tile: View {
                     Text(caption).font(.subheadline.weight(.semibold)).foregroundStyle(tint)
                 }
             }
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

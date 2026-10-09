@@ -35,6 +35,7 @@ enum CalendarSync {
 
     enum Outcome: Equatable {
         case updated(added: Int, changed: Int, removed: Int)
+        case removed(Int)
         case notAllowed
         case failed(String)
 
@@ -43,6 +44,8 @@ enum CalendarSync {
             case .updated(let added, let changed, let removed):
                 if added + changed + removed == 0 { return "The calendar was already up to date." }
                 return "Calendar updated: \(added) added, \(changed) changed, \(removed) removed."
+            case .removed(let count):
+                return count == 0 ? "There was no Splash Out calendar to remove." : "The Splash Out calendar was removed. Anyone you shared it with no longer sees it."
             case .notAllowed:
                 return "Splash Out isn't allowed to use Calendar. You can allow it in Settings > Privacy & Security > Calendars."
             case .failed(let reason):
@@ -114,11 +117,17 @@ enum CalendarSync {
         let store = EKEventStore()
         do {
             guard try await store.requestFullAccessToEvents() else { return .notAllowed }
+            var doomed: [EKCalendar] = []
             if let id = UserDefaults.standard.string(forKey: calendarIDKey), let calendar = store.calendar(withIdentifier: id) {
-                try store.removeCalendar(calendar, commit: true)
+                doomed.append(calendar)
             }
+            for calendar in store.calendars(for: .event) where calendar.title == calendarTitle && calendar.allowsContentModifications
+                && !doomed.contains(where: { $0.calendarIdentifier == calendar.calendarIdentifier }) {
+                doomed.append(calendar)
+            }
+            for calendar in doomed { try store.removeCalendar(calendar, commit: true) }
             UserDefaults.standard.removeObject(forKey: calendarIDKey)
-            return .updated(added: 0, changed: 0, removed: 0)
+            return .removed(doomed.count)
         } catch {
             return .failed(error.localizedDescription)
         }
