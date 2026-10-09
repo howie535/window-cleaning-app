@@ -2,31 +2,49 @@
 
 Where things stand: all seven build stages in `SPEC.md` are in place. The app holds the customer database only (addresses, prices, notes). Cleaning history, payments and the diary start empty and get filled with test data before the switchover.
 
-## 1. iPad: later build
+## 1. iPad build (landscape first)
 
-The app is already universal. It runs on iPad today with the tab bar across the top (with a sidebar toggle), the Today tiles in four columns, and Customers search, filters and drag-to-reorder. That is usable as it stands. The bigger iPad build is optional polish, roughly 2 to 3 sessions of work:
+The iPad is where the round spreadsheet is used today, in landscape, so this build is worth doing properly and should be done before the switchover. The app already runs on iPad (top tab bar, sidebar toggle, four-column Today tiles, Customers search/filter/reorder, Diary calendar with wider cells), but it has only been checked in portrait. Roughly 2 to 3 sessions:
 
-- **Two-column Round and Customers.** List on the left, customer detail on the right (`NavigationSplitView`), so tapping a customer doesn't push a full screen.
-- **Landscape pass.** Check every screen in landscape. Not yet done: the Simulator tools used so far can't rotate the device. Do it on a real iPad or by rotating the Simulator by hand.
+- **Landscape check of every screen** on a real iPad or a hand-rotated Simulator (the Simulator tools used so far can't rotate the device).
+- **Two-column Round and Customers.** List on the left, customer detail or logging panel on the right (`NavigationSplitView`), so working down the round doesn't push full screens.
+- **Today and Weekly in landscape:** tiles and the chart side by side.
 - **Sheet sizing.** Record payment, Add clean and Place in round as centred, medium-sized sheets rather than full-screen.
-- **Keyboard shortcuts.** For use with a keyboard case: new customer, search, move between tabs.
+- **Keyboard shortcuts** for a keyboard case: new customer, search, move between tabs.
 - **Larger tap targets** on the Round and Owed lists if the iPad is used on a ladder or in the van.
-- **Weekly and Tax Year tables** wider layouts that use the extra width.
+- **Weekly and Tax Year tables** laid out to use the extra width.
 
 Nothing in the data model needs to change for any of this.
 
-## 2. Before the switchover (target 6 April 2027)
+## 2. Switchover checklist (target 6 April 2027)
 
-1. **Paid Apple Developer enrolment**, then add iCloud (CloudKit) and Background Modes > Remote notifications in Xcode. Flip `Persistence.makeContainer` from `cloudKitDatabase: .none` to the private database. Test sync on a real iPhone and iPad (add on one, see it on the other).
-2. **Don't promote the CloudKit schema to Production** until after the parallel check. Production schemas can't have fields removed or renamed.
-3. **Git remote.** There is none, so the code and history exist only on this Mac. Add a private remote before the switchover.
-4. **Test data.** Fill in a few weeks of fake cleans, payments, skips, diary days and tips, then confirm Weekly, Tax Year, Money Owed, Price Rise and Frequent Skips all calculate what you expect by hand.
-5. **Parallel run.** Use the old round sheet and the app side by side for the first two weeks and compare weekly totals.
-6. **Final import.** On the day, re-run `Tools/convert_round_workbook.py` against the latest sheet and do one full import (Settings > Import round data). The app takes an automatic backup before replacing anything.
-7. **Backups.** Export a backup from Settings (saved to Files/OneDrive) at the end of each week for the first month.
-8. **Acceptance figures** to match at the final import are in `SPEC.md` section 7.
+"Switchover" means the day the app replaces your round spreadsheet as the place you record everything. The aim is that nothing is lost and you trust the numbers before you stop using the spreadsheet. In order:
 
-## 3. Known loose ends
+**Now to March (can be done any time, no rush)**
+1. **Enrol in the paid Apple Developer Program.** This unlocks iCloud sync between your iPhone and iPad. In Xcode, add the iCloud (CloudKit) capability, then the app's database is switched from "this device only" to "iCloud". Test it: add a customer on the iPhone, check it appears on the iPad.
+2. **Add a Git remote** (a private copy of the code on GitHub). One-off, about 10 minutes. See below if not done yet.
+3. **Fill in test data** (fake cleans, payments, skips, a holiday in the diary, a tip). Work out a few totals by hand and check Weekly, Tax Year, Money Owed, Price Rise and Frequent Skips agree. Then clear the test history (Settings > Clear all cleaning history) so the customers are left alone.
+4. **Check prices.** Look through Customers for any with a £0 price.
 
-- Two Rhyl customers have a £0 price. Check them in Checks > Data issues.
-- Record payment, Diary, Tips, Checks and Settings screens have been tested by the automated self-test but haven't all been looked at by eye.
+**Last week of March**
+5. **Final tidy of the spreadsheet** so its customer list and prices are correct, then re-run `Tools/convert_round_workbook.py` to produce a fresh import file.
+6. **Import it** (Settings > Import round data). This replaces everything in the app. A backup is saved automatically first.
+7. **Check the figures** against the acceptance figures in `SPEC.md` section 7 (customer counts, round value, money owed).
+
+**From 6 April**
+8. **Parallel run, two weeks:** record every clean in the app AND keep the spreadsheet going. At the end of each week compare the weekly totals and money owed. If they match, carry on; if not, find out why before going further.
+9. **Stop using the spreadsheet** once two weeks match.
+10. **Weekly backup** for the first month: Settings > Export backup, saved to OneDrive.
+
+## 3. Sync notes (for when iCloud is switched on)
+
+- **Speed:** CloudKit sync is push-driven, not a constant stream. Changes normally show up on the other device within seconds to a minute when both are online, but Apple doesn't guarantee a time, and it can lag in Low Power Mode or with a weak connection. Edits made offline sync when the device is back online.
+- **Same record on two devices at once:** the last change wins, so avoid editing the same customer on both at the same moment.
+- **Settings row:** each device creates its own settings row on first launch. Before sync is switched on, the app needs to keep only one (and merge crews/team) or the devices will each end up with a copy.
+- **Fresh install** starts with no customers, crews or team. Add the team in Settings first, then crews, then the usual week.
+
+## 4. Known loose ends
+
+- Landscape layouts haven't been checked yet (see section 1).
+- Record payment: a brief red "more than is owed" message can flash while the sheet closes after saving a partial payment. Harmless, but untidy.
+- Customers priced at £0 aren't flagged anywhere; look through the list for them before the switchover.

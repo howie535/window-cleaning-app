@@ -262,6 +262,41 @@ enum SimulatorSelfTest {
         let restored = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
         check("moving back to the front restores the original order", restored.map(\.id) == originalOrder)
 
+        // team and crews
+        let appSettings = try context.fetch(FetchDescriptor<AppSettings>()).first!
+        let crewList = try context.fetch(FetchDescriptor<Crew>())
+        let workDayList = try context.fetch(FetchDescriptor<WorkDay>())
+        check("team list is worked out from the crews", Set(appSettings.teamMembers) == Set(crewList.flatMap(\.members)) && !appSettings.teamMembers.isEmpty)
+        let member = appSettings.teamMembers[0]
+        let namesBefore = crewList.map(\.name).sorted()
+        let weekBefore = appSettings.usualWeek, extraBefore = appSettings.extraDayCrew
+        let diaryBefore = workDayList.map(\.crewMembers)
+        try TeamEditor.renameMember(from: member, to: "Zed Test", settings: appSettings, crews: crewList, workDays: workDayList)
+        check("renaming a person updates the team and crews", !appSettings.teamMembers.contains(member) && appSettings.teamMembers.contains("Zed Test")
+              && !crewList.contains { $0.members.contains(member) })
+        check("renamed crews keep working in the usual week", appSettings.usualWeek.allSatisfy { week in week.isEmpty || crewList.contains { $0.name == week } }
+              && (appSettings.extraDayCrew.isEmpty || crewList.contains { $0.name == appSettings.extraDayCrew }))
+        check("renaming a person updates the diary", !workDayList.contains { $0.crewMembers.contains(member) })
+        try TeamEditor.renameMember(from: "Zed Test", to: member, settings: appSettings, crews: crewList, workDays: workDayList)
+        check("renaming back restores everything", crewList.map(\.name).sorted() == namesBefore && appSettings.usualWeek == weekBefore
+              && appSettings.extraDayCrew == extraBefore && workDayList.map(\.crewMembers) == diaryBefore)
+        check("can't remove someone who is in a crew", (try? TeamEditor.removeMember(member, settings: appSettings, crews: crewList)) == nil)
+        check("can't add a duplicate name, any capitalisation", (try? TeamEditor.addMember(member.uppercased(), settings: appSettings)) == nil)
+        try TeamEditor.addMember("  Newcomer ", settings: appSettings)
+        check("adding a person trims the name", appSettings.teamMembers.last == "Newcomer")
+        check("can't make a crew with the same people as another", (try? TeamEditor.addCrew(members: Set(crewList[0].members), dayTarget: 100, settings: appSettings, crews: crewList, context: context)) == nil)
+        let solo = try TeamEditor.addCrew(members: ["Newcomer"], dayTarget: 150, settings: appSettings, crews: crewList, context: context)
+        check("a new crew is named after its people", solo.name == "Newcomer alone" && solo.dayTarget == 150)
+        appSettings.usualWeek[3] = solo.name
+        appSettings.extraDayCrew = solo.name
+        TeamEditor.deleteCrew(solo, settings: appSettings, context: context)
+        check("deleting a crew clears it from the usual week", appSettings.usualWeek[3].isEmpty && appSettings.extraDayCrew.isEmpty)
+        try TeamEditor.removeMember("Newcomer", settings: appSettings, crews: crewList)
+        appSettings.usualWeek = weekBefore
+        appSettings.extraDayCrew = extraBefore
+        try context.save()
+        check("team tidy-up leaves the original crews", try context.fetchCount(FetchDescriptor<Crew>()) == crewList.count && !appSettings.teamMembers.contains("Newcomer"))
+
         // clear cleaning history (destructive, so last)
         for c in [skipper, oneSkip, eoCust, cancelled, beforeFirst, window, under, front, unpaid, recovered, dup, future, riser, recent, brandNew] { context.delete(c) }
         try context.save()

@@ -14,6 +14,8 @@ struct RoundFile: Codable {
     static let currentSchema = 1
 
     struct SettingsRecord: Codable {
+        /// Optional so files from before the team list existed still load (it is then worked out from the crews).
+        var team: [String]?
         var crews: [CrewRecord]
         var usualWeek: [String: String?]
         var extraDayCrew: String

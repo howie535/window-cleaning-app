@@ -170,6 +170,14 @@ private struct RoundSettingsSections: View {
     @Bindable var settings: AppSettings
     let crews: [Crew]
 
+    @Environment(\.modelContext) private var modelContext
+    @Query private var workDays: [WorkDay]
+    @State private var newMemberName = ""
+    @State private var renaming: String?
+    @State private var renameText = ""
+    @State private var isAddingCrew = false
+    @State private var teamMessage: String?
+
     private static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
     private func percentBinding(_ keyPath: ReferenceWritableKeyPath<AppSettings, Double>) -> Binding<Int> {
@@ -186,7 +194,94 @@ private struct RoundSettingsSections: View {
         )
     }
 
+    private func addMember() {
+        attempt {
+            try TeamEditor.addMember(newMemberName, settings: settings)
+            newMemberName = ""
+        }
+    }
+
+    private func attempt(_ work: () throws -> Void) {
+        do { try work() } catch { teamMessage = error.localizedDescription }
+    }
+
     var body: some View {
+        Section {
+            ForEach(settings.teamMembers, id: \.self) { name in
+                Button {
+                    renameText = name
+                    renaming = name
+                } label: {
+                    HStack {
+                        Text(name).foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "pencil").foregroundStyle(.secondary)
+                    }
+                }
+                .swipeActions {
+                    Button("Remove", role: .destructive) {
+                        attempt { try TeamEditor.removeMember(name, settings: settings, crews: crews) }
+                    }
+                }
+            }
+            LabeledField(label: "New team member") {
+                TextField("Name", text: $newMemberName)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    .onSubmit(addMember)
+            }
+            Button("Add team member", action: addMember)
+                .disabled(newMemberName.trimmingCharacters(in: .whitespaces).isEmpty)
+        } header: {
+            Text("Team")
+        } footer: {
+            Text("Everyone who works on the round. Tap a name to rename it, or swipe to remove someone who isn't in any crew.")
+        }
+        .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                if let old = renaming {
+                    attempt { try TeamEditor.renameMember(from: old, to: renameText, settings: settings, crews: crews, workDays: workDays) }
+                }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        } message: {
+            Text("Crews, the usual week and the diary follow the new name.")
+        }
+        .alert("Team", isPresented: Binding(get: { teamMessage != nil }, set: { if !$0 { teamMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(teamMessage ?? "")
+        }
+        .sheet(isPresented: $isAddingCrew) {
+            NewCrewSheet(settings: settings, crews: crews)
+        }
+
+        Section {
+            ForEach(crews) { crew in
+                LabeledContent(crew.name) {
+                    TextField("0", text: crewTargetBinding(crew))
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                }
+                .swipeActions {
+                    Button("Delete", role: .destructive) {
+                        TeamEditor.deleteCrew(crew, settings: settings, context: modelContext)
+                    }
+                }
+            }
+            Button("Add a crew...") { isAddingCrew = true }
+                .disabled(settings.teamMembers.isEmpty)
+        } header: {
+            Text("Crews and day targets")
+        } footer: {
+            Text(settings.teamMembers.isEmpty
+                 ? "Add your team first, then make a crew for each combination of people who work together. Each crew has a target for how much work it does in a day."
+                 : "A crew is a combination of people who work together, with the amount of work it aims to do in a day (in pounds). Swipe a crew to delete it.")
+        }
+
         Section {
             ForEach(Array(Self.weekdays.enumerated()), id: \.offset) { index, day in
                 Picker(day, selection: Binding(
@@ -203,23 +298,13 @@ private struct RoundSettingsSections: View {
                 }
             }
             Picker("Extra-day crew", selection: $settings.extraDayCrew) {
+                Text("None").tag("")
                 ForEach(crews) { Text($0.name).tag($0.name) }
             }
         } header: {
             Text("Usual week")
         } footer: {
             Text("The usual week sets each week's target. A day outside it counts as worked once enough houses are cleaned, and adds the extra-day crew's target.")
-        }
-
-        Section("Crew day targets") {
-            ForEach(crews) { crew in
-                LabeledContent(crew.name) {
-                    TextField("0", text: crewTargetBinding(crew))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 80)
-                }
-            }
         }
 
         Section("Counting and Next Up") {
@@ -248,6 +333,66 @@ private struct RoundSettingsSections: View {
             Text("Price rise")
         } footer: {
             Text("Leave the rise date off until it's decided: Price Rise then shows a preview for the next 6 April.")
+        }
+    }
+}
+
+/// Pick the people in a new crew and the day target for it.
+private struct NewCrewSheet: View {
+    let settings: AppSettings
+    let crews: [Crew]
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @State private var chosen: Set<String> = []
+    @State private var target = ""
+    @State private var message: String?
+
+    private var previewName: String {
+        Crew.autoName(for: settings.teamMembers.filter { chosen.contains($0) })
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Who is in this crew?") {
+                    ForEach(settings.teamMembers, id: \.self) { name in
+                        Toggle(name, isOn: Binding(
+                            get: { chosen.contains(name) },
+                            set: { if $0 { chosen.insert(name) } else { chosen.remove(name) } }
+                        ))
+                    }
+                }
+                Section {
+                    LabeledField(label: "Day target (£)") {
+                        TextField("e.g. 300", text: $target).keyboardType(.numberPad)
+                    }
+                } footer: {
+                    Text(chosen.isEmpty ? "The crew is named after its people." : "This crew will be called \"\(previewName)\".")
+                }
+            }
+            .navigationTitle("New crew")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Add", action: save) }
+            }
+            .alert("New crew", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(message ?? "")
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func save() {
+        do {
+            let value = Decimal(string: target.trimmingCharacters(in: .whitespaces)) ?? 0
+            try TeamEditor.addCrew(members: chosen, dayTarget: value, settings: settings, crews: crews, context: modelContext)
+            dismiss()
+        } catch {
+            message = error.localizedDescription
         }
     }
 }

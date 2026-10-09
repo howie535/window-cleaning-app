@@ -133,15 +133,16 @@ enum ImportService {
         }
         context.insert(settings)
 
-        if record.crews.isEmpty {
-            for crew in Crew.defaults {
-                context.insert(Crew(name: crew.name, members: crew.members, dayTarget: crew.target))
-            }
-        } else {
-            for crew in record.crews {
-                context.insert(Crew(name: crew.name, members: crew.members, dayTarget: Money.decimal(crew.dayTarget)))
-            }
+        for crew in record.crews {
+            context.insert(Crew(name: crew.name, members: crew.members, dayTarget: Money.decimal(crew.dayTarget)))
         }
+
+        // Older files have no team list: use everyone who appears in a crew, in order.
+        var team = record.team ?? []
+        if record.team == nil {
+            for member in record.crews.flatMap(\.members) where !team.contains(member) { team.append(member) }
+        }
+        settings.teamMembers = team
     }
 
     struct ClearSummary {

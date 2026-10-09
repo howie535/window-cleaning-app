@@ -19,6 +19,7 @@ enum ExportService {
         }
 
         let settingsRecord = RoundFile.SettingsRecord(
+            team: settings.teamMembers,
             crews: crews.map { .init(name: $0.name, members: $0.members, dayTarget: Money.double($0.dayTarget)) },
             usualWeek: usualWeek,
             extraDayCrew: settings.extraDayCrew,

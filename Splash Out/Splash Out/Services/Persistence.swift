@@ -8,7 +8,7 @@ enum Persistence {
 
     /// Local-only for now. Once the iCloud capability and container exist (paid developer account),
     /// change `.none` to `.private("iCloud.com.splashout.Splash-Out")`.
-    /// When that happens, make sure default rows (crews, settings) are only seeded once, or two
+    /// When that happens, make sure the default settings row is only seeded once, or two
     /// devices will each create their own copy.
     static func makeContainer() -> ModelContainer {
         let configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
@@ -20,15 +20,10 @@ enum Persistence {
         }
     }
 
-    /// Makes sure the single settings row and the standard crews exist.
+    /// Makes sure the single settings row exists. A fresh install holds no crews or names: the user adds their own.
     static func seedDefaultsIfNeeded(in context: ModelContext) {
         if (try? context.fetchCount(FetchDescriptor<AppSettings>())) == 0 {
             context.insert(AppSettings())
-        }
-        if (try? context.fetchCount(FetchDescriptor<Crew>())) == 0 {
-            for crew in Crew.defaults {
-                context.insert(Crew(name: crew.name, members: crew.members, dayTarget: crew.target))
-            }
         }
     }
 }

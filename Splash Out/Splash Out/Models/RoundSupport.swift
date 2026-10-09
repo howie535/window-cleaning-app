@@ -35,14 +35,10 @@ final class Crew {
         self.dayTarget = dayTarget
     }
 
-    /// The valid crews from the spec.
-    static let defaults: [(name: String, members: [String], target: Decimal)] = [
-        ("Howie + Dad", ["Howie", "Dad"], 400),
-        ("Howie + Rebekah", ["Howie", "Rebekah"], 300),
-        ("Dad + Rebekah", ["Dad", "Rebekah"], 300),
-        ("Howie alone", ["Howie"], 300),
-        ("Dad alone", ["Dad"], 250),
-    ]
+    /// The name a crew gets when it is made from people: "Sam + Alex", or "Sam alone".
+    static func autoName(for members: [String]) -> String {
+        members.count == 1 ? "\(members[0]) alone" : members.joined(separator: " + ")
+    }
 }
 
 /// Only days that differ from the usual week are stored.
@@ -79,9 +75,11 @@ final class Tip {
 /// One row only.
 @Model
 final class AppSettings {
+    /// Everyone who works on the round. Crews are made from these names.
+    var teamMembers: [String] = []
     /// Crew name for Monday...Sunday. Empty string means no one works that day.
-    var usualWeek: [String] = ["Howie + Dad", "Howie + Dad", "Howie + Rebekah", "", "", "", ""]
-    var extraDayCrew: String = "Howie + Dad"
+    var usualWeek: [String] = ["", "", "", "", "", "", ""]
+    var extraDayCrew: String = ""
     var minHousesForWorkingDay: Int = 5
     var overbook: Double = 0.10
     var nextUpHideWeeks: Int = 3
@@ -90,7 +88,7 @@ final class AppSettings {
     var priceRisePercent: Double = 0.10
     var priceRiseDelayMonths: Int = 12
     var priceRiseDueAfterMonths: Int = 24
-    var recordsStart: Date = RoundCalendar.date(year: 2026, month: 4, day: 6)
+    var recordsStart: Date = RoundCalendar.date(year: TaxYear.startYear(containing: Date()), month: 4, day: 6)
 
     init() {}
 }
