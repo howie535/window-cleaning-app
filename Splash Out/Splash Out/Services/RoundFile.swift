@@ -11,7 +11,7 @@ struct RoundFile: Codable {
     var diary: [DiaryRecord]
     var tips: [TipRecord]
 
-    static let currentSchema = 1
+    nonisolated static let currentSchema = 1
 
     struct SettingsRecord: Codable {
         /// Optional so files from before the team list existed still load (it is then worked out from the crews).

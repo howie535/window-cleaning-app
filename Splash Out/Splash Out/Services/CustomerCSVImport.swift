@@ -144,9 +144,10 @@ enum CustomerCSVImport {
             imported += 1
             nextSequence += 1
 
-            if !address.isEmpty {
+            let addressToFind = address
+            if !addressToFind.isEmpty {
                 Task {
-                    let coordinate = await Geocoding.coordinate(for: address)
+                    let coordinate = await Geocoding.coordinate(for: addressToFind)
                     customer.latitude = coordinate?.latitude
                     customer.longitude = coordinate?.longitude
                 }

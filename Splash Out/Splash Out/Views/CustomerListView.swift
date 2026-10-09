@@ -78,6 +78,7 @@ struct CustomerListView: View {
 
     private func customerList(_ shown: [Customer]) -> some View {
         List(selection: $selectedID) {
+            if !customers.isEmpty {
             Section {
                 Picker("Round", selection: $criteria.round) {
                     Text("All rounds").tag(String?.none)
@@ -102,6 +103,7 @@ struct CustomerListView: View {
                 } else {
                     Text("Reorder round lets you drag customers into their place. The round order decides who's next.")
                 }
+            }
             }
 
             ForEach(shown) { customer in

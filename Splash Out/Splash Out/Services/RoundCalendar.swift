@@ -3,7 +3,7 @@ import Foundation
 /// All round dates are calendar days in the UK. Parsing and formatting always use the
 /// Europe/London calendar so a date can't slip a day (it matters at the 6 April tax-year edge).
 enum RoundCalendar {
-    static let london: Calendar = {
+    nonisolated static let london: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Europe/London")!
         return calendar
@@ -25,11 +25,11 @@ enum RoundCalendar {
     private static let timestampFormatter = formatter("yyyy-MM-dd'T'HH:mm:ss")
     private static let fileStampFormatter = formatter("yyyyMMdd-HHmmss")
 
-    static func date(year: Int, month: Int, day: Int) -> Date {
+    nonisolated static func date(year: Int, month: Int, day: Int) -> Date {
         london.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
-    static func startOfDay(_ date: Date = Date()) -> Date {
+    nonisolated static func startOfDay(_ date: Date = Date()) -> Date {
         london.startOfDay(for: date)
     }
 
@@ -61,7 +61,7 @@ enum RoundCalendar {
 /// Tax years run 6 April to 5 April.
 enum TaxYear {
     /// The start year of the tax year containing `date` (6 Apr 2026 ... 5 Apr 2027 -> 2026).
-    static func startYear(containing date: Date) -> Int {
+    nonisolated static func startYear(containing date: Date) -> Int {
         let calendar = RoundCalendar.london
         let year = calendar.component(.year, from: date)
         return date >= RoundCalendar.date(year: year, month: 4, day: 6) ? year : year - 1
