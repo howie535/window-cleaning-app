@@ -10,9 +10,7 @@ struct WhatsAppButton: View {
     }
 
     private var whatsAppURL: URL? {
-        var components = URLComponents(string: "https://wa.me/\(customer.whatsAppDigits)")
-        components?.queryItems = [URLQueryItem(name: "text", value: message)]
-        return components?.url
+        DayMessage.whatsAppURL(digits: customer.whatsAppDigits, text: message)
     }
 
     var body: some View {

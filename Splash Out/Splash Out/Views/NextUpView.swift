@@ -13,6 +13,8 @@ struct NextUpView: View {
     @State private var selected: Customer?
     /// Regular width (iPad): the list on the left, the logging panel for this customer on the right.
     @State private var selectedID: UUID?
+    /// The day whose customers are being messaged.
+    @State private var messageDay: RoundPlanner.DayPlan?
 
     var body: some View {
         let today = RoundCalendar.startOfDay()
@@ -68,7 +70,7 @@ struct NextUpView: View {
                         row(for: customer)
                     }
                 } header: {
-                    DayHeader(day: day, isToday: day.date == today)
+                    DayHeader(day: day, isToday: day.date == today, onMessage: { messageDay = day })
                 }
             }
 
@@ -82,6 +84,7 @@ struct NextUpView: View {
         // Plain style keeps each day's header pinned at the top until the next day's replaces it.
         // The bar above and the header share one frosted look, so rows fade out the same way under both.
         .listStyle(.plain)
+        .sheet(item: $messageDay) { MessageDayView(day: $0) }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.bar, for: .navigationBar)
@@ -111,8 +114,10 @@ struct NextUpView: View {
 private struct DayHeader: View {
     let day: RoundPlanner.DayPlan
     let isToday: Bool
+    var onMessage: () -> Void = {}
 
     var body: some View {
+        HStack(alignment: .center) {
         VStack(alignment: .leading, spacing: 2) {
             Text((isToday ? "Today, " : "") + RoundCalendar.weekdayShort(day.date))
                 .font(.headline)
@@ -120,6 +125,14 @@ private struct DayHeader: View {
             Text("\(day.crewName) · \(day.customers.count) houses · \(day.total.formatted(.currency(code: "GBP").precision(.fractionLength(0)))) of \(day.bookTo.formatted(.currency(code: "GBP").precision(.fractionLength(0))))")
                 .font(.caption)
                 .textCase(nil)
+        }
+            Spacer()
+            if !day.customers.isEmpty {
+                Button(action: onMessage) { Label("Message", systemImage: "message") }
+                    .font(.subheadline)
+                    .buttonStyle(.bordered)
+                    .textCase(nil)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
