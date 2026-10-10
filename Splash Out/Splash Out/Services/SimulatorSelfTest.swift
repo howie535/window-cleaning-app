@@ -393,7 +393,8 @@ enum SimulatorSelfTest {
             let today0 = RoundCalendar.date(year: 2026, month: 10, day: 12)   // a Monday
             let tomorrow = RoundCalendar.date(year: 2026, month: 10, day: 13)
             let thursday = RoundCalendar.date(year: 2026, month: 10, day: 15)
-            check("message says tomorrow", DayMessage.text(template: DayMessage.defaultTemplate, name: "Ann", date: tomorrow, today: today0) == "Hi Ann, we're planning to clean your windows tomorrow. Let us know if that doesn't suit!")
+            check("standard message has the full date", DayMessage.text(template: DayMessage.defaultTemplate, name: "Ann", date: tomorrow, today: today0) == "Hi Ann, we're planning to clean your windows on Tuesday 13 October. Let us know if that doesn't suit!")
+            check("message can still say tomorrow", DayMessage.text(template: "{name}: {when}", name: "Ann", date: tomorrow, today: today0) == "Ann: tomorrow")
             check("message names a later day", DayMessage.when(thursday, today: today0) == "on Thursday" && DayMessage.when(today0, today: today0) == "today")
             let link = DayMessage.whatsAppURL(digits: "447700900123", text: "Hi Ann & Bob")?.absoluteString ?? ""
             check("WhatsApp link has the number and an encoded message", link.hasPrefix("https://wa.me/447700900123?text=Hi%20Ann") && link.contains("%26") )

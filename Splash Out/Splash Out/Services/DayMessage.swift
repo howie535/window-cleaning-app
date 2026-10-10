@@ -2,7 +2,7 @@ import Foundation
 
 /// The WhatsApp message for a day's customers, and the link that opens it.
 enum DayMessage {
-    static let defaultTemplate = "Hi {name}, we're planning to clean your windows {when}. Let us know if that doesn't suit!"
+    static let defaultTemplate = "Hi {name}, we're planning to clean your windows on {date}. Let us know if that doesn't suit!"
     static let templateKey = "whatsapp.dayTemplate"
 
     private static let dayFormatter: DateFormatter = {
@@ -12,6 +12,17 @@ enum DayMessage {
         formatter.dateFormat = "EEEE"
         return formatter
     }()
+
+    private static let fullDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = RoundCalendar.london.timeZone
+        formatter.dateFormat = "EEEE d MMMM"
+        return formatter
+    }()
+
+    /// "Tuesday 13 October".
+    static func fullDate(_ date: Date) -> String { fullDateFormatter.string(from: date) }
 
     /// "today", "tomorrow", or "on Tuesday" (with the date if it's more than a week away).
     static func when(_ date: Date, today: Date = RoundCalendar.startOfDay()) -> String {
@@ -28,6 +39,7 @@ enum DayMessage {
         template
             .replacingOccurrences(of: "{name}", with: name)
             .replacingOccurrences(of: "{when}", with: when(date, today: today))
+            .replacingOccurrences(of: "{date}", with: fullDate(date))
     }
 
     /// Opens a WhatsApp chat with the number, with the text ready to send.

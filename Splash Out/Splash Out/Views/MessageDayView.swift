@@ -33,7 +33,7 @@ struct MessageDayView: View {
                 } header: {
                     Text("Message")
                 } footer: {
-                    Text("{name} becomes the customer's name and {when} becomes \"tomorrow\" or \"on Tuesday\".")
+                    Text("{name} becomes the customer's name and {date} the day, like \"Tuesday 13 October\". {when} gives \"tomorrow\" or \"on Tuesday\" instead. The same message can be changed in Settings.")
                 }
 
                 Section {

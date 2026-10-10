@@ -50,6 +50,8 @@ struct SettingsView: View {
 
                 CalendarSection()
 
+                MessageSection()
+
                 Section {
                     Button("Import round data...") {
                         importCustomersOnly = false
@@ -163,6 +165,30 @@ struct SettingsView: View {
             message = "Removed \(summary.visits) visits, \(summary.diary) diary entries and \(summary.tips) tips. Customers were kept. A backup was saved first."
         } catch {
             message = "Couldn't clear the history: \(error.localizedDescription)"
+        }
+    }
+}
+
+/// The WhatsApp message sent to each day's customers (Round > Message).
+private struct MessageSection: View {
+    @AppStorage(DayMessage.templateKey) private var template = DayMessage.defaultTemplate
+
+    var body: some View {
+        Section {
+            TextField("Message", text: $template, axis: .vertical)
+                .lineLimit(3...6)
+            if template != DayMessage.defaultTemplate {
+                Button("Reset to the standard message") { template = DayMessage.defaultTemplate }
+            }
+            LabeledContent("Looks like") {
+                Text(DayMessage.text(template: template, name: "Anne", date: RoundCalendar.london.date(byAdding: .day, value: 1, to: RoundCalendar.startOfDay())!))
+                    .font(.footnote)
+                    .multilineTextAlignment(.trailing)
+            }
+        } header: {
+            Text("WhatsApp message")
+        } footer: {
+            Text("Sent to everyone on a day from the Message button on the Round screen. {name} becomes the customer's name and {date} the day, like \"Tuesday 13 October\". {when} gives \"tomorrow\" or \"on Tuesday\" instead.")
         }
     }
 }
