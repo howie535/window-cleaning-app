@@ -144,20 +144,44 @@ struct CustomerDetailView: View {
 struct ContactButton: View {
     let customer: Customer
 
+    @State private var isPickingContact = false
+    @State private var pickMessage: String?
+
     var body: some View {
-        if customer.contact == .ring {
-            if let url = URL(string: "tel:\(customer.phone.filter(\.isNumber))"), !customer.phone.isEmpty {
-                Link(destination: url) {
-                    Label("Ring \(customer.name)", systemImage: "phone")
+        Group {
+            if customer.phone.isEmpty {
+                // No number yet: say so, and let one tap fill it in from Contacts.
+                Button { isPickingContact = true } label: {
+                    Label("Add \(customer.name)'s number from Contacts", systemImage: "person.crop.circle.badge.plus")
                         .font(.title3)
                         .padding(.vertical, 6)
                 }
+            } else if customer.contact == .ring {
+                if let url = URL(string: "tel:\(customer.phone.filter(\.isNumber))") {
+                    Link(destination: url) {
+                        Label("Ring \(customer.name)", systemImage: "phone")
+                            .font(.title3)
+                            .padding(.vertical, 6)
+                    }
+                }
             } else {
-                Label("Ring (no number yet)", systemImage: "phone")
-                    .foregroundStyle(.secondary)
+                WhatsAppButton(customer: customer)
             }
-        } else {
-            WhatsAppButton(customer: customer)
+        }
+        .sheet(isPresented: $isPickingContact) {
+            ContactPicker { contact in
+                let digits = contact.splashOutPhoneDigits
+                if digits.isEmpty {
+                    pickMessage = "\(contact.splashOutFullName) has no phone number in Contacts."
+                } else {
+                    customer.phone = digits
+                }
+            }
+        }
+        .alert("Contacts", isPresented: Binding(get: { pickMessage != nil }, set: { if !$0 { pickMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(pickMessage ?? "")
         }
     }
 }

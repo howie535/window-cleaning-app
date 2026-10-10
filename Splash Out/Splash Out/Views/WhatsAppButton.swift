@@ -20,12 +20,13 @@ struct WhatsAppButton: View {
             openWhatsApp()
         } label: {
             Label("Message on WhatsApp", systemImage: "message")
+                .font(.title3)
+                .padding(.vertical, 6)
         }
-        .disabled(customer.whatsAppDigits.isEmpty)
         .alert("Can't Open WhatsApp", isPresented: $showsUnavailableAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("WhatsApp isn't installed, or the phone number is missing a country code.")
+            Text("WhatsApp couldn't be opened. Check it is installed and that the number \(customer.phone) is right.")
         }
     }
 
