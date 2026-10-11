@@ -16,6 +16,8 @@ enum NextUp {
         var lastNotDue: Date?
         /// The latest visit of any kind (cleaned, skipped or not due). A skip moves the round on just like a clean.
         var lastVisit: Date?
+        /// Not started yet: shown in the round, greyed, but never counted in a day's total.
+        var isPending: Bool = false
     }
 
     struct Day: Equatable {
@@ -30,6 +32,7 @@ enum NextUp {
         var dayIndex: Int?
         /// Running total of prices up to and including this customer.
         var cumulative: Decimal
+        var isPending = false
     }
 
     /// The customer most recently dealt with: the latest visit of any kind (cleaned, skipped or not due);
@@ -133,7 +136,15 @@ enum NextUp {
         var dayTotal: Decimal = 0
         var total: Decimal = 0
         var result: [Assignment] = []
-        for candidate in rotated where candidate.isListable {
+        for candidate in rotated where candidate.isListable || candidate.isPending {
+            if candidate.isPending {
+                // Sits where its turn comes, on the day being filled (or the one just finished, if this day is still empty).
+                let index = (dayTotal == 0 && dayIndex > 0) ? dayIndex - 1 : dayIndex
+                if index < days.count {
+                    result.append(Assignment(key: candidate.key, dayIndex: index, cumulative: total, isPending: true))
+                }
+                continue
+            }
             let when = dayIndex < days.count ? days[dayIndex].date : days[days.count - 1].date
             let nextLap = pointerSequence.map { candidate.sequence <= $0 } ?? false
             guard nextLap || isDue(candidate, today: when, hideWeeks: hideWeeks, calendar: calendar) else { continue }

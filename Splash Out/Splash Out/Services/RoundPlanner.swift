@@ -3,6 +3,13 @@ import Foundation
 /// Connects the Next Up engine to real customers, crews, diary days and settings.
 @MainActor
 enum RoundPlanner {
+    /// One line of a day: a customer, and whether they're only shown (not started yet) rather than booked.
+    struct DayRow: Identifiable {
+        var customer: Customer
+        var isPending: Bool
+        var id: UUID { customer.id }
+    }
+
     struct DayPlan: Identifiable {
         var id: Date { date }
         var date: Date
@@ -10,7 +17,10 @@ enum RoundPlanner {
         /// target x (1 + overbook): how much can be booked.
         var bookTo: Decimal
         var crewName: String
+        /// The booked customers: these make up the day's total.
         var customers: [Customer]
+        /// Everything to show for the day in round order: booked customers plus greyed not-started ones.
+        var rows: [DayRow] = []
         var total: Decimal { customers.reduce(0) { $0 + $1.price } }
     }
 
@@ -50,7 +60,8 @@ enum RoundPlanner {
                 everyOther: customer.everyOther,
                 lastCleaned: lastCleaned,
                 lastNotDue: lastNotDue,
-                lastVisit: lastVisit
+                lastVisit: lastVisit,
+                isPending: customer.status == .notStarted
             )
         }
 
@@ -72,11 +83,16 @@ enum RoundPlanner {
         var later: [Customer] = []
         for assignment in assignments {
             let customer = customers[assignment.key]
-            if let index = assignment.dayIndex { dayPlans[index].customers.append(customer) } else { later.append(customer) }
+            if let index = assignment.dayIndex {
+                dayPlans[index].rows.append(DayRow(customer: customer, isPending: assignment.isPending))
+                if !assignment.isPending { dayPlans[index].customers.append(customer) }
+            } else if !assignment.isPending {
+                later.append(customer)
+            }
         }
 
         // One full round, no empty days on the end: they fill up as customers are cleaned or skipped.
-        while dayPlans.count > 1, dayPlans.last?.customers.isEmpty == true { dayPlans.removeLast() }
+        while dayPlans.count > 1, dayPlans.last?.rows.isEmpty == true { dayPlans.removeLast() }
 
         let pointer = NextUp.pointer(in: candidates).map { customers[$0.key] }
         return Plan(days: dayPlans, later: later, pointer: pointer)

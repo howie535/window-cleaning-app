@@ -9,6 +9,7 @@ struct CustomerDetailView: View {
     @State private var isShowingPayment = false
     @State private var logSheet: VisitSheet?
     @State private var isConfirmingCancel = false
+    @State private var isShowingNewOccupant = false
 
     private var sortedLogs: [Visit] {
         customer.allVisits.sorted { $0.date > $1.date }
@@ -109,12 +110,13 @@ struct CustomerDetailView: View {
             Section {
                 if customer.status == .cancelled {
                     Button("Reactivate this customer") { customer.status = .active }
+                    Button("Someone new has moved in...") { isShowingNewOccupant = true }
                 } else {
                     Button("Cancel this customer...", role: .destructive) { isConfirmingCancel = true }
                 }
             } footer: {
                 Text(customer.status == .cancelled
-                     ? "Cancelled customers stay in the list and keep their history and anything they owe. Find them with Status > Cancelled on the Customers screen."
+                     ? "Cancelled customers stay in the list and keep their history and anything they owe. Find them with Status > Cancelled on the Customers screen. If a new person has moved into the house, \"Someone new has moved in\" starts a fresh customer at the same address, so this customer's history stays separate and your stats stay right."
                      : "Use this when a customer stops using you. Their history is kept, and so is anything they owe.")
             }
 
@@ -138,6 +140,9 @@ struct CustomerDetailView: View {
             }
         }
         .visitLogSheets(customer: customer, selection: $logSheet)
+        .sheet(isPresented: $isShowingNewOccupant) {
+            AddEditCustomerView(customer: nil, replacing: customer)
+        }
         .confirmationDialog("Cancel \(customer.name)?", isPresented: $isConfirmingCancel, titleVisibility: .visible) {
             Button("Cancel customer", role: .destructive) { customer.status = .cancelled }
             Button("Keep them", role: .cancel) {}

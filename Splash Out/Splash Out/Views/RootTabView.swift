@@ -10,6 +10,8 @@ struct RootTabView: View {
     @State private var selection: AppTab = .today
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("onboarding.seen") private var onboardingSeen = false
+    @State private var showTour = false
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
@@ -36,6 +38,8 @@ struct RootTabView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .environment(undoCenter)
+        .onAppear { if !onboardingSeen { showTour = true } }
+        .fullScreenCover(isPresented: $showTour) { OnboardingView() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await CalendarSync.syncIfEnabled(context: modelContext) } }
         }

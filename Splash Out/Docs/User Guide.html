@@ -61,9 +61,16 @@
   .btn { display: inline-block; background: var(--blue-soft); color: var(--blue); font-weight: 600; border-radius: 10px; padding: 1px 10px; font-size: 15.5px; white-space: nowrap; }
   .toc { columns: 2; column-gap: 28px; padding-left: 20px; }
   .toc li { margin: 3px 0; }
+  figure.shot { margin: 18px auto; text-align: center; break-inside: avoid; }
+  figure.shot img { display: block; margin: 0 auto; width: 250px; max-width: 70%; border-radius: 26px; border: 1px solid var(--line); box-shadow: 0 6px 22px rgba(30,60,90,.14); }
+  figure.shot.wide img { width: 100%; max-width: 640px; border-radius: 16px; }
+  figure.shot figcaption { color: var(--soft); font-size: 15px; margin-top: 9px; }
+  .pair { display: flex; gap: 18px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .pair figure.shot { margin: 18px 0; flex: 0 1 250px; }
+  .pair figure.shot img { width: 100%; max-width: 250px; }
   footer { margin-top: 56px; color: var(--soft); text-align: center; font-size: 15px; }
   @media (max-width: 560px) { .tabs { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } .toc { columns: 1; } .hero h1 { font-size: 32px; } }
-  @media print { html, body { background: #fff !important; font-size: 13.5px; line-height: 1.5; } .page { padding: 0; } h2 { break-after: avoid; margin-top: 26px; } h3 { margin-top: 14px; } .hero { border-radius: 18px; padding: 30px 28px; } .card { box-shadow: none; padding: 2px 20px 12px; } .tip, .heads-up, .good { margin: 10px 0; padding: 9px 15px; } ol.steps li { margin: 6px 0; } }
+  @media print { figure.shot img { width: 190px; box-shadow: none; } figure.shot.wide img { width: 460px; } .pair figure.shot { flex-basis: 190px; } html, body { background: #fff !important; font-size: 13.5px; line-height: 1.5; } .page { padding: 0; } h2 { break-after: avoid; margin-top: 26px; } h3 { margin-top: 14px; } .hero { border-radius: 18px; padding: 30px 28px; } .card { box-shadow: none; padding: 2px 20px 12px; } .tip, .heads-up, .good { margin: 10px 0; padding: 9px 15px; } ol.steps li { margin: 6px 0; } }
   @page { margin: 16mm 14mm; }
 </style>
 </head>
@@ -112,6 +119,11 @@
   <div class="tab"><b>More</b>everything else</div>
 </div>
 
+<div class="pair">
+<figure class="shot"><img src="screens/tour1.jpg" alt="The quick tour shown the first time you open the app"><figcaption>The quick tour shown the first time you open the app</figcaption></figure>
+<figure class="shot"><img src="screens/tour2.jpg" alt="Each step has a little animation"><figcaption>Each step has a little animation</figcaption></figure>
+</div>
+<div class="tip"><b class="l">Quick tour.</b> A short animated walk-through opens the first time you start the app. Run it again any time from <span class="btn">More</span> → <span class="btn">Quick tour</span>.</div>
 <h2><span class="n">2</span>Setting up (once)</h2>
 <p class="lead">Do this first. It takes about five minutes and makes the Round screen work properly.</p>
 <div class="card">
@@ -123,6 +135,7 @@
   <div class="tip"><b class="l">Why this matters.</b> The usual week and the targets are how the app knows how many customers to line up for each day.</div>
 </div>
 
+<figure class="shot"><img src="screens/settings.jpg" alt="Settings: your team, crews and usual week"><figcaption>Settings: your team, crews and usual week</figcaption></figure>
 <h2><span class="n">3</span>Adding your customers</h2>
 <div class="card">
   <h3>Bring in a list you already have</h3>
@@ -133,7 +146,11 @@
     <li>Fill in the name, address, phone and price. Tap <b>Import from Contacts</b> at the top to copy a name, number and address from your phone's Contacts.</li>
     <li>Choose where they go in the round with <b>Place in round</b>, then tap <b>Save</b>.</li>
   </ol>
-  <div class="heads-up"><b class="l">Good to know.</b> A new customer starts as <b>Not started</b>, which keeps them off the Round list. When you're ready to book them in, edit them and set <b>Status</b> to <b>Active</b>. (Their first logged clean also makes them Active.)</div>
+  <div class="heads-up"><b class="l">Good to know.</b> A new customer starts as <b>Not started</b>. They show greyed out on the Round, as a reminder, and aren't counted in the day's total. Tap them and choose <b>Start</b> when they're ready. (Their first logged clean also makes them Active.)</div>
+  <div class="pair">
+<figure class="shot"><img src="screens/customers.jpg" alt="The Customers tab: search, filter and reorder"><figcaption>The Customers tab: search, filter and reorder</figcaption></figure>
+<figure class="shot"><img src="screens/customer.jpg" alt="A customer's page"><figcaption>A customer's page</figcaption></figure>
+</div>
   <h3>Handy extras on each customer</h3>
   <ul>
     <li><b>Every other clean</b>: for customers you only visit every other round.</li>
@@ -163,6 +180,19 @@
   <div class="tip"><b class="l">Quick way.</b> On the <span class="btn">Customers</span> tab, swipe a row right for <b>Paid</b> or <b>Not paid</b>, or left for <b>Skipped</b>.</div>
 </div>
 
+<div class="pair">
+<figure class="shot"><img src="screens/round.jpg" alt="The Round: one day at a time, with the date bar pinned"><figcaption>The Round: one day at a time, with the date bar pinned</figcaption></figure>
+<figure class="shot"><img src="screens/panel.jpg" alt="Tap a customer, then tap what happened"><figcaption>Tap a customer, then tap what happened</figcaption></figure>
+</div>
+<figure class="shot wide"><img src="screens/ipad.jpg" alt="On an iPad the round and the logging panel sit side by side"><figcaption>On an iPad the round and the logging panel sit side by side</figcaption></figure>
+<div class="card">
+  <h3>New customers show greyed out</h3>
+  <p>Someone who hasn't started yet appears in the round, greyed out, at the place where they belong. They don't count towards the day's total. Tap them and choose <b>Start … put them on the round</b> to make them active.</p>
+</div>
+<div class="pair">
+<figure class="shot"><img src="screens/round2.jpg" alt="A greyed-out customer waiting to be started"><figcaption>A greyed-out customer waiting to be started</figcaption></figure>
+<figure class="shot"><img src="screens/start.jpg" alt="One tap puts them on the round"><figcaption>One tap puts them on the round</figcaption></figure>
+</div>
 <h2><span class="n">5</span>Booking customers in</h2>
 <p class="lead">When you book people in, let them know which day you're coming.</p>
 <div class="card">
@@ -175,6 +205,7 @@
   <div class="heads-up"><b class="l">Phone numbers.</b> A customer with no number shows <b>Add number from Contacts</b> on their page. Tap it and pick them from your Contacts. WhatsApp itself makes you press Send each time, so the app can open every message ready for you but can't send them for you.</div>
 </div>
 
+<figure class="shot"><img src="screens/message.jpg" alt="The Message sheet: one tap per customer"><figcaption>The Message sheet: one tap per customer</figcaption></figure>
 <h2><span class="n">6</span>When someone skips</h2>
 <div class="card">
   <p>Mark them <b>Skipped</b> when you get there. They move to the back of the round, and the next customers move up to fill the day, so you don't lose the work.</p>
@@ -193,6 +224,7 @@
   <p>You can also reach <b>Record payment</b> from any customer's page.</p>
 </div>
 
+<figure class="shot"><img src="screens/owed.jpg" alt="The Owed tab, oldest first"><figcaption>The Owed tab, oldest first</figcaption></figure>
 <h2><span class="n">8</span>Looking after your customers</h2>
 <div class="card">
   <h3>Find someone</h3>
@@ -203,8 +235,12 @@
   <p>On the Customers tab switch on <b>Reorder round</b> and drag them into place. Handy when a new street opens up.</p>
   <h3>Cancel a customer</h3>
   <p>Open their page, scroll down and tap <b>Cancel this customer…</b>. If they still owe you money, the app tells you first. Their history stays, and what they owe stays on the Owed list.</p>
+  <figure class="shot"><img src="screens/cancel.jpg" alt="Cancelling is at the bottom of a customer's page"><figcaption>Cancelling is at the bottom of a customer's page</figcaption></figure>
   <h3>Find cancelled customers</h3>
   <p>On the Customers tab choose <b>Status</b> → <b>Cancelled</b>. If they come back, open them and tap <b>Reactivate this customer</b>.</p>
+  <h3>A new person has moved into a cancelled customer's house</h3>
+  <p>Open the cancelled customer's page and tap <b>Someone new has moved in…</b>. A new customer form opens with the <b>address, round, area, price and notes</b> already filled in. Type the new person's name and number and save. They go in the round right after the old customer, and start as Active.</p>
+  <div class="good"><b class="l">Your stats stay right.</b> The old customer keeps their own history and anything they owed. The new person starts fresh, so cleans, skips, "last cleaned" and what they owe are never mixed up with the person before them.</div>
   <h3>Other statuses</h3>
   <ul>
     <li><b>Paused</b>: away for a while. Not on the round until you reactivate them.</li>
@@ -228,6 +264,7 @@
 </div>
 <p>Below the cards, a chart shows the last twelve weeks. Green bars hit the target, orange bars fell short.</p>
 
+<figure class="shot"><img src="screens/stats.jpg" alt="The Stats screen"><figcaption>The Stats screen</figcaption></figure>
 <h2><span class="n">10</span>The More menu</h2>
 <div class="card">
   <div class="grid2">
@@ -240,6 +277,10 @@
     <div class="mini"><b>Tips</b><span>Record tips. They're never counted as income.</span></div>
     <div class="mini"><b>Exports</b><span>Customer list, tax year income list and a report for analysis.</span></div>
   </div>
+  <div class="pair">
+<figure class="shot"><img src="screens/more2.jpg" alt="The More menu"><figcaption>The More menu</figcaption></figure>
+<figure class="shot"><img src="screens/diary.jpg" alt="The Diary calendar"><figcaption>The Diary calendar</figcaption></figure>
+</div>
   <h3>Share your working days</h3>
   <p>In <b>Settings → Calendar</b>, switch on <b>Keep a calendar up to date</b>. Splash Out adds a calendar to your phone showing who works each day (no money or customer details). Share it from the Calendar app with the people who need to see it. Switching it off removes it.</p>
 </div>
@@ -256,8 +297,10 @@
 
 <h2><span class="n">12</span>Quick answers</h2>
 <div class="card">
+  <h3>A customer is greyed out on the Round list</h3>
+  <p>They haven't started yet. Tap them and choose <b>Start … put them on the round</b>.</p>
   <h3>A customer isn't on the Round list</h3>
-  <p>Check their status. Only <b>Active</b> and <b>Leaving</b> customers appear. Someone cleaned in the last five weeks won't appear until their turn comes round.</p>
+  <p>Check their status. Paused and cancelled customers don't appear. Someone cleaned in the last five weeks won't appear until their turn comes round.</p>
   <h3>The Round list changed overnight</h3>
   <p>It's recalculated every day from who you've cleaned or skipped, so it always reflects where you've got to.</p>
   <h3>I logged the wrong thing</h3>

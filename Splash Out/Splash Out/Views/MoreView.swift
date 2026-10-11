@@ -17,6 +17,9 @@ struct MoreView: View {
                     NavigationLink { TipsView() } label: { Label("Tips", systemImage: "heart") }
                     NavigationLink { ExportsView() } label: { Label("Exports", systemImage: "square.and.arrow.up") }
                 }
+                Section("Help") {
+                    QuickTourButton()
+                }
                 Section("Tools") {
                     NavigationLink { RouteBuilderView(embedded: true) } label: { Label("Route planner", systemImage: "map") }
                     NavigationLink { SettingsView(embedded: true) } label: { Label("Settings", systemImage: "gearshape") }

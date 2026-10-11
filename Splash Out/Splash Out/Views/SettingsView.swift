@@ -48,6 +48,8 @@ struct SettingsView: View {
                     RoundSettingsSections(settings: settings, crews: crews)
                 }
 
+                Section { QuickTourButton() } footer: { Text("A short animated tour of how the app works.") }
+
                 CalendarSection()
 
                 MessageSection()

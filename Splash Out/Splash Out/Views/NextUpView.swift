@@ -61,8 +61,8 @@ struct NextUpView: View {
                         LabeledContent("Carrying on from") { Text(pointer.name) }
                             .font(.subheadline)
                     }
-                    ForEach(day.customers) { customer in
-                        row(for: customer)
+                    ForEach(day.rows) { dayRow in
+                        row(for: dayRow.customer, pending: dayRow.isPending)
                     }
                 } header: {
                     DayHeader(day: day, isToday: day.date == today, onMessage: { messageDay = day })
@@ -86,12 +86,12 @@ struct NextUpView: View {
     }
 
     @ViewBuilder
-    private func row(for customer: Customer) -> some View {
+    private func row(for customer: Customer, pending: Bool) -> some View {
         if sizeClass == .regular {
-            NextUpRow(customer: customer).tag(customer.id)
+            NextUpRow(customer: customer, isPending: pending).tag(customer.id)
         } else {
             Button { selected = customer } label: {
-                NextUpRow(customer: customer)
+                NextUpRow(customer: customer, isPending: pending)
             }
             .buttonStyle(.plain)
         }
@@ -147,6 +147,7 @@ private struct DayHeader: View {
 
 private struct NextUpRow: View {
     let customer: Customer
+    var isPending = false
 
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
@@ -155,6 +156,7 @@ private struct NextUpRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(customer.name).font(.headline)
+                    if isPending { tag("Not started · tap to start") }
                     if customer.everyOther { tag("EO") }
                     if customer.frontOnly { tag("Front only") }
                 }
@@ -189,6 +191,7 @@ private struct NextUpRow: View {
             }
         }
         .padding(.vertical, 4)
+        .opacity(isPending ? 0.45 : 1)
         .contentShape(Rectangle())
     }
 
@@ -213,6 +216,18 @@ struct CustomerLogPanel: View {
 
     var body: some View {
         List {
+            if customer.status == .notStarted {
+                Section {
+                    Button { customer.status = .active } label: {
+                        Label("Start \(customer.name): put them on the round", systemImage: "play.circle.fill")
+                            .font(.title3)
+                            .padding(.vertical, 6)
+                    }
+                } footer: {
+                    Text("They haven't started yet, so they show greyed out and don't count towards the day's total.")
+                }
+            }
+
             Section {
                 Text(customer.address)
                 if owed.cleans > 0 {

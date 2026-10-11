@@ -7,6 +7,8 @@ struct AddEditCustomerView: View {
     @Environment(\.dismiss) private var dismiss
 
     let customer: Customer?
+    /// A cancelled customer whose house has a new occupant: the address, round and price carry over, the person doesn't.
+    var replacing: Customer?
 
     @Query(sort: \Customer.sequence) private var allCustomers: [Customer]
 
@@ -108,7 +110,7 @@ struct AddEditCustomerView: View {
                         .lineLimit(3...6)
                 }
             }
-            .navigationTitle(isEditing ? "Edit Customer" : "New Customer")
+            .navigationTitle(isEditing ? "Edit Customer" : (replacing == nil ? "New Customer" : "New Occupant"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -151,6 +153,18 @@ struct AddEditCustomerView: View {
     }
 
     private func populateFieldsIfEditing() {
+        if customer == nil, let old = replacing {
+            address = old.address
+            priceText = NSDecimalNumber(decimal: old.price).stringValue
+            round = old.round
+            area = old.area
+            notesText = old.notesText
+            frontOnly = old.frontOnly
+            payMethod = old.payMethod
+            status = .active
+            placeAfter = old
+            return
+        }
         guard let customer else { return }
         name = customer.name
         address = customer.address

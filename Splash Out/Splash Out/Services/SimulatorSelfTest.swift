@@ -326,6 +326,18 @@ enum SimulatorSelfTest {
                                         price: customer.price, everyOther: customer.everyOther, lastCleaned: lastCleaned, lastNotDue: lastNotDue, lastVisit: lastVisit)
             }
             let hide = planSettings?.nextUpHideWeeks ?? 5
+            var pendingSeen: [UUID: Int] = [:]
+            var pendingBooked = false, totalsMatch = true
+            for day in planned.days {
+                for row in day.rows where row.isPending {
+                    pendingSeen[row.customer.id, default: 0] += 1
+                    if day.customers.contains(where: { $0.id == row.customer.id }) { pendingBooked = true }
+                }
+                if day.total != day.customers.reduce(Decimal(0), { $0 + $1.price }) { totalsMatch = false }
+            }
+            let notStartedCount = allNow.filter { $0.status == .notStarted }.count
+            check("plan: each not-started customer shows once, greyed", pendingSeen.count == notStartedCount && pendingSeen.values.allSatisfy { $0 == 1 }, "\(pendingSeen.count) of \(notStartedCount)")
+            check("plan: not-started customers aren't booked or counted in a day's total", !pendingBooked && totalsMatch)
             var dueByTheirDay = true
             let pointerSeq = NextUp.pointer(in: candidates)?.sequence
             for day in planned.days {
