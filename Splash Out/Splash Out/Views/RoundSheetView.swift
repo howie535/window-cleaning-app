@@ -96,59 +96,28 @@ enum RoundSheet {
     }
 }
 
-/// Carries the sideways scroll position from the rows to the headings, and the "go to latest" request, without
-/// making the whole sheet redraw on every frame of scrolling (only views that read `x` update).
-@Observable
-final class SheetScrollSync {
-    var x: CGFloat = 0
-    var jump = 0
-}
-
-/// The headings row: follows the rows' sideways scrolling.
-private struct SheetHeaderScroll: View {
-    let sync: SheetScrollSync
-    let columns: Int
-    let dateWidth: CGFloat
-    let payWidth: CGFloat
-    let height: CGFloat
-    let colour: Color
-
-    @State private var position = ScrollPosition(edge: .leading)
-
-    private func head(_ text: String, width: CGFloat) -> some View {
-        Text(text)
-            .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: width, height: height)
-            .background(colour)
-            .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
-    }
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 0) {
-                ForEach(1...columns, id: \.self) { n in
-                    head("Clean \(n)", width: dateWidth)
-                    head("P\(n)", width: payWidth)
-                }
-            }
+extension View {
+    /// Keeps a view pinned to the left edge while the page scrolls sideways. `natural` is where the view sits in its row.
+    /// This runs while drawing, without re-working out the layout, so it stays smooth.
+    fileprivate func stickyLeft(_ natural: CGFloat) -> some View {
+        visualEffect { content, proxy in
+            let minX = proxy.frame(in: .scrollView(axis: .horizontal)).minX
+            return content.offset(x: max(0, natural - minX))
         }
-        .scrollDisabled(true)
-        .scrollIndicators(.hidden)
-        .scrollPosition($position)
-        .onChange(of: sync.x) { _, x in position.scrollTo(x: x) }
     }
 }
 
 /// The round as one big sheet, like the paper-style spreadsheet: a tab per round, a row per customer in round order,
 /// a coloured block per area, then Clean 1 / P1, Clean 2 / P2 ... across the page.
+/// The whole page scrolls as one, with only the visible rows built; names and prices are pinned to the left and the
+/// headings to the top.
 struct RoundSheetView: View {
     @Query(sort: \Customer.sequence) private var customers: [Customer]
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var selectedRound: String?
     @State private var showCancelled = false
-    @State private var sync = SheetScrollSync()
+    @State private var position = ScrollPosition()
 
     private let rowHeight: CGFloat = 36
     private let headerHeight: CGFloat = 30
@@ -162,7 +131,8 @@ struct RoundSheetView: View {
     private var addressWidth: CGFloat { wide ? 175 : 0 }
     private var priceWidth: CGFloat { 48 }
     private var eoWidth: CGFloat { wide ? 34 : 0 }
-    private var leftWidth: CGFloat { bandWidth + numberWidth + nameWidth + addressWidth + priceWidth + eoWidth }
+    private var cellsWidth: CGFloat { numberWidth + nameWidth + addressWidth + priceWidth + eoWidth }
+    private var leftWidth: CGFloat { bandWidth + cellsWidth }
 
     // The spreadsheet's colours.
     private let bandA = Color(red: 0.69, green: 0.78, blue: 0.91)
@@ -224,18 +194,27 @@ struct RoundSheetView: View {
     var body: some View {
         let rows = rows
         let columns = rows.first?.cells.count ?? 8
+        let totalWidth = leftWidth + CGFloat(columns) * (dateWidth + payWidth)
 
         VStack(spacing: 0) {
-            controls(columns: columns)
-            ScrollView {
+            controls(totalWidth: totalWidth)
+            ScrollView([.horizontal, .vertical]) {
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     Section {
-                        sheet(rows: rows, columns: columns)
+                        ForEach(groups(of: rows)) { group in
+                            VStack(spacing: 0) {
+                                ForEach(group.rows) { rowView($0, totalWidth: totalWidth) }
+                            }
+                            .overlay(alignment: .topLeading) { areaBand(group).stickyLeft(0) }
+                        }
+                        totals(rows: rows, totalWidth: totalWidth)
                     } header: {
-                        headerRow(columns: columns)
+                        headerRow(columns: columns, totalWidth: totalWidth)
                     }
                 }
+                .frame(width: totalWidth, alignment: .leading)
             }
+            .scrollPosition($position)
         }
         .fontDesign(.serif)
         .navigationTitle("Round Sheet")
@@ -245,10 +224,10 @@ struct RoundSheetView: View {
     // MARK: Controls
 
     @ViewBuilder
-    private func controls(columns: Int) -> some View {
+    private func controls(totalWidth: CGFloat) -> some View {
         VStack(spacing: 8) {
             if rounds.count > 1 {
-                Picker("Round", selection: Binding(get: { currentRound ?? "" }, set: { selectedRound = $0 })) {
+                Picker("Round", selection: Binding(get: { currentRound ?? "" }, set: { selectedRound = $0; position.scrollTo(x: 0, y: 0) })) {
                     ForEach(rounds, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -259,7 +238,7 @@ struct RoundSheetView: View {
                     .fixedSize()
                 Spacer()
                 Button {
-                    sync.jump += 1
+                    withAnimation { position.scrollTo(x: totalWidth) }
                 } label: {
                     Label("Go to latest", systemImage: "arrow.right.to.line")
                         .font(.subheadline)
@@ -273,18 +252,16 @@ struct RoundSheetView: View {
 
     // MARK: Header
 
-    private func headCell(_ text: String, width: CGFloat, sub: String? = nil) -> some View {
-        VStack(spacing: 0) {
-            Text(text).font(.system(size: 13, weight: .bold))
-            if let sub { Text(sub).font(.system(size: 9)).opacity(0.85) }
-        }
+    private func headCell(_ text: String, width: CGFloat) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: width, height: headerHeight)
             .background(headerBlue)
             .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
     }
 
-    private func headerRow(columns: Int) -> some View {
+    private func headerRow(columns: Int, totalWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             HStack(spacing: 0) {
                 headCell("", width: bandWidth)
@@ -294,55 +271,21 @@ struct RoundSheetView: View {
                 headCell("Price", width: priceWidth)
                 if wide { headCell("EO", width: eoWidth) }
             }
-            .frame(width: leftWidth)
+            .stickyLeft(0)
+            .zIndex(1)
 
-            SheetHeaderScroll(sync: sync, columns: columns, dateWidth: dateWidth, payWidth: payWidth, height: headerHeight, colour: headerBlue)
+            HStack(spacing: 0) {
+                ForEach(1...columns, id: \.self) { n in
+                    headCell("Clean \(n)", width: dateWidth)
+                    headCell("P\(n)", width: payWidth)
+                }
+            }
         }
+        .frame(width: totalWidth, alignment: .leading)
         .background(headerBlue)
     }
 
-    // MARK: Body
-
-    private func sheet(rows: [Row], columns: Int) -> some View {
-        let groups = groups(of: rows)
-        let priced = rows.filter { $0.customer.status == .active || $0.customer.status == .leaving || $0.customer.status == .notStarted }
-        let total = priced.reduce(Decimal(0)) { $0 + $1.customer.price }
-        let average = priced.isEmpty ? Decimal(0) : total / Decimal(priced.count)
-
-        return HStack(alignment: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                ForEach(groups) { group in
-                    HStack(spacing: 0) {
-                        areaBand(group)
-                        VStack(spacing: 0) {
-                            ForEach(group.rows) { leftRow($0) }
-                        }
-                    }
-                }
-                totalRow("Total", total)
-                totalRow("Average", average)
-            }
-            .frame(width: leftWidth)
-
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    ZStack(alignment: .topTrailing) {
-                        VStack(spacing: 0) {
-                            ForEach(rows) { rightRow($0, columns: columns) }
-                            Color.clear.frame(height: rowHeight * 2)
-                        }
-                        Color.clear.frame(width: 1, height: 1).id("sheetEnd")
-                    }
-                }
-                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in
-                    sync.x = x
-                }
-                .onChange(of: sync.jump) { _, _ in
-                    withAnimation { proxy.scrollTo("sheetEnd", anchor: .trailing) }
-                }
-            }
-        }
-    }
+    // MARK: Rows
 
     private func areaBand(_ group: Group) -> some View {
         let height = CGFloat(group.rows.count) * rowHeight
@@ -356,6 +299,7 @@ struct RoundSheetView: View {
             .frame(width: bandWidth, height: height)
             .background(group.colour)
             .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
+            .zIndex(2)
     }
 
     private func fill(_ index: Int) -> Color { index.isMultiple(of: 2) ? bandA : bandB }
@@ -368,19 +312,35 @@ struct RoundSheetView: View {
         }
     }
 
-    private func leftRow(_ row: Row) -> some View {
+    private func rowView(_ row: Row, totalWidth: CGFloat) -> some View {
         let customer = row.customer
         return NavigationLink {
             CustomerDetailView(customer: customer)
         } label: {
             HStack(spacing: 0) {
-                if wide { text("\(customer.sequence)", width: numberWidth, size: 11, colour: .black.opacity(0.6)).background(fill(row.index)) }
-                text(customer.name, width: nameWidth, size: 13, colour: nameColour(customer), lines: 2).background(fill(row.index))
-                if wide { text(customer.address, width: addressWidth, size: 12, colour: nameColour(customer), lines: 2).background(fill(row.index)) }
-                text("£\(customer.price.formatted(.number.precision(.fractionLength(0...2))))", width: priceWidth, size: 13, colour: .black).background(priceYellow)
-                if wide { text(customer.everyOther ? "EO" : "", width: eoWidth, size: 12, colour: .black).background(fill(row.index)) }
+                Color.clear.frame(width: bandWidth, height: rowHeight)
+                HStack(spacing: 0) {
+                    if wide { text("\(customer.sequence)", width: numberWidth, size: 11, colour: .black.opacity(0.6)).background(fill(row.index)) }
+                    text(customer.name, width: nameWidth, size: 13, colour: nameColour(customer), lines: 2).background(fill(row.index))
+                    if wide { text(customer.address, width: addressWidth, size: 12, colour: nameColour(customer), lines: 2).background(fill(row.index)) }
+                    text("£\(customer.price.formatted(.number.precision(.fractionLength(0...2))))", width: priceWidth, size: 13, colour: .black).background(priceYellow)
+                    if wide { text(customer.everyOther ? "EO" : "", width: eoWidth, size: 12, colour: .black).background(fill(row.index)) }
+                }
+                .drawingGroup()
+                .stickyLeft(bandWidth)
+                .zIndex(1)
+
+                HStack(spacing: 0) {
+                    ForEach(0..<row.cells.count, id: \.self) { slot in
+                        let cell = row.cells[slot]
+                        cellText(cell?.date ?? "", width: dateWidth, cell: cell, isPay: false).background(fill(row.index))
+                        cellText(cell?.pay ?? "", width: payWidth, cell: cell, isPay: true)
+                            .background(cell?.kind == .unpaid ? Color(red: 1.0, green: 0.82, blue: 0.6) : fill(row.index))
+                    }
+                }
+                .drawingGroup()
             }
-            .drawingGroup()
+            .frame(width: totalWidth, alignment: .leading)
         }
         .buttonStyle(.plain)
     }
@@ -397,42 +357,11 @@ struct RoundSheetView: View {
             .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
     }
 
-    private func totalRow(_ label: String, _ value: Decimal) -> some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: bandWidth + numberWidth, height: rowHeight)
-            Text(label).font(.system(size: 13)).foregroundStyle(.primary).frame(width: nameWidth, height: rowHeight)
-                .overlay(Rectangle().stroke(Color.primary.opacity(0.6), lineWidth: 0.75))
-            Text(value.formatted(.currency(code: "GBP")))
-                .font(.system(size: 13)).foregroundStyle(.primary)
-                .frame(width: addressWidth > 0 ? addressWidth : priceWidth + 20, height: rowHeight, alignment: .trailing)
-                .padding(.trailing, 6)
-                .overlay(Rectangle().stroke(Color.primary.opacity(0.6), lineWidth: 0.75))
-        }
-    }
-
-    private func rightRow(_ row: Row, columns: Int) -> some View {
-        NavigationLink {
-            CustomerDetailView(customer: row.customer)
-        } label: {
-            HStack(spacing: 0) {
-                ForEach(0..<columns, id: \.self) { slot in
-                    let cell: RoundSheet.Cell? = slot < row.cells.count ? row.cells[slot] : nil
-                    cellText(cell?.date ?? "", width: dateWidth, cell: cell, isPay: false).background(fill(row.index))
-                    cellText(cell?.pay ?? "", width: payWidth, cell: cell, isPay: true)
-                        .background(cell?.kind == .unpaid ? Color(red: 1.0, green: 0.82, blue: 0.6) : fill(row.index))
-                }
-            }
-            .drawingGroup()
-        }
-        .buttonStyle(.plain)
-    }
-
     private func cellText(_ value: String, width: CGFloat, cell: RoundSheet.Cell?, isPay: Bool) -> some View {
         let colour: Color = switch cell?.kind {
         case .skipped: Color(red: 0.7, green: 0.2, blue: 0.2)
         case .notDue: .gray
-        case .unpaid: isPay ? Color(red: 0.75, green: 0.35, blue: 0.0) : .black
-        case .part: isPay ? Color(red: 0.75, green: 0.35, blue: 0.0) : .black
+        case .unpaid, .part: isPay ? Color(red: 0.75, green: 0.35, blue: 0.0) : .black
         default: .black
         }
         return Text(value)
@@ -440,5 +369,37 @@ struct RoundSheetView: View {
             .foregroundStyle(colour)
             .frame(width: width, height: rowHeight)
             .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
+    }
+
+    // MARK: Totals
+
+    private func totals(rows: [Row], totalWidth: CGFloat) -> some View {
+        let priced = rows.filter { $0.customer.status == .active || $0.customer.status == .leaving || $0.customer.status == .notStarted }
+        let total = priced.reduce(Decimal(0)) { $0 + $1.customer.price }
+        let average = priced.isEmpty ? Decimal(0) : total / Decimal(priced.count)
+        return VStack(spacing: 0) {
+            totalRow("Total", total, totalWidth: totalWidth)
+            totalRow("Average", average, totalWidth: totalWidth)
+        }
+    }
+
+    private func totalRow(_ label: String, _ value: Decimal, totalWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Color.clear.frame(width: bandWidth + numberWidth, height: rowHeight)
+                Text(label).font(.system(size: 13)).foregroundStyle(.primary).frame(width: nameWidth, height: rowHeight)
+                    .overlay(Rectangle().stroke(Color.primary.opacity(0.6), lineWidth: 0.75))
+                Text(value.formatted(.currency(code: "GBP")))
+                    .font(.system(size: 13)).foregroundStyle(.primary)
+                    .frame(width: addressWidth > 0 ? addressWidth : priceWidth + 20, height: rowHeight, alignment: .trailing)
+                    .padding(.trailing, 6)
+                    .overlay(Rectangle().stroke(Color.primary.opacity(0.6), lineWidth: 0.75))
+            }
+            .background(Color(.systemBackground))
+            .stickyLeft(0)
+            .zIndex(1)
+            Spacer(minLength: 0)
+        }
+        .frame(width: totalWidth, alignment: .leading)
     }
 }
