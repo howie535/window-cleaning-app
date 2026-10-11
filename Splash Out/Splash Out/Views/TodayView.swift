@@ -14,7 +14,7 @@ struct TodayView: View {
     }
 
     private func pounds(_ value: Decimal) -> String {
-        value.formatted(.currency(code: "GBP").precision(.fractionLength(0)))
+        value.pounds
     }
 
     var body: some View {

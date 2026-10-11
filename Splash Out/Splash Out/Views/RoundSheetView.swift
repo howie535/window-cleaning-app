@@ -22,7 +22,10 @@ enum RoundSheet {
     }
 
     private static func amount(_ value: Decimal) -> String {
-        value.formatted(.number.precision(.fractionLength(0...2)).grouping(.never))
+        var whole = Decimal()
+        var copy = value
+        NSDecimalRound(&whole, &copy, 0, .down)
+        return value.formatted(.number.precision(.fractionLength(value == whole ? 0 : 2)).grouping(.never))
     }
 
     private static func cell(for visit: Visit) -> Cell {
@@ -323,7 +326,7 @@ struct RoundSheetView: View {
                     if wide { text("\(customer.sequence)", width: numberWidth, size: 11, colour: .black.opacity(0.6)).background(fill(row.index)) }
                     text(customer.name, width: nameWidth, size: 13, colour: nameColour(customer), lines: 2).background(fill(row.index))
                     if wide { text(customer.address, width: addressWidth, size: 12, colour: nameColour(customer), lines: 2).background(fill(row.index)) }
-                    text("£\(customer.price.formatted(.number.precision(.fractionLength(0...2))))", width: priceWidth, size: 13, colour: .black).background(priceYellow)
+                    text(customer.price.pounds, width: priceWidth, size: 13, colour: .black).background(priceYellow)
                     if wide { text(customer.everyOther ? "EO" : "", width: eoWidth, size: 12, colour: .black).background(fill(row.index)) }
                 }
                 .drawingGroup()

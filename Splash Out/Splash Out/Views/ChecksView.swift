@@ -27,8 +27,8 @@ struct ChecksView: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 3) {
-                                Text("Price \(row.customer.price.formatted(.currency(code: "GBP").precision(.fractionLength(0))))")
-                                Text("Last paid \(row.lastPaid.formatted(.currency(code: "GBP").precision(.fractionLength(0))))")
+                                Text("Price \(row.customer.price.pounds)")
+                                Text("Last paid \(row.lastPaid.pounds)")
                                     .font(.caption).foregroundStyle(.orange)
                             }
                         }

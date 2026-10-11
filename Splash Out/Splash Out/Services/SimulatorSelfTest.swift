@@ -494,6 +494,13 @@ enum SimulatorSelfTest {
             try? FileManager.default.removeItem(at: folder)
         }
 
+        // money is never rounded away on screen
+        do {
+            func shown(_ value: Decimal) -> String { value.pounds }
+            check("whole pounds show without pence", shown(1140) == "£1,140")
+            check("pence are kept, not rounded", shown(Decimal(string: "1139.5")!) == "£1,139.50" && shown(Decimal(string: "16.05")!) == "£16.05")
+        }
+
         // calendar contents
         do {
             let calSettings = try context.fetch(FetchDescriptor<AppSettings>()).first!

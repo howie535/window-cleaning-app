@@ -138,7 +138,7 @@ struct DiaryView: View {
             } else if target > 0 {
                 Text(initials(members)).font(.caption2.weight(.medium)).foregroundStyle(changed ? Color.accentColor : .secondary)
                 if sizeClass == .regular {
-                    Text(target.formatted(.currency(code: "GBP").precision(.fractionLength(0))))
+                    Text(target.pounds)
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }

@@ -125,7 +125,7 @@ private struct DayHeader: View {
             Text((isToday ? "Today, " : "") + RoundCalendar.weekdayShort(day.date))
                 .font(.headline)
                 .foregroundStyle(.primary)
-            Text("\(day.crewName) · \(day.customers.count) houses · \(day.total.formatted(.currency(code: "GBP").precision(.fractionLength(0)))) of \(day.bookTo.formatted(.currency(code: "GBP").precision(.fractionLength(0))))")
+            Text("\(day.crewName) · \(day.customers.count) houses · \(day.total.pounds) of \(day.bookTo.pounds)")
                 .font(.caption)
                 .textCase(nil)
         }
@@ -168,7 +168,7 @@ private struct NextUpRow: View {
                     if !customer.area.isEmpty { Text(customer.area) }
                     if let last = customer.lastCleanDate { Text("Last \(RoundCalendar.short(last))") }
                     if owed.cleans > 0 {
-                        Text("Owes \(owed.amount.formatted(.currency(code: "GBP").precision(.fractionLength(0))))")
+                        Text("Owes \(owed.amount.pounds)")
                             .foregroundStyle(.red)
                     }
                 }
@@ -183,7 +183,7 @@ private struct NextUpRow: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
-                Text(customer.price, format: .currency(code: "GBP").precision(.fractionLength(0)))
+                Text(customer.price.pounds)
                     .font(.headline)
                 Image(systemName: customer.contact == .ring ? "phone" : "message")
                     .font(.caption)

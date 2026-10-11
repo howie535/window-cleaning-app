@@ -16,7 +16,7 @@ struct PriceRiseView: View {
     @State private var message: String?
 
     private func pounds(_ value: Decimal, pence: Bool = false) -> String {
-        value.formatted(.currency(code: "GBP").precision(.fractionLength(pence ? 2 : 0)))
+        pence ? value.formatted(.currency(code: "GBP").precision(.fractionLength(2))) : value.pounds
     }
 
     var body: some View {

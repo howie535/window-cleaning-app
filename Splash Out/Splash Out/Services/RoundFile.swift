@@ -109,3 +109,13 @@ enum Money {
         (NSDecimalNumber(decimal: value).doubleValue * 100).rounded() / 100
     }
 }
+
+extension Decimal {
+    /// Money as shown on screen, never rounded: whole pounds as £1,140, anything with pence as £1,139.50.
+    var pounds: String {
+        var whole = Decimal()
+        var copy = self
+        NSDecimalRound(&whole, &copy, 0, .down)
+        return formatted(.currency(code: "GBP").precision(.fractionLength(self == whole ? 0 : 2)))
+    }
+}

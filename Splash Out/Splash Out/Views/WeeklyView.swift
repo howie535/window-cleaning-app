@@ -9,7 +9,7 @@ struct WeeklyView: View {
     @Query private var settings: [AppSettings]
 
     private func pounds(_ value: Decimal) -> String {
-        value.formatted(.currency(code: "GBP").precision(.fractionLength(0)))
+        value.pounds
     }
 
     /// Green when work meets target, amber within 10% below, red lower.
