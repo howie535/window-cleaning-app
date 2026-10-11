@@ -96,6 +96,50 @@ enum RoundSheet {
     }
 }
 
+/// Carries the sideways scroll position from the rows to the headings, and the "go to latest" request, without
+/// making the whole sheet redraw on every frame of scrolling (only views that read `x` update).
+@Observable
+final class SheetScrollSync {
+    var x: CGFloat = 0
+    var jump = 0
+}
+
+/// The headings row: follows the rows' sideways scrolling.
+private struct SheetHeaderScroll: View {
+    let sync: SheetScrollSync
+    let columns: Int
+    let dateWidth: CGFloat
+    let payWidth: CGFloat
+    let height: CGFloat
+    let colour: Color
+
+    @State private var position = ScrollPosition(edge: .leading)
+
+    private func head(_ text: String, width: CGFloat) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: width, height: height)
+            .background(colour)
+            .overlay(Rectangle().stroke(Color.white.opacity(0.6), lineWidth: 0.5))
+    }
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 0) {
+                ForEach(1...columns, id: \.self) { n in
+                    head("Clean \(n)", width: dateWidth)
+                    head("P\(n)", width: payWidth)
+                }
+            }
+        }
+        .scrollDisabled(true)
+        .scrollIndicators(.hidden)
+        .scrollPosition($position)
+        .onChange(of: sync.x) { _, x in position.scrollTo(x: x) }
+    }
+}
+
 /// The round as one big sheet, like the paper-style spreadsheet: a tab per round, a row per customer in round order,
 /// a coloured block per area, then Clean 1 / P1, Clean 2 / P2 ... across the page.
 struct RoundSheetView: View {
@@ -104,8 +148,7 @@ struct RoundSheetView: View {
 
     @State private var selectedRound: String?
     @State private var showCancelled = false
-    @State private var headerPosition = ScrollPosition(edge: .leading)
-    @State private var rowsPosition = ScrollPosition(edge: .leading)
+    @State private var sync = SheetScrollSync()
 
     private let rowHeight: CGFloat = 36
     private let headerHeight: CGFloat = 30
@@ -216,7 +259,7 @@ struct RoundSheetView: View {
                     .fixedSize()
                 Spacer()
                 Button {
-                    rowsPosition.scrollTo(x: CGFloat(columns) * (dateWidth + payWidth))
+                    sync.jump += 1
                 } label: {
                     Label("Go to latest", systemImage: "arrow.right.to.line")
                         .font(.subheadline)
@@ -253,17 +296,7 @@ struct RoundSheetView: View {
             }
             .frame(width: leftWidth)
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 0) {
-                    ForEach(1...columns, id: \.self) { n in
-                        headCell("Clean \(n)", width: dateWidth)
-                        headCell("P\(n)", width: payWidth)
-                    }
-                }
-            }
-            .scrollDisabled(true)
-            .scrollIndicators(.hidden)
-            .scrollPosition($headerPosition)
+            SheetHeaderScroll(sync: sync, columns: columns, dateWidth: dateWidth, payWidth: payWidth, height: headerHeight, colour: headerBlue)
         }
         .background(headerBlue)
     }
@@ -291,15 +324,22 @@ struct RoundSheetView: View {
             }
             .frame(width: leftWidth)
 
-            ScrollView(.horizontal) {
-                VStack(spacing: 0) {
-                    ForEach(rows) { rightRow($0, columns: columns) }
-                    Color.clear.frame(height: rowHeight * 2)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    ZStack(alignment: .topTrailing) {
+                        VStack(spacing: 0) {
+                            ForEach(rows) { rightRow($0, columns: columns) }
+                            Color.clear.frame(height: rowHeight * 2)
+                        }
+                        Color.clear.frame(width: 1, height: 1).id("sheetEnd")
+                    }
                 }
-            }
-            .scrollPosition($rowsPosition)
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in
-                headerPosition.scrollTo(x: x)
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in
+                    sync.x = x
+                }
+                .onChange(of: sync.jump) { _, _ in
+                    withAnimation { proxy.scrollTo("sheetEnd", anchor: .trailing) }
+                }
             }
         }
     }
@@ -340,6 +380,7 @@ struct RoundSheetView: View {
                 text("£\(customer.price.formatted(.number.precision(.fractionLength(0...2))))", width: priceWidth, size: 13, colour: .black).background(priceYellow)
                 if wide { text(customer.everyOther ? "EO" : "", width: eoWidth, size: 12, colour: .black).background(fill(row.index)) }
             }
+            .drawingGroup()
         }
         .buttonStyle(.plain)
     }
@@ -381,6 +422,7 @@ struct RoundSheetView: View {
                         .background(cell?.kind == .unpaid ? Color(red: 1.0, green: 0.82, blue: 0.6) : fill(row.index))
                 }
             }
+            .drawingGroup()
         }
         .buttonStyle(.plain)
     }
