@@ -34,6 +34,10 @@ struct VisitQuickActions: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(UndoCenter.self) private var undoCenter
 
+    @State private var isConfirmingSkip = false
+
+    private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
+
     var body: some View {
         Group {
             row("Cleaned & paid", systemImage: "checkmark.circle.fill", tint: .green) {
@@ -46,7 +50,13 @@ struct VisitQuickActions: View {
                 sheet = .extra
             }
             row("Skipped", systemImage: "forward.circle", tint: .red) {
-                run(.skipped)
+                if owed.cleans > 0 { isConfirmingSkip = true } else { run(.skipped) }
+            }
+            .alert("\(customer.name) owes money", isPresented: $isConfirmingSkip) {
+                Button("Skip anyway", role: .destructive) { run(.skipped) }
+                Button("Go back", role: .cancel) {}
+            } message: {
+                Text("They still owe \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s"). Skip them anyway?")
             }
             if customer.everyOther {
                 row("Not due (every other)", systemImage: "arrow.triangle.2.circlepath", tint: .gray) {

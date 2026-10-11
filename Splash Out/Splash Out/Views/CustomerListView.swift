@@ -17,6 +17,7 @@ struct CustomerListView: View {
     @State private var isShowingFileImporter = false
     @State private var pendingImport: PendingImport?
     @State private var importErrorMessage: String?
+    @State private var skipAsk: Customer?
 
     private struct PendingImport: Identifiable {
         let id = UUID()
@@ -66,6 +67,13 @@ struct CustomerListView: View {
             allowedContentTypes: [.commaSeparatedText, .plainText],
             onCompletion: handleFileImport
         )
+        .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
+            Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
+            Button("Go back", role: .cancel) {}
+        } message: { person in
+            let owed = RoundMetrics.moneyOwed([person])
+            Text("\(person.name) still owes \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s").")
+        }
         .alert("Couldn't Import File", isPresented: Binding(
             get: { importErrorMessage != nil },
             set: { if !$0 { importErrorMessage = nil } }
@@ -189,6 +197,14 @@ struct CustomerListView: View {
     }
 
     private func log(_ action: VisitLogger.Action, for customer: Customer) {
+        if case .skipped = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
+            skipAsk = customer
+            return
+        }
+        perform(action, for: customer)
+    }
+
+    private func perform(_ action: VisitLogger.Action, for customer: Customer) {
         let undo = VisitLogger.perform(action, for: customer, in: modelContext)
         undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
     }

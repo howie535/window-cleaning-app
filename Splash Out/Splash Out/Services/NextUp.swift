@@ -121,28 +121,33 @@ enum NextUp {
         hideWeeks: Int,
         calendar: Calendar
     ) -> [Assignment] {
-        guard let lastDay = days.last else { return [] }
+        guard !days.isEmpty else { return [] }
         // Customers at or behind the pointer are on the next lap (already dealt with this lap), so their turn comes
         // round in order whatever the dates say. The "less than 5 weeks" check only guards those still ahead of
         // the pointer, who may have been cleaned out of order.
         let pointerSequence = pointer(in: rotated)?.sequence
-        var capacities: [Decimal] = []
-        var running: Decimal = 0
-        for day in days {
-            running += day.target * (1 + overbook)
-            capacities.append(running)
-        }
 
+        // Each day is filled in order until it reaches its booking target (day target plus the overbook allowance),
+        // and the customer who takes it over the line stays on that day, so every day meets or exceeds its target.
+        var dayIndex = 0
+        var dayTotal: Decimal = 0
         var total: Decimal = 0
         var result: [Assignment] = []
         for candidate in rotated where candidate.isListable {
-            let after = total + candidate.price
-            let index = capacities.filter { $0 < after }.count
-            let when = index < days.count ? days[index].date : lastDay.date
+            let when = dayIndex < days.count ? days[dayIndex].date : days[days.count - 1].date
             let nextLap = pointerSequence.map { candidate.sequence <= $0 } ?? false
-            guard candidate.isListable, nextLap || isDue(candidate, today: when, hideWeeks: hideWeeks, calendar: calendar) else { continue }
-            total = after
-            result.append(Assignment(key: candidate.key, dayIndex: index < days.count ? index : nil, cumulative: total))
+            guard nextLap || isDue(candidate, today: when, hideWeeks: hideWeeks, calendar: calendar) else { continue }
+            total += candidate.price
+            if dayIndex < days.count {
+                result.append(Assignment(key: candidate.key, dayIndex: dayIndex, cumulative: total))
+                dayTotal += candidate.price
+                if dayTotal >= days[dayIndex].target * (1 + overbook) {
+                    dayIndex += 1
+                    dayTotal = 0
+                }
+            } else {
+                result.append(Assignment(key: candidate.key, dayIndex: nil, cumulative: total))
+            }
         }
         return result
     }

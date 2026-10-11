@@ -50,22 +50,17 @@ struct NextUpView: View {
 
     private func roundList(plan: RoundPlanner.Plan, today: Date) -> some View {
         List(selection: $selectedID) {
-            if let pointer = plan.pointer {
-                Section {
-                    LabeledContent("Carrying on from") {
-                        Text(pointer.name)
-                    }
-                    .font(.subheadline)
-                }
-            }
-
             if plan.days.isEmpty {
                 ContentUnavailableView("No working days", systemImage: "calendar.badge.exclamationmark",
                                        description: Text("There are no working days coming up. Check the usual week in Settings."))
             }
 
-            ForEach(plan.days) { day in
+            ForEach(Array(plan.days.enumerated()), id: \.element.id) { index, day in
                 Section {
+                    if index == 0, let pointer = plan.pointer {
+                        LabeledContent("Carrying on from") { Text(pointer.name) }
+                            .font(.subheadline)
+                    }
                     ForEach(day.customers) { customer in
                         row(for: customer)
                     }
@@ -116,6 +111,14 @@ private struct DayHeader: View {
     let isToday: Bool
     var onMessage: () -> Void = {}
 
+    /// Customers on this day who haven't had the message, once some others have (for example someone skipped,
+    /// so the next people were pulled forward).
+    private var newCount: Int {
+        let sent = Set(UserDefaults.standard.stringArray(forKey: DayMessage.sentKey(day.date)) ?? [])
+        guard !sent.isEmpty else { return 0 }
+        return day.customers.filter { $0.contact == .whatsapp && !$0.whatsAppDigits.isEmpty && !sent.contains($0.id.uuidString) }.count
+    }
+
     var body: some View {
         HStack(alignment: .center) {
         VStack(alignment: .leading, spacing: 2) {
@@ -128,7 +131,7 @@ private struct DayHeader: View {
         }
             Spacer()
             if !day.customers.isEmpty {
-                Button(action: onMessage) { Label("Message", systemImage: "message") }
+                Button(action: onMessage) { Label(newCount > 0 ? "Message · \(newCount) new" : "Message", systemImage: "message") }
                     .font(.subheadline)
                     .buttonStyle(.bordered)
                     .textCase(nil)

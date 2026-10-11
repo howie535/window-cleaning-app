@@ -10,7 +10,7 @@ struct MessageDayView: View {
     @State private var sent: Set<String> = []
     @State private var failure: String?
 
-    private var storageKey: String { "messaged.\(RoundCalendar.dayString(day.date))" }
+    private var storageKey: String { DayMessage.sentKey(day.date) }
 
     private func text(for customer: Customer) -> String {
         DayMessage.text(template: template, name: customer.name, date: day.date)
@@ -48,7 +48,7 @@ struct MessageDayView: View {
                             .foregroundStyle(.green)
                     }
                 } footer: {
-                    Text("Opens WhatsApp with the message ready. Press Send there, then come back and tap again. \(sentCount) of \(queue.count) done.")
+                    Text("Opens WhatsApp with the message ready. Press Send there, then come back and tap again. \(sentCount) of \(queue.count) done." + (sentCount > 0 && nextToSend != nil ? " The rest joined this day after you started, for example when someone was skipped." : ""))
                 }
 
                 Section("Customers (\(day.customers.count))") {

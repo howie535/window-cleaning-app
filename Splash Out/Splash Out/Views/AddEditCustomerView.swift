@@ -26,6 +26,8 @@ struct AddEditCustomerView: View {
     @State private var isShowingPlace = false
     @State private var isShowingContactPicker = false
     @State private var saveToContacts = true
+    @State private var isConfirmingOwedCancel = false
+    @State private var cancelAnyway = false
     @State private var contactsMessage: String?
 
     private var isEditing: Bool { customer != nil }
@@ -118,6 +120,15 @@ struct AddEditCustomerView: View {
                 }
             }
             .onAppear(perform: populateFieldsIfEditing)
+            .alert("They still owe money", isPresented: $isConfirmingOwedCancel) {
+                Button("Cancel anyway", role: .destructive) { cancelAnyway = true; save() }
+                Button("Go back", role: .cancel) {}
+            } message: {
+                if let customer {
+                    let owed = RoundMetrics.moneyOwed([customer])
+                    Text("\(customer.name) owes \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) clean\(owed.cleans == 1 ? "" : "s"). That stays on Money Owed after they're cancelled.")
+                }
+            }
             .alert("Contacts", isPresented: Binding(get: { contactsMessage != nil }, set: { if !$0 { contactsMessage = nil; dismiss() } })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -156,6 +167,11 @@ struct AddEditCustomerView: View {
     }
 
     private func save() {
+        if let customer, status == .cancelled, customer.status != .cancelled, !cancelAnyway,
+           RoundMetrics.moneyOwed([customer]).cleans > 0 {
+            isConfirmingOwedCancel = true
+            return
+        }
         let price = Decimal(string: priceText) ?? 0
         let addressChanged = address != customer?.address
         let target: Customer

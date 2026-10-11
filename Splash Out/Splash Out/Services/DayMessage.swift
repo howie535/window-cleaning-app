@@ -5,6 +5,9 @@ enum DayMessage {
     static let defaultTemplate = "Hi {name}, we're planning to clean your windows on {date}. Let us know if that doesn't suit!"
     static let templateKey = "whatsapp.dayTemplate"
 
+    /// Where the ticks for who has been messaged for a day are kept.
+    static func sentKey(_ date: Date) -> String { "messaged.\(RoundCalendar.dayString(date))" }
+
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_GB")

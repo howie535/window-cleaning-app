@@ -310,7 +310,11 @@ enum SimulatorSelfTest {
             let planned = RoundPlanner.plan(customers: allNow, settings: planSettings, crews: planCrews, workDays: planDiary, today: today)
             let placed = planned.days.flatMap(\.customers) + planned.later
             check("plan: nobody appears twice", Set(placed.map(\.id)).count == placed.count)
-            // first day is what the old "due today" logic gave
+            var reachesTarget = true
+            for day in planned.days.dropLast() where !day.customers.isEmpty {
+                if day.total < day.bookTo { reachesTarget = false }
+            }
+            check("plan: every full day reaches or exceeds its booking target", reachesTarget)
             let candidates = allNow.enumerated().map { index, customer -> NextUp.Candidate in
                 var lastCleaned: Date?, lastNotDue: Date?, lastVisit: Date?
                 for visit in customer.allVisits {
@@ -322,12 +326,6 @@ enum SimulatorSelfTest {
                                         price: customer.price, everyOther: customer.everyOther, lastCleaned: lastCleaned, lastNotDue: lastNotDue, lastVisit: lastVisit)
             }
             let hide = planSettings?.nextUpHideWeeks ?? 5
-            let dueToday = NextUp.queue(candidates, today: today, hideWeeks: hide, calendar: RoundCalendar.london)
-            if let first = planned.days.first {
-                let oldDay = NextUp.assign(dueToday, to: NextUp.workingDays(from: today, calendar: RoundCalendar.london) { _ in first.target }, overbook: Money.decimal((planSettings?.overbook ?? 0.1) * 100) / 100)
-                let oldFirst = oldDay.filter { $0.dayIndex == 0 }.map { allNow[$0.key].id }
-                check("plan: today's list is the same as before", oldFirst == first.customers.map(\.id), "\(oldFirst.count) vs \(first.customers.count)")
-            }
             var dueByTheirDay = true
             let pointerSeq = NextUp.pointer(in: candidates)?.sequence
             for day in planned.days {
