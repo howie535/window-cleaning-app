@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splash Out: User Guide</title>
+<style>
+  :root {
+    --ink: #1c2733;
+    --soft: #5b6b7a;
+    --line: #e3eaf1;
+    --bg: #f5f8fb;
+    --card: #ffffff;
+    --blue: #1f7ae0;
+    --blue-soft: #e8f2fd;
+    --green: #1f9d57;
+    --green-soft: #e6f6ed;
+    --amber: #c27a0a;
+    --amber-soft: #fff4de;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 22px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #1f7ae0 0%, #46b3f2 100%);
+    color: #fff; border-radius: 26px; padding: 44px 34px; margin-bottom: 30px;
+  }
+  .hero h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: -0.5px; }
+  .hero p { margin: 0; font-size: 19px; opacity: .95; }
+  h2 { font-size: 27px; margin: 46px 0 6px; letter-spacing: -0.3px; }
+  h2 .n { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+          background: var(--blue); color: #fff; font-size: 17px; margin-right: 10px; vertical-align: 3px; }
+  h3 { font-size: 19px; margin: 24px 0 4px; }
+  p { margin: 8px 0; }
+  .lead { color: var(--soft); margin-top: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 6px 24px 18px; margin: 16px 0;
+          box-shadow: 0 2px 10px rgba(30,60,90,.05); break-inside: avoid; }
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 14px 0 4px; }
+  ol.steps li { counter-increment: s; position: relative; padding: 4px 0 4px 46px; margin: 10px 0; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 2px; width: 32px; height: 32px; border-radius: 50%;
+          background: var(--blue-soft); color: var(--blue); font-weight: 700; display: grid; place-items: center; }
+  ul { padding-left: 22px; } li { margin: 4px 0; }
+  .tip, .heads-up, .good { border-radius: 16px; padding: 12px 18px; margin: 16px 0; break-inside: avoid; }
+  .tip { background: var(--blue-soft); }
+  .good { background: var(--green-soft); }
+  .heads-up { background: var(--amber-soft); }
+  .tip b.l { color: var(--blue); } .good b.l { color: var(--green); } .heads-up b.l { color: var(--amber); }
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 18px 0; }
+  .tab { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 8px; text-align: center; font-size: 15px; }
+  .tab b { display: block; font-size: 16px; margin-bottom: 2px; color: var(--blue); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+  .mini { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; break-inside: avoid; }
+  .mini b { display: block; }
+  .mini span { color: var(--soft); font-size: 15.5px; }
+  .btn { display: inline-block; background: var(--blue-soft); color: var(--blue); font-weight: 600; border-radius: 10px; padding: 1px 10px; font-size: 15.5px; white-space: nowrap; }
+  .toc { columns: 2; column-gap: 28px; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  footer { margin-top: 56px; color: var(--soft); text-align: center; font-size: 15px; }
+  @media (max-width: 560px) { .tabs { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } .toc { columns: 1; } .hero h1 { font-size: 32px; } }
+  @media print { html, body { background: #fff !important; font-size: 13.5px; line-height: 1.5; } .page { padding: 0; } h2 { break-after: avoid; margin-top: 26px; } h3 { margin-top: 14px; } .hero { border-radius: 18px; padding: 30px 28px; } .card { box-shadow: none; padding: 2px 20px 12px; } .tip, .heads-up, .good { margin: 10px 0; padding: 9px 15px; } ol.steps li { margin: 6px 0; } }
+  @page { margin: 16mm 14mm; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <h1>Splash Out</h1>
+  <p>Your round, your customers and your money, all in one place.<br>A friendly guide to getting started.</p>
+</header>
+
+<div class="card">
+  <h3>In this guide</h3>
+  <ol class="toc">
+    <li>What Splash Out does</li>
+    <li>Setting up (once)</li>
+    <li>Adding your customers</li>
+    <li>A normal working day</li>
+    <li>Booking customers in</li>
+    <li>When someone skips</li>
+    <li>Getting paid</li>
+    <li>Looking after your customers</li>
+    <li>The Stats screen</li>
+    <li>The More menu</li>
+    <li>Keeping your data safe</li>
+    <li>Quick answers</li>
+  </ol>
+</div>
+
+<h2><span class="n">1</span>What Splash Out does</h2>
+<p class="lead">Splash Out replaces your notebook or spreadsheet. It does six jobs for you:</p>
+<div class="grid2">
+  <div class="mini"><b>Remembers your customers</b><span>Names, addresses, prices, notes and phone numbers.</span></div>
+  <div class="mini"><b>Plans your round</b><span>Shows who is next, day by day, in round order.</span></div>
+  <div class="mini"><b>Logs each clean</b><span>One tap: cleaned and paid, not paid, skipped.</span></div>
+  <div class="mini"><b>Tracks who owes you</b><span>Every unpaid clean, oldest first.</span></div>
+  <div class="mini"><b>Shows how you're doing</b><span>Weekly targets, tax year income and more.</span></div>
+  <div class="mini"><b>Messages customers</b><span>Opens WhatsApp with a ready-made message.</span></div>
+</div>
+<p>There are five tabs along the bottom (or the top on an iPad):</p>
+<div class="tabs">
+  <div class="tab"><b>Stats</b>how you're doing</div>
+  <div class="tab"><b>Round</b>who's next</div>
+  <div class="tab"><b>Customers</b>everyone</div>
+  <div class="tab"><b>Owed</b>who owes you</div>
+  <div class="tab"><b>More</b>everything else</div>
+</div>
+
+<h2><span class="n">2</span>Setting up (once)</h2>
+<p class="lead">Do this first. It takes about five minutes and makes the Round screen work properly.</p>
+<div class="card">
+  <ol class="steps">
+    <li><b>Add your team.</b> Go to <span class="btn">More</span> → <span class="btn">Settings</span> → <b>Team</b>. Type each person's name and tap <b>Add team member</b>.</li>
+    <li><b>Make your crews.</b> Under <b>Crews and day targets</b> tap <b>Add a crew…</b>. A crew is a combination of people who work together, such as "Sam + Alex" or just "Sam". Give each crew a <b>day target</b>: how many pounds of work it aims to do in a day.</li>
+    <li><b>Set your usual week.</b> Under <b>Usual week</b> choose which crew works on each day. Leave days you don't work as "Not working".</li>
+  </ol>
+  <div class="tip"><b class="l">Why this matters.</b> The usual week and the targets are how the app knows how many customers to line up for each day.</div>
+</div>
+
+<h2><span class="n">3</span>Adding your customers</h2>
+<div class="card">
+  <h3>Bring in a list you already have</h3>
+  <p>On the <span class="btn">Customers</span> tab tap the <b>download arrow</b> (top left) and pick a spreadsheet saved as a CSV file. Match each column to a field (Name, Address, Price…) and tap <b>Import</b>.</p>
+  <h3>Or add one at a time</h3>
+  <ol class="steps">
+    <li>On the <span class="btn">Customers</span> tab tap <b>+</b>.</li>
+    <li>Fill in the name, address, phone and price. Tap <b>Import from Contacts</b> at the top to copy a name, number and address from your phone's Contacts.</li>
+    <li>Choose where they go in the round with <b>Place in round</b>, then tap <b>Save</b>.</li>
+  </ol>
+  <div class="heads-up"><b class="l">Good to know.</b> A new customer starts as <b>Not started</b>, which keeps them off the Round list. When you're ready to book them in, edit them and set <b>Status</b> to <b>Active</b>. (Their first logged clean also makes them Active.)</div>
+  <h3>Handy extras on each customer</h3>
+  <ul>
+    <li><b>Every other clean</b>: for customers you only visit every other round.</li>
+    <li><b>Front only</b>: a reminder that only the front is done.</li>
+    <li><b>Notes</b>: gate codes, pets, parking. They show up when you tap the customer on the round.</li>
+    <li><b>Contact by</b>: WhatsApp or Ring, so you get the right button.</li>
+  </ul>
+</div>
+
+<h2><span class="n">4</span>A normal working day</h2>
+<p class="lead">Open the <span class="btn">Round</span> tab. It lists customers day by day, in the order you work them. The date bar stays at the top as you scroll, so you always know which day you're looking at.</p>
+<div class="card">
+  <ol class="steps">
+    <li><b>Tap the customer you're at.</b> A panel opens with their address, notes and anything they owe.</li>
+    <li><b>Tap what happened:</b>
+      <ul>
+        <li><b>Cleaned &amp; paid</b>: done, and they paid.</li>
+        <li><b>Cleaned, not paid</b>: done, they'll pay later. It goes on the Owed list.</li>
+        <li><b>Cleaned + extra…</b>: for something extra (conservatory roof) or less (front only). Add a note.</li>
+        <li><b>Skipped</b>: you couldn't do them today. They go to the back of the round.</li>
+        <li><b>Not due</b>: for every-other customers on their off round.</li>
+        <li><b>Other date or amount…</b>: for logging a clean from another day, or when they paid a different amount.</li>
+      </ul></li>
+    <li><b>Made a mistake?</b> A bar appears at the bottom for a few seconds. Tap <b>Undo</b>.</li>
+  </ol>
+  <div class="good"><b class="l">The list looks after itself.</b> Each clean or skip moves the round on, and the list refills. Customers you've just cleaned drop to the back and come round again in about five weeks.</div>
+  <div class="tip"><b class="l">Quick way.</b> On the <span class="btn">Customers</span> tab, swipe a row right for <b>Paid</b> or <b>Not paid</b>, or left for <b>Skipped</b>.</div>
+</div>
+
+<h2><span class="n">5</span>Booking customers in</h2>
+<p class="lead">When you book people in, let them know which day you're coming.</p>
+<div class="card">
+  <ol class="steps">
+    <li>On the <span class="btn">Round</span> tab, find the day and tap <b>Message</b> on its date bar.</li>
+    <li>You'll see the message ready to go. Tap <b>Message next</b>. WhatsApp opens with the message filled in for that customer.</li>
+    <li>Press <b>Send</b> in WhatsApp, then come back and tap <b>Message next</b> again. Each customer you've done gets a tick.</li>
+  </ol>
+  <p>The message fills in each customer's name and the day, for example <i>"Hi Anne, we're planning to clean your windows on Tuesday 13 October."</i> Change the wording any time in <span class="btn">More</span> → <span class="btn">Settings</span> → <b>WhatsApp message</b>.</p>
+  <div class="heads-up"><b class="l">Phone numbers.</b> A customer with no number shows <b>Add number from Contacts</b> on their page. Tap it and pick them from your Contacts. WhatsApp itself makes you press Send each time, so the app can open every message ready for you but can't send them for you.</div>
+</div>
+
+<h2><span class="n">6</span>When someone skips</h2>
+<div class="card">
+  <p>Mark them <b>Skipped</b> when you get there. They move to the back of the round, and the next customers move up to fill the day, so you don't lose the work.</p>
+  <p>Those customers weren't in your original message, so the day's <b>Message</b> button now says something like <b>Message · 3 new</b>. Tap it, and <b>Message next</b> takes you through just the new ones.</p>
+  <div class="tip"><b class="l">Owes you money?</b> If you skip someone who still owes you from an earlier clean, the app asks you first, in case you want to collect before moving on.</div>
+</div>
+
+<h2><span class="n">7</span>Getting paid</h2>
+<div class="card">
+  <p>The <span class="btn">Owed</span> tab lists everyone with an unpaid clean, oldest first, with the total at the top.</p>
+  <ol class="steps">
+    <li>Tap the customer.</li>
+    <li>Tap <b>Record payment…</b> and type what they paid.</li>
+    <li>Save. The money is taken off their oldest unpaid cleans first. Part-payments work too.</li>
+  </ol>
+  <p>You can also reach <b>Record payment</b> from any customer's page.</p>
+</div>
+
+<h2><span class="n">8</span>Looking after your customers</h2>
+<div class="card">
+  <h3>Find someone</h3>
+  <p>On the <span class="btn">Customers</span> tab use the search bar (name, address, area or note). You can also filter by <b>Round</b>, <b>Area</b> or <b>Status</b>.</p>
+  <h3>Change their details</h3>
+  <p>Tap the customer, then <b>Edit</b>. Changing a price keeps a record of the old one.</p>
+  <h3>Move someone in the round</h3>
+  <p>On the Customers tab switch on <b>Reorder round</b> and drag them into place. Handy when a new street opens up.</p>
+  <h3>Cancel a customer</h3>
+  <p>Open their page, scroll down and tap <b>Cancel this customer…</b>. If they still owe you money, the app tells you first. Their history stays, and what they owe stays on the Owed list.</p>
+  <h3>Find cancelled customers</h3>
+  <p>On the Customers tab choose <b>Status</b> → <b>Cancelled</b>. If they come back, open them and tap <b>Reactivate this customer</b>.</p>
+  <h3>Other statuses</h3>
+  <ul>
+    <li><b>Paused</b>: away for a while. Not on the round until you reactivate them.</li>
+    <li><b>Leaving</b>: still being cleaned, but flagged as going.</li>
+  </ul>
+</div>
+
+<h2><span class="n">9</span>The Stats screen</h2>
+<p class="lead">The first tab gives you the big picture at a glance.</p>
+<div class="grid2">
+  <div class="mini"><b>This week</b><span>Work done against your weekly target.</span></div>
+  <div class="mini"><b>Today</b><span>Today's work against the crew's day target.</span></div>
+  <div class="mini"><b>Tax year</b><span>Everything you've earned since 6 April, paid or not.</span></div>
+  <div class="mini"><b>Money owed</b><span>Total waiting to be paid.</span></div>
+  <div class="mini"><b>Round value</b><span>What one full round of customers is worth.</span></div>
+  <div class="mini"><b>Average per house</b><span>What you charge for the average clean.</span></div>
+  <div class="mini"><b>Houses per workday</b><span>How many houses you do on a working day.</span></div>
+  <div class="mini"><b>Pace</b><span>How many weeks between cleans, on the current plan.</span></div>
+  <div class="mini"><b>Skip rate</b><span>How often visits end up skipped.</span></div>
+  <div class="mini"><b>Price rises due</b><span>Customers who haven't had a rise in two years.</span></div>
+</div>
+<p>Below the cards, a chart shows the last twelve weeks. Green bars hit the target, orange bars fell short.</p>
+
+<h2><span class="n">10</span>The More menu</h2>
+<div class="card">
+  <div class="grid2">
+    <div class="mini"><b>Weekly</b><span>Each week against its target.</span></div>
+    <div class="mini"><b>Tax Year</b><span>Month by month totals. Share a file for your accounts.</span></div>
+    <div class="mini"><b>Price Rise</b><span>Preview a rise for every customer, then apply it in one go.</span></div>
+    <div class="mini"><b>Frequent Skips</b><span>Customers who skip a lot.</span></div>
+    <div class="mini"><b>Checks</b><span>Customers paying under their price, and dates worth a second look.</span></div>
+    <div class="mini"><b>Diary</b><span>A calendar. Tap a day to mark a holiday or change the crew.</span></div>
+    <div class="mini"><b>Tips</b><span>Record tips. They're never counted as income.</span></div>
+    <div class="mini"><b>Exports</b><span>Customer list, tax year income list and a report for analysis.</span></div>
+  </div>
+  <h3>Share your working days</h3>
+  <p>In <b>Settings → Calendar</b>, switch on <b>Keep a calendar up to date</b>. Splash Out adds a calendar to your phone showing who works each day (no money or customer details). Share it from the Calendar app with the people who need to see it. Switching it off removes it.</p>
+</div>
+
+<h2><span class="n">11</span>Keeping your data safe</h2>
+<div class="card">
+  <ul>
+    <li><b>Your data lives on your device.</b> Never delete the app to fix a problem. That deletes everything in it.</li>
+    <li><b>Make a backup now and then.</b> Go to <span class="btn">More</span> → <span class="btn">Settings</span> → <b>Export backup…</b> and save the file somewhere safe, like OneDrive or iCloud Drive.</li>
+    <li><b>Starting on a new device?</b> Use <b>Import round data…</b> with your backup file.</li>
+    <li>The app also makes its own safety copies before big changes. Ask whoever set up the app if you ever need one restored.</li>
+  </ul>
+</div>
+
+<h2><span class="n">12</span>Quick answers</h2>
+<div class="card">
+  <h3>A customer isn't on the Round list</h3>
+  <p>Check their status. Only <b>Active</b> and <b>Leaving</b> customers appear. Someone cleaned in the last five weeks won't appear until their turn comes round.</p>
+  <h3>The Round list changed overnight</h3>
+  <p>It's recalculated every day from who you've cleaned or skipped, so it always reflects where you've got to.</p>
+  <h3>I logged the wrong thing</h3>
+  <p>Tap <b>Undo</b> straight away. Later on, open the customer, find the visit under <b>History</b> and swipe it to delete.</p>
+  <h3>A day shows more than its target</h3>
+  <p>That's on purpose. Each day is filled until it reaches the target plus a little extra, so you've always got enough lined up.</p>
+  <h3>The WhatsApp button wants a number</h3>
+  <p>Tap <b>Add number from Contacts</b> on the customer's page and choose them.</p>
+</div>
+
+<footer>Splash Out User Guide</footer>
+</div>
+</body>
+</html>
