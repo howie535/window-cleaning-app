@@ -5,6 +5,9 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Overview") {
+                    NavigationLink { RoundSheetView() } label: { Label("Round Sheet", systemImage: "tablecells") }
+                }
                 Section("Reports") {
                     NavigationLink { WeeklyView() } label: { Label("Weekly", systemImage: "calendar") }
                     NavigationLink { TaxYearView() } label: { Label("Tax Year", systemImage: "sterlingsign.square") }

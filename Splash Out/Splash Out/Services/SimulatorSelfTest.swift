@@ -411,6 +411,46 @@ enum SimulatorSelfTest {
             check("no number means no link", DayMessage.whatsAppURL(digits: "", text: "x") == nil)
         }
 
+        // round sheet cells
+        do {
+            let sheetPeople = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
+            var rounds: [String: [Customer]] = [:]
+            for person in sheetPeople where !person.round.isEmpty && person.status != .cancelled { rounds[person.round, default: []].append(person) }
+            var allShown = true, datesOK = true, tight = 0, pairs = 0
+            for (_, people) in rounds {
+                let layout = RoundSheet.layout(for: people)
+                let columns = layout.columns + 1
+                var previous: [RoundSheet.Cell?]?
+                for person in people {
+                    let cells = RoundSheet.cells(for: person, layout: layout, columns: columns)
+                    let shown = cells.compactMap { $0 }
+                    if shown.count != person.allVisits.count { allShown = false }
+                    if shown.filter({ $0.date != "—" }).count != person.allVisits.filter({ $0.kind == .cleaned }).count { datesOK = false }
+                    // Neighbours' cleans in the same column should be from about the same time.
+                    if let previous {
+                        for (a, b) in zip(previous, cells) {
+                            if let a, let b, a.kind != .skipped, a.kind != .notDue, b.kind != .skipped, b.kind != .notDue {
+                                pairs += 1
+                                if abs(a.when.timeIntervalSince(b.when)) < 45 * 86_400 { tight += 1 }
+                            }
+                        }
+                    }
+                    previous = cells
+                }
+            }
+            check("round sheet shows every visit exactly once", allShown)
+            check("a date shows for every clean, a dash for skips and not-dues", datesOK)
+            check("neighbours' cleans in the same column are from the same time round", pairs > 0 && Double(tight) / Double(pairs) > 0.97, "\(tight) of \(pairs)")
+            if let ira = sheetPeople.first(where: { $0.name.hasPrefix("Ira & Hillary") }), let lyn = sheetPeople.first(where: { $0.name == "Lyn Garage" }), let people = rounds[ira.round] {
+                let layout = RoundSheet.layout(for: people)
+                let columns = layout.columns + 1
+                let iraCells = RoundSheet.cells(for: ira, layout: layout, columns: columns)
+                let lynCells = RoundSheet.cells(for: lyn, layout: layout, columns: columns)
+                let column = iraCells.firstIndex { $0 != nil }
+                check("a late joiner's first clean sits in the same column as everyone's clean of that date", column != nil && lynCells[column!]?.date == iraCells[column!]?.date)
+            }
+        }
+
         // calendar contents
         do {
             let calSettings = try context.fetch(FetchDescriptor<AppSettings>()).first!
