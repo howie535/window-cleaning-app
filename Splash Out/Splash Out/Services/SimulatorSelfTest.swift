@@ -474,6 +474,23 @@ enum SimulatorSelfTest {
             let empty = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
             let emptyFolder = URL.temporaryDirectory.appendingPathComponent("autobackup-empty-\(UUID().uuidString)", isDirectory: true)
             check("an empty app never writes a backup", AutoBackup.run(context: empty.mainContext, directory: emptyFolder, defaults: testDefaults) == nil && !FileManager.default.fileExists(atPath: emptyFolder.path))
+            // a chosen folder gets each day's copy too
+            let chosen = URL.temporaryDirectory.appendingPathComponent("autobackup-chosen-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: chosen, withIntermediateDirectories: true)
+            try AutoBackup.setFolder(chosen, defaults: testDefaults)
+            let local = URL.temporaryDirectory.appendingPathComponent("autobackup-local-\(UUID().uuidString)", isDirectory: true)
+            for offset in 0..<33 {
+                let day = RoundCalendar.london.date(byAdding: .day, value: offset, to: day0)!
+                _ = AutoBackup.run(context: context, directory: local, now: day, defaults: testDefaults)
+            }
+            let copies = ((try? FileManager.default.contentsOfDirectory(at: chosen, includingPropertiesForKeys: nil)) ?? []).map(\.lastPathComponent).sorted()
+            check("each day's backup is also copied into the chosen folder", copies.last == "splash-out-daily-2027-02-02.json", copies.last ?? "none")
+            check("the chosen folder keeps only the newest 30", copies.count == AutoBackup.keepInFolder, "\(copies.count)")
+            check("a working folder is reported as working", AutoBackup.folderWorks(defaults: testDefaults))
+            try? FileManager.default.removeItem(at: chosen)
+            for offset in 33..<34 { _ = AutoBackup.run(context: context, directory: local, now: RoundCalendar.london.date(byAdding: .day, value: offset, to: day0)!, defaults: testDefaults) }
+            check("a folder that has gone away is reported, without stopping the backup", !AutoBackup.folderWorks(defaults: testDefaults) && !(testDefaults.string(forKey: AutoBackup.folderErrorKey) ?? "").isEmpty)
+            try? FileManager.default.removeItem(at: local)
             try? FileManager.default.removeItem(at: folder)
         }
 

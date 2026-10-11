@@ -37,6 +37,10 @@ struct SettingsView: View {
     @State private var message: String?
     @AppStorage(AutoBackup.lastKey) private var lastAuto = 0.0
     @AppStorage(AutoBackup.exportedKey) private var lastExported = 0.0
+    @AppStorage(AutoBackup.folderNameKey) private var folderName = ""
+    @AppStorage(AutoBackup.folderLastKey) private var folderLast = 0.0
+    @AppStorage(AutoBackup.folderErrorKey) private var folderError = ""
+    @State private var isChoosingFolder = false
 
     var body: some View {
         OptionalNavigationStack(embedded: embedded) {
@@ -61,9 +65,23 @@ struct SettingsView: View {
                         Text(lastAuto > 0 ? Date(timeIntervalSince1970: lastAuto).formatted(date: .abbreviated, time: .shortened) : "Not yet")
                             .foregroundStyle(.secondary)
                     }
-                    LabeledContent("Copy kept elsewhere") {
+                    LabeledContent("Backup folder") {
+                        Text(folderName.isEmpty ? "Not set" : folderName).foregroundStyle(folderError.isEmpty ? Color.secondary : Color.orange)
+                    }
+                    if !folderName.isEmpty {
+                        LabeledContent("Last copied there") {
+                            Text(folderError.isEmpty ? (folderLast > 0 ? Date(timeIntervalSince1970: folderLast).formatted(date: .abbreviated, time: .shortened) : "Not yet") : folderError)
+                                .foregroundStyle(folderError.isEmpty ? Color.secondary : Color.orange)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                    Button(folderName.isEmpty ? "Choose a backup folder..." : "Choose a different folder...") { isChoosingFolder = true }
+                    if !folderName.isEmpty {
+                        Button("Stop saving to a folder", role: .destructive) { AutoBackup.clearFolder() }
+                    }
+                    LabeledContent("Exported by hand") {
                         Text(lastExported > 0 ? Date(timeIntervalSince1970: lastExported).formatted(date: .abbreviated, time: .omitted) : "Never")
-                            .foregroundStyle(staleExport ? Color.orange : Color.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     Button("Back up now") {
                         if AutoBackup.run(context: modelContext) != nil { message = "Backed up. It's in Files > On My iPhone > Splash Out > Backups > Daily." }
@@ -86,12 +104,23 @@ struct SettingsView: View {
                 } header: {
                     Text("Backup")
                 } footer: {
-                    Text("A copy is saved on this phone automatically every day you use the app (the last 14 days are kept). Export backup puts a copy in OneDrive or Files, which is what protects you if the phone is lost: do it weekly. Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
+                    Text("A copy is saved on this phone automatically every day you use the app (the last 14 days are kept). Choose a backup folder (iCloud Drive or OneDrive in the Files app) and each day's copy is also saved there automatically, which protects you if the phone is lost. Export backup saves a one-off copy. Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
                 }
             }
             .navigationTitle("Settings")
             .fileImporter(isPresented: $isShowingImporter, allowedContentTypes: [.json]) { result in
                 handlePickedFile(result)
+            }
+            .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
+                switch result {
+                case .success(let url):
+                    do {
+                        try AutoBackup.setFolder(url)
+                        _ = AutoBackup.run(context: modelContext)
+                        message = folderError.isEmpty ? "Backups will now be copied to \"\(url.lastPathComponent)\" every day. The first one has been saved." : folderError
+                    } catch { message = "Couldn't use that folder: \(error.localizedDescription)" }
+                case .failure(let error): message = "Couldn't open that folder: \(error.localizedDescription)"
+                }
             }
             .fileExporter(
                 isPresented: $isShowingExporter,
@@ -131,9 +160,6 @@ struct SettingsView: View {
             }
         }
     }
-
-    /// More than a week since a copy was saved somewhere other than this phone (or never).
-    private var staleExport: Bool { lastExported == 0 || Date().timeIntervalSince1970 - lastExported > 7 * 86_400 }
 
     private func prepareExport() {
         do {

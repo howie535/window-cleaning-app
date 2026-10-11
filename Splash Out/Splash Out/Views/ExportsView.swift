@@ -95,26 +95,32 @@ private struct ExportRow: View {
     }
 }
 
-/// A gentle nudge on the Stats screen when no backup copy has been saved somewhere other than this phone for over a week.
+/// A gentle nudge on the Stats screen when nothing is saving backups anywhere but this phone: no backup folder chosen,
+/// and no copy saved by hand for a month.
 struct BackupReminder: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var customers: [Customer]
     @AppStorage(AutoBackup.exportedKey) private var lastExported = 0.0
     @AppStorage("export.snoozeUntil") private var snoozeUntil = 0.0
+    @AppStorage(AutoBackup.bookmarkKey) private var bookmark: Data?
+    @AppStorage(AutoBackup.folderErrorKey) private var folderError = ""
 
     @State private var document = RoundBackupDocument(data: Data())
     @State private var isExporting = false
+    @State private var isChoosingFolder = false
     @State private var failure: String?
 
     private var due: Bool {
         let now = Date().timeIntervalSince1970
-        return !customers.isEmpty && now > snoozeUntil && (lastExported == 0 || now - lastExported > 7 * 86_400)
+        if customers.isEmpty || now < snoozeUntil { return false }
+        if bookmark != nil && folderError.isEmpty { return false }       // a folder is taking care of it
+        return bookmark != nil || lastExported == 0 || now - lastExported > 30 * 86_400
     }
 
     private var message: String {
-        guard lastExported > 0 else { return "You haven't saved a backup anywhere but this phone yet." }
-        let days = Int((Date().timeIntervalSince1970 - lastExported) / 86_400)
-        return "Your last backup copy off this phone was \(days) days ago."
+        if bookmark != nil { return "Saving to your backup folder has stopped working. Choose the folder again." }
+        guard lastExported > 0 else { return "Your round is only saved on this phone. Pick a folder in iCloud Drive or OneDrive and a copy is saved there every day, so it survives a lost phone." }
+        return "Your round is only saved on this phone. Pick a folder in iCloud Drive or OneDrive and a copy is saved there every day."
     }
 
     var body: some View {
@@ -123,18 +129,19 @@ struct BackupReminder: View {
                 Label("Back up your round", systemImage: "externaldrive.badge.exclamationmark")
                     .font(.headline)
                     .foregroundStyle(.orange)
-                Text(message + " Save one to OneDrive or iCloud Drive so it survives a lost phone.")
-                    .font(.subheadline)
+                Text(message).font(.subheadline)
                 HStack {
-                    Button("Back up now") {
+                    Button("Choose a folder") { isChoosingFolder = true }
+                        .buttonStyle(.borderedProminent)
+                    Button("Save one copy") {
                         do {
                             document = RoundBackupDocument(data: try ExportService.data(from: modelContext))
                             isExporting = true
                         } catch { failure = error.localizedDescription }
                     }
-                    .buttonStyle(.borderedProminent)
-                    Button("Remind me tomorrow") { snoozeUntil = Date().timeIntervalSince1970 + 86_400 }
-                        .buttonStyle(.bordered)
+                    .buttonStyle(.bordered)
+                    Button("Later") { snoozeUntil = Date().timeIntervalSince1970 + 7 * 86_400 }
+                        .buttonStyle(.borderless)
                 }
             }
             .padding(14)
@@ -144,6 +151,13 @@ struct BackupReminder: View {
                           defaultFilename: "splash-out-backup-\(RoundCalendar.fileStamp())") { result in
                 switch result {
                 case .success: lastExported = Date().timeIntervalSince1970
+                case .failure(let error): failure = error.localizedDescription
+                }
+            }
+            .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
+                switch result {
+                case .success(let url):
+                    do { try AutoBackup.setFolder(url); _ = AutoBackup.run(context: modelContext) } catch { failure = error.localizedDescription }
                 case .failure(let error): failure = error.localizedDescription
                 }
             }
