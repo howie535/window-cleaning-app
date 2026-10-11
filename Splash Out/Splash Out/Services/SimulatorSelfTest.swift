@@ -451,6 +451,32 @@ enum SimulatorSelfTest {
             }
         }
 
+        // automatic daily backups
+        do {
+            let folder = URL.temporaryDirectory.appendingPathComponent("autobackup-test-\(UUID().uuidString)", isDirectory: true)
+            let testDefaults = UserDefaults(suiteName: "autobackup-test")!
+            testDefaults.removePersistentDomain(forName: "autobackup-test")
+            let day0 = RoundCalendar.date(year: 2027, month: 1, day: 1)
+            var written: URL?
+            for offset in 0..<17 {
+                let day = RoundCalendar.london.date(byAdding: .day, value: offset, to: day0)!
+                written = AutoBackup.run(context: context, directory: folder, now: day, defaults: testDefaults)
+            }
+            let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+            check("daily backup keeps only the newest 14", files.count == AutoBackup.keepDays, "\(files.count) files")
+            let newest = files.map(\.lastPathComponent).sorted().last
+            check("daily backups are named by date", newest == "splash-out-daily-2027-01-17.json", newest ?? "none")
+            if let written, let data = try? Data(contentsOf: written), let decoded = try? RoundFile.decode(data) {
+                check("a daily backup holds every customer and can be read back", decoded.customers.count == (try context.fetchCount(FetchDescriptor<Customer>())))
+            } else {
+                check("a daily backup holds every customer and can be read back", false)
+            }
+            let empty = try ModelContainer(for: Persistence.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+            let emptyFolder = URL.temporaryDirectory.appendingPathComponent("autobackup-empty-\(UUID().uuidString)", isDirectory: true)
+            check("an empty app never writes a backup", AutoBackup.run(context: empty.mainContext, directory: emptyFolder, defaults: testDefaults) == nil && !FileManager.default.fileExists(atPath: emptyFolder.path))
+            try? FileManager.default.removeItem(at: folder)
+        }
+
         // calendar contents
         do {
             let calSettings = try context.fetch(FetchDescriptor<AppSettings>()).first!

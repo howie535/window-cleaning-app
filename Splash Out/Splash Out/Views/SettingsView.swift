@@ -35,6 +35,8 @@ struct SettingsView: View {
     @State private var exportDocument = RoundBackupDocument(data: Data())
     @State private var isConfirmingClear = false
     @State private var message: String?
+    @AppStorage(AutoBackup.lastKey) private var lastAuto = 0.0
+    @AppStorage(AutoBackup.exportedKey) private var lastExported = 0.0
 
     var body: some View {
         OptionalNavigationStack(embedded: embedded) {
@@ -55,6 +57,18 @@ struct SettingsView: View {
                 MessageSection()
 
                 Section {
+                    LabeledContent("Saved on this phone") {
+                        Text(lastAuto > 0 ? Date(timeIntervalSince1970: lastAuto).formatted(date: .abbreviated, time: .shortened) : "Not yet")
+                            .foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Copy kept elsewhere") {
+                        Text(lastExported > 0 ? Date(timeIntervalSince1970: lastExported).formatted(date: .abbreviated, time: .omitted) : "Never")
+                            .foregroundStyle(staleExport ? Color.orange : Color.secondary)
+                    }
+                    Button("Back up now") {
+                        if AutoBackup.run(context: modelContext) != nil { message = "Backed up. It's in Files > On My iPhone > Splash Out > Backups > Daily." }
+                        else { message = "Nothing to back up yet." }
+                    }
                     Button("Import round data...") {
                         importCustomersOnly = false
                         isShowingImporter = true
@@ -72,7 +86,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Backup")
                 } footer: {
-                    Text("Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
+                    Text("A copy is saved on this phone automatically every day you use the app (the last 14 days are kept). Export backup puts a copy in OneDrive or Files, which is what protects you if the phone is lost: do it weekly. Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
                 }
             }
             .navigationTitle("Settings")
@@ -85,8 +99,9 @@ struct SettingsView: View {
                 contentType: .json,
                 defaultFilename: "splash-out-backup-\(RoundCalendar.fileStamp())"
             ) { result in
-                if case .failure(let error) = result {
-                    message = "Export failed: \(error.localizedDescription)"
+                switch result {
+                case .failure(let error): message = "Export failed: \(error.localizedDescription)"
+                case .success: lastExported = Date().timeIntervalSince1970
                 }
             }
             .alert(importCustomersOnly ? "Replace with customers only?" : "Replace all data?", isPresented: Binding(
@@ -116,6 +131,9 @@ struct SettingsView: View {
             }
         }
     }
+
+    /// More than a week since a copy was saved somewhere other than this phone (or never).
+    private var staleExport: Bool { lastExported == 0 || Date().timeIntervalSince1970 - lastExported > 7 * 86_400 }
 
     private func prepareExport() {
         do {

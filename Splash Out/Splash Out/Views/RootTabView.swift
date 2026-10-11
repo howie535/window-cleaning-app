@@ -41,7 +41,11 @@ struct RootTabView: View {
         .onAppear { if !onboardingSeen { showTour = true } }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await CalendarSync.syncIfEnabled(context: modelContext) } }
+            if phase == .active {
+                AutoBackup.runIfDue(context: modelContext)
+                Task { await CalendarSync.syncIfEnabled(context: modelContext) }
+            }
+            if phase == .background { AutoBackup.run(context: modelContext) }
         }
         .background {
             // Keyboard shortcuts for a keyboard case: Command-1 to Command-5 switch tab.
