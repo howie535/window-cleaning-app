@@ -79,6 +79,9 @@ struct TodayView: View {
                 // Wide enough (iPad landscape): tiles on the left, the chart beside them.
                 let sideBySide = geometry.size.width > 800
                 ScrollView {
+                    BackupReminder()
+                        .padding(.horizontal)
+                        .padding(.bottom, 4)
                     if sideBySide {
                         HStack(alignment: .top, spacing: 12) {
                             tiles
