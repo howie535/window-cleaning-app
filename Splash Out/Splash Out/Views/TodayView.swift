@@ -9,6 +9,7 @@ struct TodayView: View {
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
+    @State private var destination: Destination?
 
     private func pounds2(_ value: Decimal) -> String {
         value.formatted(.currency(code: "GBP").precision(.fractionLength(2)))
@@ -42,62 +43,42 @@ struct TodayView: View {
         let ideal = Ideal(stats: stats, weeks: settings.first?.targetRoundWeeks ?? 5, customersPerRound: onRound,
                           housesPerDay: perDay?.average)
 
+        let showIdeal = { destination = .ideal }
         let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
-                    NavigationLink { StatDetailView(metric: .weeklyWork) } label: {
-                        Tile(title: "This week", value: pounds(week.work),
-                             detail: "of \(pounds(week.target)) target · \(week.houses) houses",
-                             tint: week.work >= week.target ? .green : .primary, opens: true)
-                    }
-                    Tile(title: "Today", value: pounds(todayWork),
-                         detail: dayTarget > 0
-                            ? "of \(pounds(dayTarget)) · \(resolver.crewName(on: today)) · \(todayHouses) houses"
-                            : "Not a working day")
-                    NavigationLink { TaxYearView() } label: {
-                        Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))", value: pounds(yearTotals.work),
-                             detail: "\(pounds(yearTotals.paid)) paid · \(pounds(yearTotals.work - yearTotals.paid)) not yet paid · \(yearTotals.cleans) cleans",
-                             opens: true)
-                    }
-                    Tile(title: "Money owed", value: pounds(owed.amount),
-                         detail: "\(owed.cleans) cleans" + (oldestOwed.map { " · oldest \(RoundCalendar.short($0))" } ?? ""),
-                         tint: owed.amount > 0 ? .red : .primary)
-                    NavigationLink { StatDetailView(metric: .monthlyWork) } label: {
-                        Tile(title: "This month", value: pounds(stats.work(from: stats.thisMonthStart, through: today)),
-                             detail: "so far · \(stats.houses(from: stats.thisMonthStart, through: today)) houses", opens: true)
-                    }
-                    Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
-                         detail: "per cycle", ideal: ideal.roundValue.map { pounds($0) })
-                    NavigationLink { StatDetailView(metric: .perHouse) } label: {
-                        Tile(title: "Average per house",
-                             value: perHouse.map { pounds2($0.average) } ?? pounds2(listAverage),
-                             detail: perHouse.map { "average of each day's £ per house, \($0.days) days this tax year (as the spreadsheet) · list prices \(pounds2(listAverage))" }
-                                ?? "list price average across \(priced.count) customers",
-                             ideal: ideal.perHouse.map { pounds2($0) }, opens: true)
-                    }
-                    NavigationLink { StatDetailView(metric: .housesPerDay) } label: {
-                        Tile(title: "Houses per workday",
-                             value: perDay.map { $0.average.formatted(.number.precision(.fractionLength(1))) } ?? "–",
-                             detail: perDay.map { "over \($0.days) worked days this tax year" } ?? "no worked days yet this tax year",
-                             opens: true)
-                    }
-                    Tile(title: "Pace",
+                    card(.weeklyWork, Tile(title: "This week", value: pounds(week.work),
+                         detail: "of \(pounds(week.target)) · \(week.houses) houses",
+                         tint: week.work >= week.target ? .green : .primary))
+                    card(nil, Tile(title: "Today", value: pounds(todayWork),
+                         detail: dayTarget > 0 ? "of \(pounds(dayTarget)) · \(todayHouses) houses" : "Not a working day"))
+                    card(.taxYear, Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))", value: pounds(yearTotals.work),
+                         detail: "\(pounds(yearTotals.paid)) paid · \(yearTotals.cleans) cleans"))
+                    card(nil, Tile(title: "Money owed", value: pounds(owed.amount),
+                         detail: "\(owed.cleans) cleans" + (oldestOwed.map { " · since \(RoundCalendar.short($0))" } ?? ""),
+                         tint: owed.amount > 0 ? .red : .primary))
+                    card(.monthlyWork, Tile(title: "This month", value: pounds(stats.work(from: stats.thisMonthStart, through: today)),
+                         detail: "\(stats.houses(from: stats.thisMonthStart, through: today)) houses"))
+                    card(nil, Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
+                         detail: "per round", ideal: ideal.roundValue.map { pounds($0) }, onIdeal: showIdeal))
+                    card(.perHouse, Tile(title: "Average per house",
+                         value: perHouse.map { pounds2($0.average) } ?? pounds2(listAverage),
+                         detail: perHouse.map { "over \($0.days) days" } ?? "list prices",
+                         ideal: ideal.perHouse.map { pounds2($0) }, onIdeal: showIdeal))
+                    card(.housesPerDay, Tile(title: "Houses per workday",
+                         value: perDay.map { $0.average.formatted(.number.precision(.fractionLength(1))) } ?? "–",
+                         detail: perDay.map { "over \($0.days) days" } ?? "no worked days yet"))
+                    card(nil, Tile(title: "Pace",
                          value: pace.map { $0.weeks.formatted(.number.precision(.fractionLength(1))) + " weeks" } ?? "–",
-                         detail: pace == nil ? "needs customers who have been cleaned before"
-                                             : "between cleans on the current plan (every-other left out)",
-                         ideal: "\(ideal.weeks) weeks")
-                    Tile(title: "Customers", value: "\(listed)",
+                         detail: pace == nil ? "" : "between cleans",
+                         ideal: "\(ideal.weeks) weeks", onIdeal: showIdeal))
+                    card(nil, Tile(title: "Customers", value: "\(listed)",
                          detail: "\(customers.filter { $0.status == .notStarted }.count) not started · \(customers.filter { $0.status == .paused }.count) paused",
-                         ideal: ideal.customers.map { "\($0)" })
-                    Tile(title: "New vs lost", value: "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))",
-                         detail: "new / cancelled this tax year")
-                    NavigationLink { PriceRiseView() } label: {
-                        Tile(title: "Price rises due", value: "\(stats.risesDue().count)",
-                             detail: "no rise in \((settings.first?.priceRiseDueAfterMonths ?? 24) / 12) years", opens: true)
-                    }
-                    NavigationLink { StatDetailView(metric: .skipRate) } label: {
-                        Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))), detail: "", opens: true)
-                    }
+                         ideal: ideal.customers.map { "\($0)" }, onIdeal: showIdeal))
+                    card(nil, Tile(title: "New vs lost", value: "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))",
+                         detail: "this tax year"))
+                    card(.priceRise, Tile(title: "Price rises due", value: "\(stats.risesDue().count)",
+                         detail: "no rise in \((settings.first?.priceRiseDueAfterMonths ?? 24) / 12) years"))
+                    card(.skipRate, Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))), detail: ""))
                 }
-                .buttonStyle(.plain)
 
         NavigationStack {
             GeometryReader { geometry in
@@ -118,15 +99,6 @@ struct TodayView: View {
                     } else {
                         tiles
                             .padding(.horizontal)
-                        if ideal.roundValue != nil {
-                            Text("Ideal: what it takes to make the weekly target with a \(ideal.weeks)-week round, from your houses per workday and the customers you have, allowing for the skip rate. Customers is how many the crew can get round in \(ideal.weeks) weeks; average per house is the price needed with the houses there are"
-                                 + (ideal.limitedByCustomers ? " (you have fewer customers than that, so the price is worked out from the customers you have)." : ".")
-                                 + " Change the round length in Settings.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal)
-                                .padding(.top, 4)
-                        }
                         WeeksChart(weeks: Array(stats.weeks.suffix(12)))
                             .padding()
                     }
@@ -134,7 +106,31 @@ struct TodayView: View {
             }
             .navigationTitle("Stats")
             .background(Color(.systemGroupedBackground))
+            .navigationDestination(item: $destination) { destination in
+                switch destination {
+                case .weeklyWork: StatDetailView(metric: .weeklyWork)
+                case .monthlyWork: StatDetailView(metric: .monthlyWork)
+                case .perHouse: StatDetailView(metric: .perHouse)
+                case .housesPerDay: StatDetailView(metric: .housesPerDay)
+                case .skipRate: StatDetailView(metric: .skipRate)
+                case .taxYear: TaxYearView()
+                case .priceRise: PriceRiseView()
+                case .ideal: IdealWorkingView(ideal: ideal)
+                }
+            }
         }
+    }
+
+    /// Where tapping a card (or an Ideal line) goes.
+    enum Destination: Hashable {
+        case weeklyWork, monthlyWork, perHouse, housesPerDay, skipRate, taxYear, priceRise, ideal
+    }
+
+    /// A card that opens `opens` when tapped (nil: not tappable). Its Ideal line has its own tap.
+    private func card(_ opens: Destination?, _ tile: Tile) -> some View {
+        var tile = tile
+        tile.opens = opens != nil
+        return tile.onTapGesture { if let opens { destination = opens } }
     }
 }
 
@@ -151,6 +147,17 @@ struct Ideal {
     /// True when there are fewer customers than the crew could get round, so customers (not the work rate) set the price.
     let limitedByCustomers: Bool
 
+    // The inputs, for showing the working.
+    var weeklyTarget: Decimal = 0
+    var workingDays = 0
+    var housesPerDay: Decimal?
+    /// Share of visits not skipped.
+    var keep: Decimal = 1
+    var customersPerRound: Decimal = 0
+    /// Houses a week the crew can do, and houses a week the round supplies.
+    var capacity: Decimal?
+    var supply: Decimal?
+
     /// - Parameters:
     ///   - customersPerRound: customers on the round, every-other customers counted as half.
     ///   - housesPerDay: the work rate.
@@ -160,6 +167,11 @@ struct Ideal {
         let targets = stats.config.usualTargets.filter { $0 > 0 }
         let weekly = targets.reduce(Decimal(0), +)
         let keep = Decimal(max(0.5, 1 - stats.skipRate))
+        weeklyTarget = weekly
+        workingDays = targets.count
+        self.housesPerDay = housesPerDay
+        self.keep = keep
+        self.customersPerRound = customersPerRound
         guard weekly > 0 else {
             roundValue = nil; customers = nil; perHouse = nil; limitedByCustomers = false
             return
@@ -172,6 +184,8 @@ struct Ideal {
         // Houses a week: what the crew can do, or what the round supplies, whichever is less.
         let capacity = rate * Decimal(targets.count)
         let supply = customersPerRound * keep / Decimal(weeks)
+        self.capacity = capacity
+        self.supply = supply
         let housesPerWeek = min(capacity, supply)
         limitedByCustomers = supply < capacity
         customers = Int(NSDecimalNumber(decimal: capacity * Decimal(weeks) / keep).doubleValue.rounded(.up))
@@ -179,7 +193,7 @@ struct Ideal {
     }
 }
 
-private struct Tile: View {
+struct Tile: View {
     let title: String
     let value: String
     let detail: String
@@ -187,6 +201,7 @@ private struct Tile: View {
     var caption: String?
     /// The figure needed to hit the target in the chosen round length.
     var ideal: String?
+    var onIdeal: (() -> Void)? = nil
     /// Tapping opens more detail.
     var opens = false
 
@@ -218,9 +233,17 @@ private struct Tile: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let ideal {
-                Label("Ideal \(ideal)", systemImage: "scope")
+                Button { onIdeal?() } label: {
+                    HStack(spacing: 4) {
+                        Label("Ideal \(ideal)", systemImage: "scope")
+                        Image(systemName: "info.circle")
+                    }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.blue)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -201,11 +201,11 @@ struct StatDetailView: View {
 
     private var explanation: String {
         switch metric {
-        case .weeklyWork: "Each week's work (what was charged, paid or not). The line is that week's target: green bars met it."
-        case .monthlyWork: "Work done in each calendar month (what was charged, paid or not)."
-        case .perHouse: "Dots are each day's £ per house; the line is the average over the last 28 days. The Stats card averages the days the same way as the spreadsheet."
-        case .housesPerDay: "Dots are houses cleaned on each worked day; the line is the average over the last 28 days."
-        case .skipRate: "Skips as a share of visits each month (not-due visits for every-other customers left out). Cancelled customers aren't counted."
+        case .weeklyWork: "Work charged each week. Line: the target."
+        case .monthlyWork: "Work charged each month."
+        case .perHouse: "Dots: each day's £ per house. Line: 28-day average. The card averages the days, like the spreadsheet."
+        case .housesPerDay: "Dots: houses each worked day. Line: 28-day average."
+        case .skipRate: "Skips as a share of visits each month."
         }
     }
 }
