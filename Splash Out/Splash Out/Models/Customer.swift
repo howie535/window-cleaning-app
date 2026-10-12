@@ -22,6 +22,8 @@ final class Customer {
     var contactRaw: String = ContactMethod.whatsapp.rawValue
     var payMethodRaw: String?
     var notes: [String] = []
+    /// The day they've been booked in for (messaged). Cleared when they're next visited.
+    var bookedFor: Date?
     var latitude: Double?
     var longitude: Double?
 

@@ -110,6 +110,8 @@ struct MessageDayView: View {
         guard let url = DayMessage.whatsAppURL(digits: customer.whatsAppDigits, text: text(for: customer)) else { return }
         sent.insert(customer.id.uuidString)
         save()
+        // Messaged for this day: they're booked in, so the round keeps them on it.
+        customer.bookedFor = day.date
         UIApplication.shared.open(url) { success in
             if !success { failure = "WhatsApp couldn't be opened for \(customer.name). Check it is installed and the number \(customer.phone) is right." }
         }

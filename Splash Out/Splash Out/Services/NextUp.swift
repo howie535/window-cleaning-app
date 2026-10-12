@@ -2,22 +2,41 @@ import Foundation
 
 /// Who's next on the round (Docs/SPEC.md section 4.6).
 /// Pure logic on plain values, no storage, so it can be tested on its own.
+///
+/// How the list is built:
+/// - A customer is **done this lap** if they had any visit (clean, skip or not due) in the last `hideWeeks` weeks.
+/// - The list carries on from where the round had got to **at the start of today** (the last customer visited before
+///   today; on a tie, the one furthest along). Nothing done today changes the order, so cleaning someone further
+///   down never pushes the customers above them to the end, and anyone passed over earlier stays near the top.
+/// - Customers visited **today** stay on today, shown as done; a clean counts towards today's total, so marking a
+///   clean never pulls new customers onto the day. A skip doesn't count, so the next customers move up.
+/// - **Booked** customers (messaged for a day) stay on that day whatever else happens.
+/// - **Every-other** customers who were cleaned last lap are shown greyed as "not this round" and aren't counted.
+/// - Each day is then filled in round order until it reaches its target plus the overbook allowance.
 enum NextUp {
     struct Candidate: Equatable {
         /// Caller's handle for the customer (e.g. an index).
         var key: Int
         /// Position in round order.
         var sequence: Int
-        /// Active or leaving. Paused, not started and cancelled customers are never listed.
+        /// Active or leaving. Paused, not started and cancelled customers are never booked.
         var isListable: Bool
         var price: Decimal
         var everyOther: Bool
         var lastCleaned: Date?
         var lastNotDue: Date?
-        /// The latest visit of any kind (cleaned, skipped or not due). A skip moves the round on just like a clean.
+        /// The latest visit of any kind (cleaned, skipped or not due).
         var lastVisit: Date?
+        /// The latest visit before today: where the round had got to when the day started.
+        var lastVisitBeforeToday: Date? = nil
         /// Not started yet: shown in the round, greyed, but never counted in a day's total.
         var isPending: Bool = false
+        /// What happened today, if they've been visited today.
+        var visitedToday: VisitKind? = nil
+        /// What was charged for today's clean (counts towards today's total).
+        var chargedToday: Decimal = 0
+        /// The day they've been booked in for (messaged), if any.
+        var bookedFor: Date? = nil
     }
 
     struct Day: Equatable {
@@ -26,17 +45,41 @@ enum NextUp {
         var target: Decimal
     }
 
-    struct Assignment: Equatable {
+    enum State: Equatable {
+        /// Planned for the day (counts towards its total).
+        case planned
+        /// Booked for this day by message (counts towards its total).
+        case booked
+        /// Visited today.
+        case cleanedToday
+        case skippedToday
+        case notDueToday
+        /// Not started yet (greyed, not counted).
+        case notStarted
+        /// Every-other customer on their off round (greyed, not counted).
+        case everyOtherOff
+
+        var counts: Bool { self == .planned || self == .booked }
+    }
+
+    struct Placement: Equatable {
         var key: Int
         /// Index into the working days, or nil when they don't fit in the days available ("later").
         var dayIndex: Int?
-        /// Running total of prices up to and including this customer.
-        var cumulative: Decimal
-        var isPending = false
+        var state: State
+        /// Position in the lap (round order from the lap start), for sorting rows within a day.
+        var order: Int
     }
 
-    /// The customer most recently dealt with: the latest visit of any kind (cleaned, skipped or not due);
-    /// on a tie, the one furthest along the round.
+    // MARK: Helpers
+
+    /// Whole days from `from` to `to` (both start-of-day).
+    private static func days(from: Date, to: Date, calendar: Calendar) -> Int {
+        calendar.dateComponents([.day], from: from, to: to).day ?? 0
+    }
+
+    /// The customer most recently dealt with (latest visit; on a tie, the one furthest along the round).
+    /// Only used to say where the round is "carrying on from".
     static func pointer(in all: [Candidate]) -> Candidate? {
         func date(_ c: Candidate) -> Date? { c.lastVisit ?? c.lastCleaned }
         return all.filter { date($0) != nil }.max { a, b in
@@ -45,35 +88,38 @@ enum NextUp {
         }
     }
 
-    /// Whole days from `from` to `to` (both start-of-day).
-    private static func days(from: Date, to: Date, calendar: Calendar) -> Int {
-        calendar.dateComponents([.day], from: from, to: to).day ?? 0
+    static func isDoneThisLap(_ c: Candidate, today: Date, hideWeeks: Int, calendar: Calendar) -> Bool {
+        guard let last = c.lastVisit else { return false }
+        return days(from: last, to: today, calendar: calendar) < 7 * hideWeeks
     }
 
-    /// Due when it's their turn, unless they were cleaned (or marked not due) less than `hideWeeks` weeks before that day.
-    /// Every-other customers follow the same rule: whoever is on their off round is marked "not due" when the crew reaches them.
-    static func isDue(_ c: Candidate, today: Date, hideWeeks: Int, calendar: Calendar) -> Bool {
-        guard c.isListable else { return false }
-        if let last = c.lastCleaned, days(from: last, to: today, calendar: calendar) < 7 * hideWeeks { return false }
-        if let notDue = c.lastNotDue, days(from: notDue, to: today, calendar: calendar) < 7 * hideWeeks { return false }
-        return true
+    /// An every-other customer cleaned within about one and a half laps is on their off round.
+    static func isEveryOtherOff(_ c: Candidate, today: Date, lapDays: Int, factor: Double, calendar: Calendar) -> Bool {
+        guard c.everyOther, let cleaned = c.lastCleaned else { return false }
+        return Double(days(from: cleaned, to: today, calendar: calendar)) < Double(lapDays) * factor
     }
 
-    /// Everyone listable in round order, starting just after the pointer and wrapping.
-    static func rotated(_ all: [Candidate]) -> [Candidate] {
+    /// Due today: not done this lap (and not on an every-other off round).
+    static func isDue(_ c: Candidate, today: Date, hideWeeks: Int, lapDays: Int = 35, everyOtherFactor: Double = 1.5, calendar: Calendar) -> Bool {
+        c.isListable
+            && !isDoneThisLap(c, today: today, hideWeeks: hideWeeks, calendar: calendar)
+            && !isEveryOtherOff(c, today: today, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar)
+    }
+
+    /// Where the round had got to at the start of today: the last customer visited before today
+    /// (on a tie, the one furthest along the round).
+    static func startOfDayPointer(in all: [Candidate]) -> Candidate? {
+        all.filter { $0.lastVisitBeforeToday != nil }.max { a, b in
+            if a.lastVisitBeforeToday! != b.lastVisitBeforeToday! { return a.lastVisitBeforeToday! < b.lastVisitBeforeToday! }
+            return a.sequence < b.sequence
+        }
+    }
+
+    /// Everyone in round order, carrying on just after where the round had got to at the start of today.
+    static func lapOrder(_ all: [Candidate], today: Date, hideWeeks: Int, calendar: Calendar) -> [Candidate] {
         let ordered = all.sorted { $0.sequence < $1.sequence }
-        guard let pointer = pointer(in: all) else { return ordered }
+        guard let pointer = startOfDayPointer(in: all) else { return ordered }
         return ordered.filter { $0.sequence > pointer.sequence } + ordered.filter { $0.sequence <= pointer.sequence }
-    }
-
-    /// Customers in round order starting just after the pointer and wrapping, limited to those due today.
-    static func queue(
-        _ all: [Candidate],
-        today: Date,
-        hideWeeks: Int,
-        calendar: Calendar
-    ) -> [Candidate] {
-        rotated(all).filter { isDue($0, today: today, hideWeeks: hideWeeks, calendar: calendar) }
     }
 
     /// The next working days from `today`: those with a target above zero, within a look-ahead window.
@@ -93,73 +139,84 @@ enum NextUp {
         return result
     }
 
-    /// Each customer goes on the first day whose cumulative booking capacity (target x (1 + overbook))
-    /// covers the running total of prices. Spare capacity carries over rather than resetting daily.
-    static func assign(_ queue: [Candidate], to days: [Day], overbook: Decimal) -> [Assignment] {
-        var capacities: [Decimal] = []
-        var running: Decimal = 0
-        for day in days {
-            running += day.target * (1 + overbook)
-            capacities.append(running)
-        }
+    // MARK: Plan
 
-        var total: Decimal = 0
-        return queue.map { candidate in
-            total += candidate.price
-            let index = capacities.filter { $0 < total }.count
-            return Assignment(key: candidate.key, dayIndex: index < days.count ? index : nil, cumulative: total)
-        }
-    }
-
-    /// Plans ahead: walks the whole round in order and puts each customer on the day their turn comes, provided
-    /// they will be due by then (not cleaned less than 5 weeks before that day).
-    /// This keeps a skipped customer in their place among their neighbours, instead of being swept into a day of
-    /// stragglers at the end because their neighbours aren't due *yet*. Customers who won't be due by the time
-    /// their turn comes are left out of this pass; each customer appears at most once.
-    /// `dayIndex` is nil for those due but beyond the days available ("later").
-    static func assignProjected(
-        _ rotated: [Candidate],
-        to days: [Day],
+    static func plan(
+        _ all: [Candidate],
+        days: [Day],
+        today: Date,
         overbook: Decimal,
         hideWeeks: Int,
+        lapDays: Int,
+        everyOtherFactor: Double = 1.5,
         calendar: Calendar
-    ) -> [Assignment] {
-        guard !days.isEmpty else { return [] }
-        // Customers at or behind the pointer are on the next lap (already dealt with this lap), so their turn comes
-        // round in order whatever the dates say. The "less than 5 weeks" check only guards those still ahead of
-        // the pointer, who may have been cleaned out of order.
-        let pointerSequence = pointer(in: rotated)?.sequence
+    ) -> [Placement] {
+        let lap = lapOrder(all, today: today, hideWeeks: hideWeeks, calendar: calendar)
+        let capacity = days.map { $0.target * (1 + overbook) }
+        var load = [Decimal](repeating: 0, count: days.count)
+        let todayIndex = days.firstIndex { $0.date == today }
+        var placed = Set<Int>()
+        var result: [Placement] = []
 
-        // Each day is filled in order until it reaches its booking target (day target plus the overbook allowance),
-        // and the customer who takes it over the line stays on that day, so every day meets or exceeds its target.
-        var dayIndex = 0
-        var dayTotal: Decimal = 0
-        var total: Decimal = 0
-        var result: [Assignment] = []
-        for candidate in rotated where candidate.isListable || candidate.isPending {
-            if candidate.isPending {
-                // Sits where its turn comes, on the day being filled (or the one just finished, if this day is still empty).
-                let index = (dayTotal == 0 && dayIndex > 0) ? dayIndex - 1 : dayIndex
-                if index < days.count {
-                    result.append(Assignment(key: candidate.key, dayIndex: index, cumulative: total, isPending: true))
-                }
+        // 1. Visited today: stay on today. A clean counts; a skip or not-due doesn't.
+        for (order, c) in lap.enumerated() {
+            guard let kind = c.visitedToday, let todayIndex else { continue }
+            let state: State = switch kind {
+            case .cleaned: .cleanedToday
+            case .skipped: .skippedToday
+            case .notDue: .notDueToday
+            }
+            if state == .cleanedToday { load[todayIndex] += c.chargedToday }
+            result.append(Placement(key: c.key, dayIndex: todayIndex, state: state, order: order))
+            placed.insert(c.key)
+        }
+
+        // 2. Booked: on their booked day.
+        for (order, c) in lap.enumerated() where !placed.contains(c.key) && c.isListable {
+            guard let booked = c.bookedFor, booked >= today, let index = days.firstIndex(where: { $0.date == booked }) else { continue }
+            load[index] += c.price
+            result.append(Placement(key: c.key, dayIndex: index, state: .booked, order: order))
+            placed.insert(c.key)
+        }
+
+        // 3. Everyone else due, in lap order, filling each day to its target plus overbook.
+        var day = 0
+        func skipFullDays() { while day < days.count && load[day] >= capacity[day] { day += 1 } }
+        skipFullDays()
+        for (order, c) in lap.enumerated() where !placed.contains(c.key) {
+            if c.isPending {
+                if day < days.count { result.append(Placement(key: c.key, dayIndex: day, state: .notStarted, order: order)) }
                 continue
             }
-            let when = dayIndex < days.count ? days[dayIndex].date : days[days.count - 1].date
-            let nextLap = pointerSequence.map { candidate.sequence <= $0 } ?? false
-            guard nextLap || isDue(candidate, today: when, hideWeeks: hideWeeks, calendar: calendar) else { continue }
-            total += candidate.price
-            if dayIndex < days.count {
-                result.append(Assignment(key: candidate.key, dayIndex: dayIndex, cumulative: total))
-                dayTotal += candidate.price
-                if dayTotal >= days[dayIndex].target * (1 + overbook) {
-                    dayIndex += 1
-                    dayTotal = 0
-                }
-            } else {
-                result.append(Assignment(key: candidate.key, dayIndex: nil, cumulative: total))
+            guard c.isListable, !isDoneThisLap(c, today: today, hideWeeks: hideWeeks, calendar: calendar) else { continue }
+            if isEveryOtherOff(c, today: today, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar) {
+                if day < days.count { result.append(Placement(key: c.key, dayIndex: day, state: .everyOtherOff, order: order)) }
+                continue
             }
+            guard day < days.count else {
+                result.append(Placement(key: c.key, dayIndex: nil, state: .planned, order: order))
+                continue
+            }
+            load[day] += c.price
+            result.append(Placement(key: c.key, dayIndex: day, state: .planned, order: order))
+            if load[day] >= capacity[day] { day += 1; skipFullDays() }
         }
         return result
+    }
+
+    /// Typical days between cleans: the median gap between consecutive cleans of regular (not every-other) customers,
+    /// using cleans in the last `recentDays`. Falls back to `fallback` with too little history.
+    static func lapDays(cleanDates: [[Date]], today: Date, recentDays: Int = 120, fallback: Int, calendar: Calendar) -> Int {
+        var gaps: [Int] = []
+        for dates in cleanDates {
+            let sorted = dates.sorted()
+            for (a, b) in zip(sorted, sorted.dropFirst()) where days(from: b, to: today, calendar: calendar) <= recentDays {
+                let gap = days(from: a, to: b, calendar: calendar)
+                if gap >= 14 { gaps.append(gap) }   // ignore re-cleans and corrections
+            }
+        }
+        guard gaps.count >= 20 else { return fallback }
+        gaps.sort()
+        return min(max(gaps[gaps.count / 2], 21), 90)
     }
 }

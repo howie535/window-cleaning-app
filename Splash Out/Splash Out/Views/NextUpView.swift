@@ -8,6 +8,12 @@ struct NextUpView: View {
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.modelContext) private var modelContext
+    @Environment(UndoCenter.self) private var undoCenter
+    @Environment(RoundClock.self) private var clock
+
+    /// A skip waiting for "they still owe money" confirmation.
+    @State private var skipAsk: Customer?
 
     /// Compact width (iPhone): tapping a customer opens a sheet.
     @State private var selected: Customer?
@@ -17,7 +23,7 @@ struct NextUpView: View {
     @State private var messageDay: RoundPlanner.DayPlan?
 
     var body: some View {
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
         let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
 
         if sizeClass == .regular {
@@ -49,7 +55,7 @@ struct NextUpView: View {
     }
 
     private func roundList(plan: RoundPlanner.Plan, today: Date) -> some View {
-        List(selection: $selectedID) {
+        List(selection: sizeClass == .regular ? $selectedID : .constant(nil)) {
             if plan.days.isEmpty {
                 ContentUnavailableView("No working days", systemImage: "calendar.badge.exclamationmark",
                                        description: Text("There are no working days coming up. Check the usual week in Settings."))
@@ -62,7 +68,7 @@ struct NextUpView: View {
                             .font(.subheadline)
                     }
                     ForEach(day.rows) { dayRow in
-                        row(for: dayRow.customer, pending: dayRow.isPending)
+                        row(for: dayRow)
                     }
                 } header: {
                     DayHeader(day: day, isToday: day.date == today, onMessage: { messageDay = day })
@@ -79,22 +85,60 @@ struct NextUpView: View {
         // Plain style keeps each day's header pinned at the top until the next day's replaces it.
         // The bar above and the header share one frosted look, so rows fade out the same way under both.
         .listStyle(.plain)
+        .contentMargins(.top, 0, for: .scrollContent)
         .sheet(item: $messageDay) { MessageDayView(day: $0) }
+        .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
+            Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
+            Button("Go back", role: .cancel) {}
+        } message: { person in
+            let owed = RoundMetrics.moneyOwed([person])
+            Text("\(person.name) still owes \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s").")
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.bar, for: .navigationBar)
     }
 
     @ViewBuilder
-    private func row(for customer: Customer, pending: Bool) -> some View {
-        if sizeClass == .regular {
-            NextUpRow(customer: customer, isPending: pending).tag(customer.id)
-        } else {
-            Button { selected = customer } label: {
-                NextUpRow(customer: customer, isPending: pending)
+    private func row(for dayRow: RoundPlanner.DayRow) -> some View {
+        let customer = dayRow.customer
+        Group {
+            if sizeClass == .regular {
+                NextUpRow(customer: customer, state: dayRow.state).tag(customer.id)
+            } else {
+                Button { selected = customer } label: {
+                    NextUpRow(customer: customer, state: dayRow.state)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if !dayRow.isDone {
+                Button { log(.cleanedPaid, for: customer) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }
+                    .tint(.green)
+                Button { log(.cleanedNotPaid, for: customer) } label: { Label("Not paid", systemImage: "clock.badge.exclamationmark") }
+                    .tint(.orange)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !dayRow.isDone {
+                Button { log(.skipped, for: customer) } label: { Label("Skipped", systemImage: "forward.circle") }
+                    .tint(.red)
+            }
+        }
+    }
+
+    private func log(_ action: VisitLogger.Action, for customer: Customer) {
+        if case .skipped = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
+            skipAsk = customer
+            return
+        }
+        perform(action, for: customer)
+    }
+
+    private func perform(_ action: VisitLogger.Action, for customer: Customer) {
+        let undo = VisitLogger.perform(action, for: customer, in: modelContext)
+        undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
     }
 
     /// After logging, move on to whoever is next in the round.
@@ -119,13 +163,27 @@ private struct DayHeader: View {
         return day.customers.filter { $0.contact == .whatsapp && !$0.whatsAppDigits.isEmpty && !sent.contains($0.id.uuidString) }.count
     }
 
+    /// "Howie + Dad · £144 done · £296 left · 3 booked" today; "Howie + Dad · 26 houses · £448 of £440" otherwise.
+    private var summary: String {
+        var parts = [day.crewName]
+        if isToday && day.doneTotal > 0 {
+            parts.append("\(day.doneTotal.pounds) done")
+            parts.append("\(day.total.pounds) left")
+        } else {
+            parts.append("\(day.customers.count) houses")
+            parts.append("\(day.total.pounds) of \(day.bookTo.pounds)")
+        }
+        if day.bookedCount > 0 { parts.append("\(day.bookedCount) booked") }
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     var body: some View {
         HStack(alignment: .center) {
         VStack(alignment: .leading, spacing: 2) {
             Text((isToday ? "Today, " : "") + RoundCalendar.weekdayShort(day.date))
                 .font(.headline)
                 .foregroundStyle(.primary)
-            Text("\(day.crewName) · \(day.customers.count) houses · \(day.total.pounds) of \(day.bookTo.pounds)")
+            Text(summary)
                 .font(.caption)
                 .textCase(nil)
         }
@@ -147,7 +205,9 @@ private struct DayHeader: View {
 
 private struct NextUpRow: View {
     let customer: Customer
-    var isPending = false
+    var state: NextUp.State = .planned
+
+    private var isDimmed: Bool { state != .planned && state != .booked }
 
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
@@ -156,8 +216,15 @@ private struct NextUpRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(customer.name).font(.headline)
-                    if isPending { tag("Not started · tap to start") }
-                    if customer.everyOther { tag("EO") }
+                    switch state {
+                    case .notStarted: tag("Not started · tap to start")
+                    case .everyOtherOff: tag("EO · not this round", colour: .gray)
+                    case .booked: tag("Booked", colour: .purple)
+                    case .skippedToday: tag("Skipped today", colour: .red)
+                    case .notDueToday: tag("Not due", colour: .gray)
+                    default: EmptyView()
+                    }
+                    if customer.everyOther && state != .everyOtherOff { tag("EO") }
                     if customer.frontOnly { tag("Front only") }
                 }
                 Text(customer.address)
@@ -183,25 +250,37 @@ private struct NextUpRow: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
-                Text(customer.price.pounds)
-                    .font(.headline)
+                if state == .cleanedToday {
+                    Label(chargedToday.pounds, systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                } else {
+                    Text(customer.price.pounds)
+                        .font(.headline)
+                }
                 Image(systemName: customer.contact == .ring ? "phone" : "message")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
-        .opacity(isPending ? 0.45 : 1)
+        .opacity(isDimmed ? 0.45 : 1)
         .contentShape(Rectangle())
     }
 
-    private func tag(_ text: String) -> some View {
+    /// What was charged for today's clean(s).
+    private var chargedToday: Decimal {
+        let today = RoundCalendar.startOfDay()
+        return customer.allVisits.filter { $0.kind == .cleaned && $0.date == today }.reduce(0) { $0 + $1.charged }
+    }
+
+    private func tag(_ text: String, colour: Color = .blue) -> some View {
         Text(text)
             .font(.caption2.bold())
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(.blue.opacity(0.15), in: Capsule())
-            .foregroundStyle(.blue)
+            .background(colour.opacity(0.15), in: Capsule())
+            .foregroundStyle(colour)
     }
 }
 
@@ -225,6 +304,15 @@ struct CustomerLogPanel: View {
                     }
                 } footer: {
                     Text("They haven't started yet, so they show greyed out and don't count towards the day's total.")
+                }
+            }
+
+            if let booked = customer.bookedFor {
+                Section {
+                    LabeledContent("Booked for", value: RoundCalendar.weekdayShort(booked))
+                    Button("Remove booking", role: .destructive) { customer.bookedFor = nil }
+                } footer: {
+                    Text("They were messaged for this day, so the round keeps them on it. Logging a clean or skip clears it.")
                 }
             }
 

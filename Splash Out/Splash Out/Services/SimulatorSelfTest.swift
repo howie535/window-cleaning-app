@@ -145,32 +145,70 @@ enum SimulatorSelfTest {
         func plan() -> RoundPlanner.Plan {
             RoundPlanner.plan(customers: all, settings: settings, crews: crews, workDays: workDays, today: today)
         }
-        /// Last in the plan: dealt with, so they go to the back of the round and come round again in order.
-        func atBackOfRound(_ customer: Customer) -> Bool {
-            let p = plan()
-            let flat = p.days.flatMap(\.customers) + p.later
-            return flat.last === customer
+        func dayIndex(of customer: Customer, in p: RoundPlanner.Plan) -> Int? { p.days.firstIndex { $0.rows.contains { $0.customer === customer } } }
+        func stateOf(_ customer: Customer, in p: RoundPlanner.Plan) -> NextUp.State? {
+            for day in p.days { if let row = day.rows.first(where: { $0.customer === customer }) { return row.state } }
+            return nil
         }
         func listed(_ customer: Customer) -> Bool {
             let p = plan()
             return p.days.contains { $0.customers.contains { $0 === customer } } || p.later.contains { $0 === customer }
         }
-        if let dueNow = plan().days.first?.customers.first(where: { !$0.everyOther }) {
-            check("a customer on the round is listed", listed(dueNow))
+        let planBefore = plan()
+        if let first = planBefore.days.first, first.date == today, let dueNow = first.customers.first(where: { !$0.everyOther }) {
+            check("a customer on today's round is listed", listed(dueNow))
+            let todaysPlanned = Set(first.customers.map(\.id))
             let skip = VisitLogger.perform(.skipped, for: dueNow, in: context)
-            check("skipping keeps them on the round", listed(dueNow))
+            var after = plan()
+            check("a skip stays on today, shown as skipped and not counted", stateOf(dueNow, in: after) == .skippedToday && dayIndex(of: dueNow, in: after) == 0 && !after.days[0].customers.contains { $0 === dueNow })
             skip()
+            let todayBefore = Set(first.rows.filter { $0.state.counts || $0.isDone }.map(\.customer.id))
+            let doneBefore = first.doneTotal
             let done = VisitLogger.perform(.cleanedPaid, for: dueNow, in: context)
-            check("cleaning them sends them to the back of the round", atBackOfRound(dueNow))
-            check("the round now carries on from them", plan().pointer === dueNow)
+            after = plan()
+            check("a clean stays on today, ticked, and counts towards today", stateOf(dueNow, in: after) == .cleanedToday && dayIndex(of: dueNow, in: after) == 0 && after.days[0].doneTotal - doneBefore == dueNow.price)
+            let stillToday = Set(after.days[0].rows.filter { $0.state.counts || $0.isDone }.map(\.customer.id))
+            check("marking a clean doesn't pull new customers onto today", stillToday.isSubset(of: todayBefore) && stillToday.contains(dueNow.id), "\(stillToday.subtracting(todayBefore).count) new")
             done()
-            check("undo puts them back on the round", listed(dueNow))
+            check("undo puts them back on the plan", listed(dueNow) && stateOf(dueNow, in: plan()) == .planned)
+
+            // Cleaning someone further down first doesn't move the customers above them.
+            if planBefore.days.count > 2, let further = planBefore.days[2].customers.first(where: { !$0.everyOther }) {
+                let jump = VisitLogger.perform(.cleanedNotPaid, for: further, in: context)
+                after = plan()
+                let firstDayNow = Set(after.days[0].customers.map(\.id))
+                let secondDayBefore = Set(planBefore.days[1].customers.map(\.id))
+                let stayed = todaysPlanned.subtracting([further.id]).filter { firstDayNow.contains($0) }.count
+                check("cleaning out of order keeps today's customers on today", Double(stayed) >= Double(todaysPlanned.count) * 0.8, "\(stayed) of \(todaysPlanned.count)")
+                check("cleaning out of order doesn't send anyone to the end of the round", secondDayBefore.allSatisfy { id in after.days.prefix(4).contains { $0.rows.contains { $0.customer.id == id } } })
+                check("the customer cleaned out of order shows on today, done", stateOf(further, in: after) == .cleanedToday && dayIndex(of: further, in: after) == 0)
+                let again = plan()
+                check("a customer cleaned today never shows again as still to do", !again.days.contains { $0.customers.contains { $0 === further } } && !again.later.contains { $0 === further })
+                jump()
+            }
+
+            // Booking keeps a customer on their day.
+            if planBefore.days.count > 3 {
+                let target = planBefore.days[3].date
+                dueNow.bookedFor = target
+                after = plan()
+                check("a booked customer goes on their booked day", stateOf(dueNow, in: after) == .booked && after.days.firstIndex { $0.date == target } == dayIndex(of: dueNow, in: after))
+                let other = planBefore.days[0].customers.first { $0 !== dueNow && !$0.everyOther }
+                let otherDone = other.map { VisitLogger.perform(.cleanedPaid, for: $0, in: context) }
+                check("a booking survives other cleans", stateOf(dueNow, in: plan()) == .booked)
+                otherDone?()
+                let cleared = VisitLogger.perform(.skipped, for: dueNow, in: context)
+                check("logging a visit clears the booking", dueNow.bookedFor == nil)
+                cleared()
+                check("undo puts the booking back", dueNow.bookedFor == target)
+                dueNow.bookedFor = nil
+            }
         } else {
             check("found a customer on today's round", false)
         }
         if let eo = all.first(where: { $0.everyOther && $0.status == .active && listed($0) }) {
             let off = VisitLogger.perform(.notDue, for: eo, in: context)
-            check("'not due' sends an every-other customer to the back of the round", atBackOfRound(eo))
+            check("'not due' keeps an every-other customer on today, not counted", stateOf(eo, in: plan()) == .notDueToday)
             off()
         }
 
@@ -217,7 +255,7 @@ enum SimulatorSelfTest {
         let paceB = synthetic("ST pace B"); add(paceB, .cleaned, daysAgo: 42)
         let paceEO = synthetic("ST pace EO", eo: true); add(paceEO, .cleaned, daysAgo: 100)
         let paceDay = RoundPlanner.DayPlan(date: RoundCalendar.london.date(byAdding: .day, value: 7, to: today)!, target: 400, bookTo: 440, crewName: "", customers: [paceA, paceB, paceEO])
-        let pace = RoundPlanner.paceWeeks(of: RoundPlanner.Plan(days: [paceDay], later: [], pointer: nil))
+        let pace = RoundPlanner.paceWeeks(of: RoundPlanner.Plan(days: [paceDay], later: [], pointer: nil, lapDays: 35))
         check("pace: 5 weeks since the last clean, scheduled a week later, is 6 weeks", pace?.weeks == 6 && pace?.customers == 2, "\(String(describing: pace))")
         context.delete(paceA); context.delete(paceB); context.delete(paceEO)
 
@@ -309,57 +347,119 @@ enum SimulatorSelfTest {
             let allNow = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
             let planned = RoundPlanner.plan(customers: allNow, settings: planSettings, crews: planCrews, workDays: planDiary, today: today)
             let placed = planned.days.flatMap(\.customers) + planned.later
-            check("plan: nobody appears twice", Set(placed.map(\.id)).count == placed.count)
+            let shownIDs = planned.days.flatMap(\.rows).map(\.customer.id)
+            check("plan: nobody appears twice", Set(shownIDs).count == shownIDs.count && Set(placed.map(\.id)).count == placed.count)
             var reachesTarget = true
-            for day in planned.days.dropLast() where !day.customers.isEmpty {
-                if day.total < day.bookTo { reachesTarget = false }
+            for day in planned.days.dropLast() where !day.customers.isEmpty && day.bookedCount == 0 {
+                if day.total + day.doneTotal < day.bookTo { reachesTarget = false }
             }
             check("plan: every full day reaches or exceeds its booking target", reachesTarget)
-            let candidates = allNow.enumerated().map { index, customer -> NextUp.Candidate in
-                var lastCleaned: Date?, lastNotDue: Date?, lastVisit: Date?
-                for visit in customer.allVisits {
-                    if lastVisit.map({ visit.date > $0 }) ?? true { lastVisit = visit.date }
-                    if visit.kind == .cleaned, lastCleaned.map({ visit.date > $0 }) ?? true { lastCleaned = visit.date }
-                    if visit.kind == .notDue, lastNotDue.map({ visit.date > $0 }) ?? true { lastNotDue = visit.date }
-                }
-                return NextUp.Candidate(key: index, sequence: customer.sequence, isListable: customer.status == .active || customer.status == .leaving,
-                                        price: customer.price, everyOther: customer.everyOther, lastCleaned: lastCleaned, lastNotDue: lastNotDue, lastVisit: lastVisit)
-            }
-            let hide = planSettings?.nextUpHideWeeks ?? 5
             var pendingSeen: [UUID: Int] = [:]
-            var pendingBooked = false, totalsMatch = true
+            var pendingCounted = false, totalsMatch = true
             for day in planned.days {
-                for row in day.rows where row.isPending {
+                for row in day.rows where row.state == .notStarted {
                     pendingSeen[row.customer.id, default: 0] += 1
-                    if day.customers.contains(where: { $0.id == row.customer.id }) { pendingBooked = true }
+                    if day.customers.contains(where: { $0.id == row.customer.id }) { pendingCounted = true }
                 }
                 if day.total != day.customers.reduce(Decimal(0), { $0 + $1.price }) { totalsMatch = false }
             }
             let notStartedCount = allNow.filter { $0.status == .notStarted }.count
             check("plan: each not-started customer shows once, greyed", pendingSeen.count == notStartedCount && pendingSeen.values.allSatisfy { $0 == 1 }, "\(pendingSeen.count) of \(notStartedCount)")
-            check("plan: not-started customers aren't booked or counted in a day's total", !pendingBooked && totalsMatch)
-            var dueByTheirDay = true
-            let pointerSeq = NextUp.pointer(in: candidates)?.sequence
+            check("plan: greyed customers aren't counted in a day's total", !pendingCounted && totalsMatch)
+            let eoOff = planned.days.flatMap(\.rows).filter { $0.state == .everyOtherOff }
+            check("plan: every-other customers on their off round are greyed, never counted", eoOff.allSatisfy { row in !planned.days.contains { $0.customers.contains { $0 === row.customer } } })
+
+            // Rows keep round order within the lap (sequence goes up, wrapping once at most per day).
+            var wraps = 0
             for day in planned.days {
-                for customer in day.customers where pointerSeq.map({ customer.sequence > $0 }) ?? true {
-                    let c = candidates[allNow.firstIndex { $0.id == customer.id }!]
-                    if !NextUp.isDue(c, today: day.date, hideWeeks: hide, calendar: RoundCalendar.london) { dueByTheirDay = false }
+                let seqs = day.rows.map(\.customer).filter { !$0.name.hasPrefix("ST ") && !$0.name.hasPrefix("Self Test") }.map(\.sequence)
+                for (x, y) in zip(seqs, seqs.dropFirst()) where y < x { wraps += 1 }
+            }
+            check("plan: round order is kept (wraps round at most once)", wraps <= 1, "\(wraps) wraps")
+
+            // Every-other: replay the history and see how often the rule matches what was actually logged.
+            let lap = planned.lapDays
+            var bestFactor = 1.5, bestScore = -1.0, scoreAt15 = 0.0, cases = 0
+            for factor in stride(from: 1.2, through: 1.8, by: 0.1) {
+                var right = 0, total = 0
+                for customer in allNow where customer.everyOther {
+                    let visits = customer.allVisits.filter { $0.kind == .cleaned || $0.kind == .notDue }.sorted { $0.date < $1.date }
+                    var lastClean: Date?
+                    for visit in visits {
+                        if let lastClean {
+                            let gap = RoundCalendar.london.dateComponents([.day], from: lastClean, to: visit.date).day ?? 0
+                            let predictedOff = Double(gap) < Double(lap) * factor
+                            total += 1
+                            if predictedOff == (visit.kind == .notDue) { right += 1 }
+                        }
+                        if visit.kind == .cleaned { lastClean = visit.date }
+                    }
                 }
+                let score = total == 0 ? 1 : Double(right) / Double(total)
+                if abs(factor - 1.5) < 0.01 { scoreAt15 = score; cases = total }
+                if score > bestScore { bestScore = score; bestFactor = factor }
             }
-            check("plan: anyone ahead of the pointer is due by the day they're listed", dueByTheirDay)
-            let rotatedSequences = NextUp.rotated(candidates).map(\.sequence)
-            let placedSequences = placed.map(\.sequence)
-            var cursor = 0, inOrder = true
-            for sequence in placedSequences {
-                guard let at = rotatedSequences[cursor...].firstIndex(of: sequence) else { inOrder = false; break }
-                cursor = at + 1
+            lines.append("EOBACKTEST lap \(lap) days, factor 1.5 right \(Int(scoreAt15 * 100))% of \(cases), best factor \(String(format: "%.1f", bestFactor)) at \(Int(bestScore * 100))%")
+            check("every-other rule matches the logged history at least 90% of the time", scoreAt15 >= 0.9, "\(Int(scoreAt15 * 100))%")
+            for day in planned.days.prefix(14) {
+                lines.append("PLANDAY \(RoundCalendar.dayString(day.date)) to do \(day.customers.count) £\(day.total) done £\(day.doneTotal) rows \(day.rows.count)")
             }
-            check("plan: round order is kept", inOrder)
-            for day in planned.days {
-                let seqs = day.customers.map(\.sequence)
-                var runs = 0, previous = -9
-                for sequence in seqs { if sequence != previous + 1 { runs += 1 }; previous = sequence }
-                lines.append("PLANDAY \(RoundCalendar.dayString(day.date)) houses \(seqs.count) total \(day.total) runs \(runs) seq \(seqs.first.map(String.init) ?? "-")...\(seqs.last.map(String.init) ?? "-")")
+        }
+
+        // Day one replay: Mon 12 Oct 2026, the visits logged on the phone, in an out-of-order sequence.
+        do {
+            let replayDay = RoundCalendar.date(year: 2026, month: 10, day: 12)
+            let people = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)])).filter { !$0.name.hasPrefix("ST ") && !$0.name.hasPrefix("Self Test") }
+            let replaySettings = try context.fetch(FetchDescriptor<AppSettings>()).first
+            let replayCrews = try context.fetch(FetchDescriptor<Crew>())
+            let replayDiary = try context.fetch(FetchDescriptor<WorkDay>())
+            func replayPlan() -> RoundPlanner.Plan { RoundPlanner.plan(customers: people, settings: replaySettings, crews: replayCrews, workDays: replayDiary, today: replayDay) }
+            let start = replayPlan()
+            if let monday = start.days.first, monday.date == replayDay {
+                let booked = monday.customers
+                for customer in booked { customer.bookedFor = replayDay }
+                let bookedIDs = Set(booked.map(\.id))
+                let tuesdayBefore = Set(start.days.dropFirst().first?.customers.map(\.id) ?? [])
+                // (sequence, what happened) in the order replayed
+                let steps: [(String, VisitLogger.Action)] = [
+                    ("Andrew Wiseman", .cleanedExtra(extra: 28, note: "Full clean", paid: false)), ("Al/Sue", .cleanedPaid), ("Clare Ryder", .cleanedNotPaid),
+                    ("Paul and Nicki Lawrence", .cleanedPaid), ("Anne Smith", .cleanedPaid), ("Barbara Evans", .cleanedPaid), ("Sarah Williams", .cleanedNotPaid),
+                    ("Gordon", .cleanedPaid), ("Lyn Garage", .cleanedNotPaid), ("Olga & Irfon", .cleanedNotPaid), ("Cherry Russell", .notDue),
+                    ("Louise (C Jones)", .notDue), ("Val Loftus", .cleanedNotPaid), ("Caroline Brine", .cleanedNotPaid), ("Ian Paddy (Parry)", .cleanedPaid),
+                    ("P A & Lorna Roberts", .cleanedNotPaid), ("Linda Knight", .cleanedNotPaid), ("Rachel Huws", .cleanedNotPaid),
+                    ("Glenis Butler", .cleanedExtra(extra: 3, note: nil, paid: true)), ("Tracey Owen", .cleanedNotPaid), ("Ira & Hillary Philip", .cleanedPaid),
+                    ("Alan McAdams", .cleanedNotPaid), ("Nia Corcoran", .skipped), ("Darren Jarvis", .cleanedNotPaid),
+                ]
+                var undos: [() -> Void] = []
+                var doneShownAsToDo = 0, bookedLeftMonday = 0, jumpedToEnd = 0
+                var doneSoFar = Set<UUID>()
+                for (name, action) in steps {
+                    guard let customer = people.first(where: { $0.name.trimmingCharacters(in: .whitespaces) == name && $0.status != .cancelled }) else {
+                        lines.append("DAYONE missing \(name)"); continue
+                    }
+                    undos.append(VisitLogger.perform(action, for: customer, on: replayDay, in: context))
+                    doneSoFar.insert(customer.id)
+                    let now = replayPlan()
+                    let toDo = Set(now.days.flatMap(\.customers).map(\.id) + now.later.map(\.id))
+                    doneShownAsToDo += doneSoFar.intersection(toDo).count
+                    let mondayNow = Set(now.days.first?.rows.map(\.customer.id) ?? [])
+                    bookedLeftMonday += bookedIDs.subtracting(mondayNow).count
+                    let early = Set(now.days.prefix(3).flatMap(\.rows).map(\.customer.id))
+                    jumpedToEnd += tuesdayBefore.subtracting(early).subtracting(doneSoFar).count
+                }
+                let end = replayPlan()
+                let monday = end.days.first
+                lines.append("DAYONE done £\(monday?.doneTotal ?? 0) left £\(monday?.total ?? 0) rows \(monday?.rows.count ?? 0)")
+                check("day one: nobody cleaned today ever shows again as still to do", doneShownAsToDo == 0, "\(doneShownAsToDo)")
+                check("day one: booked customers never leave Monday", bookedLeftMonday == 0, "\(bookedLeftMonday)")
+                check("day one: cleaning out of order never sends Tuesday's customers to the end", jumpedToEnd == 0, "\(jumpedToEnd)")
+                check("day one: Monday's done total matches the phone (£414)", (monday?.doneTotal ?? 0) - (start.days.first?.doneTotal ?? 0) == 414, "£\((monday?.doneTotal ?? 0) - (start.days.first?.doneTotal ?? 0))")
+                check("day one: EOs logged not due and Nia's skip stay on Monday, not counted",
+                      ["Cherry Russell", "Louise (C Jones)", "Nia Corcoran"].allSatisfy { name in monday?.rows.contains { $0.customer.name == name && $0.isDone && !$0.state.counts } ?? false })
+                for undo in undos.reversed() { undo() }
+                for customer in booked { customer.bookedFor = nil }
+            } else {
+                check("day one: Monday 12 Oct is a working day in the plan", false)
             }
         }
 

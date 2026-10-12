@@ -3,11 +3,14 @@ import Foundation
 /// Connects the Next Up engine to real customers, crews, diary days and settings.
 @MainActor
 enum RoundPlanner {
-    /// One line of a day: a customer, and whether they're only shown (not started yet) rather than booked.
+    /// One line of a day: a customer and how they stand (planned, booked, done today, greyed...).
     struct DayRow: Identifiable {
         var customer: Customer
-        var isPending: Bool
+        var state: NextUp.State
         var id: UUID { customer.id }
+        /// Shown but not counted (not started yet, or an every-other customer's off round).
+        var isPending: Bool { state == .notStarted || state == .everyOtherOff }
+        var isDone: Bool { state == .cleanedToday || state == .skippedToday || state == .notDueToday }
     }
 
     struct DayPlan: Identifiable {
@@ -17,19 +20,25 @@ enum RoundPlanner {
         /// target x (1 + overbook): how much can be booked.
         var bookTo: Decimal
         var crewName: String
-        /// The booked customers: these make up the day's total.
+        /// Customers still to do that day (planned or booked): what gets messaged and what's left.
         var customers: [Customer]
-        /// Everything to show for the day in round order: booked customers plus greyed not-started ones.
+        /// Everything to show for the day in round order.
         var rows: [DayRow] = []
+        /// Charged for cleans already done today.
+        var doneTotal: Decimal = 0
+        /// Still to do (planned and booked).
         var total: Decimal { customers.reduce(0) { $0 + $1.price } }
+        var bookedCount: Int { rows.filter { $0.state == .booked }.count }
     }
 
     struct Plan {
         var days: [DayPlan]
         /// Due customers who don't fit in the days available.
         var later: [Customer]
-        /// Who was cleaned most recently (the plan starts after them).
+        /// Where the round had got to at the start of today (the list carries on after them).
         var pointer: Customer?
+        /// Typical days between cleans (used for every-other customers).
+        var lapDays: Int
     }
 
     static func plan(
@@ -43,15 +52,30 @@ enum RoundPlanner {
         let calendar = RoundCalendar.london
 
         // Candidates carry an index back into `customers`.
+        var regularCleans: [[Date]] = []
         let candidates = customers.enumerated().map { index, customer -> NextUp.Candidate in
             var lastCleaned: Date?
             var lastNotDue: Date?
             var lastVisit: Date?
+            var lastVisitBeforeToday: Date?
+            var visitedToday: VisitKind?
+            var chargedToday: Decimal = 0
+            var cleans: [Date] = []
             for visit in customer.allVisits {
                 if lastVisit.map({ visit.date > $0 }) ?? true { lastVisit = visit.date }
-                if visit.kind == .cleaned, lastCleaned.map({ visit.date > $0 }) ?? true { lastCleaned = visit.date }
+                if visit.date < today, lastVisitBeforeToday.map({ visit.date > $0 }) ?? true { lastVisitBeforeToday = visit.date }
+                if visit.kind == .cleaned {
+                    cleans.append(visit.date)
+                    if lastCleaned.map({ visit.date > $0 }) ?? true { lastCleaned = visit.date }
+                }
                 if visit.kind == .notDue, lastNotDue.map({ visit.date > $0 }) ?? true { lastNotDue = visit.date }
+                if visit.date == today {
+                    // A clean wins over a skip if both were logged today.
+                    if visit.kind == .cleaned { visitedToday = .cleaned; chargedToday += visit.charged }
+                    else if visitedToday == nil { visitedToday = visit.kind }
+                }
             }
+            if !customer.everyOther, customer.status == .active { regularCleans.append(cleans) }
             return NextUp.Candidate(
                 key: index,
                 sequence: customer.sequence,
@@ -61,41 +85,51 @@ enum RoundPlanner {
                 lastCleaned: lastCleaned,
                 lastNotDue: lastNotDue,
                 lastVisit: lastVisit,
-                isPending: customer.status == .notStarted
+                lastVisitBeforeToday: lastVisitBeforeToday,
+                isPending: customer.status == .notStarted,
+                visitedToday: visitedToday,
+                chargedToday: chargedToday,
+                bookedFor: customer.bookedFor.map { RoundCalendar.startOfDay($0) }
             )
         }
 
         let resolver = DayResolver(settings: settings, crews: crews, workDays: workDays, customers: customers)
-        let days = NextUp.workingDays(from: today, calendar: calendar) { resolver.target(on: $0) }
+        var days = NextUp.workingDays(from: today, calendar: calendar) { resolver.target(on: $0) }
+        // Today always shows if anything was done today, and a booked day always shows, even if it isn't a usual working day.
+        var extraDates = Set<Date>()
+        if candidates.contains(where: { $0.visitedToday != nil }) { extraDates.insert(today) }
+        for c in candidates { if let booked = c.bookedFor, booked >= today { extraDates.insert(booked) } }
+        for date in extraDates where !days.contains(where: { $0.date == date }) {
+            days.append(NextUp.Day(date: date, target: resolver.target(on: date)))
+        }
+        days.sort { $0.date < $1.date }
+
         let overbook = Money.decimal(settings.overbook * 100) / 100
-        let assignments = NextUp.assignProjected(
-            NextUp.rotated(candidates),
-            to: days,
-            overbook: overbook,
-            hideWeeks: settings.nextUpHideWeeks,
-            calendar: calendar
-        )
+        let lapDays = NextUp.lapDays(cleanDates: regularCleans, today: today, fallback: 7 * settings.nextUpHideWeeks, calendar: calendar)
+        let placements = NextUp.plan(candidates, days: days, today: today, overbook: overbook,
+                                     hideWeeks: settings.nextUpHideWeeks, lapDays: lapDays, calendar: calendar)
 
         var dayPlans = days.map {
             DayPlan(date: $0.date, target: $0.target, bookTo: $0.target * (1 + overbook),
                     crewName: resolver.crewName(on: $0.date), customers: [])
         }
         var later: [Customer] = []
-        for assignment in assignments {
-            let customer = customers[assignment.key]
-            if let index = assignment.dayIndex {
-                dayPlans[index].rows.append(DayRow(customer: customer, isPending: assignment.isPending))
-                if !assignment.isPending { dayPlans[index].customers.append(customer) }
-            } else if !assignment.isPending {
+        for placement in placements.sorted(by: { $0.order < $1.order }) {
+            let customer = customers[placement.key]
+            if let index = placement.dayIndex {
+                dayPlans[index].rows.append(DayRow(customer: customer, state: placement.state))
+                if placement.state.counts { dayPlans[index].customers.append(customer) }
+                if placement.state == .cleanedToday { dayPlans[index].doneTotal += candidates[placement.key].chargedToday }
+            } else if placement.state.counts {
                 later.append(customer)
             }
         }
 
-        // One full round, no empty days on the end: they fill up as customers are cleaned or skipped.
+        // One full round, no empty days on the end.
         while dayPlans.count > 1, dayPlans.last?.rows.isEmpty == true { dayPlans.removeLast() }
 
-        let pointer = NextUp.pointer(in: candidates).map { customers[$0.key] }
-        return Plan(days: dayPlans, later: later, pointer: pointer)
+        let pointer = NextUp.startOfDayPointer(in: candidates).map { customers[$0.key] }
+        return Plan(days: dayPlans, later: later, pointer: pointer, lapDays: lapDays)
     }
 
     /// The pace of the round: the average gap, in weeks, between a customer's last clean and the day the plan

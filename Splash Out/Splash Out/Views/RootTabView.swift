@@ -7,6 +7,7 @@ enum AppTab: Int, CaseIterable {
 
 struct RootTabView: View {
     @State private var undoCenter = UndoCenter()
+    @State private var clock = RoundClock()
     @State private var selection: AppTab = .today
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -38,10 +39,12 @@ struct RootTabView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .environment(undoCenter)
+        .environment(clock)
         .onAppear { if !onboardingSeen { showTour = true } }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                clock.refresh()
                 AutoBackup.runIfDue(context: modelContext)
                 Task { await CalendarSync.syncIfEnabled(context: modelContext) }
             }

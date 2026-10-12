@@ -29,6 +29,7 @@ enum VisitLogger {
     static func perform(_ action: Action, for customer: Customer, on date: Date = Date(), in context: ModelContext) -> () -> Void {
         let day = RoundCalendar.startOfDay(date)
         let previousStatus = customer.status
+        let previousBooking = customer.bookedFor
 
         let visit: Visit
         switch action {
@@ -46,6 +47,7 @@ enum VisitLogger {
 
         context.insert(visit)
         visit.customer = customer
+        customer.bookedFor = nil
 
         // "not_started until their first clean"
         if visit.kind == .cleaned && customer.status == .notStarted {
@@ -54,6 +56,7 @@ enum VisitLogger {
 
         return { [weak customer] in
             if let customer, customer.status != previousStatus { customer.status = previousStatus }
+            customer?.bookedFor = previousBooking
             remove(visit, in: context)
         }
     }
@@ -70,6 +73,7 @@ enum VisitLogger {
     ) -> () -> Void {
         let day = RoundCalendar.startOfDay(date)
         let previousStatus = customer.status
+        let previousBooking = customer.bookedFor
         let suggested = customer.suggestedNextPrice
         let visit = Visit(
             date: day,
@@ -84,9 +88,11 @@ enum VisitLogger {
         )
         context.insert(visit)
         visit.customer = customer
+        customer.bookedFor = nil
         if customer.status == .notStarted { customer.status = .active }
         return { [weak customer] in
             if let customer, customer.status != previousStatus { customer.status = previousStatus }
+            customer?.bookedFor = previousBooking
             remove(visit, in: context)
         }
     }
