@@ -168,17 +168,17 @@
     <li><b>Tap the customer you're at.</b> A panel opens with their address, notes and anything they owe.</li>
     <li><b>Tap what happened:</b>
       <ul>
-        <li><b>Cleaned &amp; paid</b>: done, and they paid.</li>
+        <li><b>Cleaned &amp; paid</b>: done, and they paid. For a customer with two prices (say front only one time, full the next) it asks which, with the one you didn't use last time first.</li>
         <li><b>Cleaned, not paid</b>: done, they'll pay later. It goes on the Owed list.</li>
         <li><b>Cleaned + extra…</b>: for something extra (conservatory roof) or less (front only). Add a note.</li>
-        <li><b>Skipped</b>: you couldn't do them today. They go to the back of the round.</li>
-        <li><b>Not due</b>: for every-other customers on their off round.</li>
+        <li><b>Skipped</b>: you couldn't do them today. They stay in today's list marked Skipped, and come round again next time.</li>
+        <li><b>Not due</b>: for an every-other customer on their off round. You rarely need it: the app spots off rounds itself and shows those customers greyed with <b>EO · not this round</b>.</li>
         <li><b>Other date or amount…</b>: for logging a clean from another day, or when they paid a different amount.</li>
       </ul></li>
     <li><b>Made a mistake?</b> A bar appears at the bottom for a few seconds. Tap <b>Undo</b>.</li>
   </ol>
-  <div class="good"><b class="l">The list looks after itself.</b> Each clean or skip moves the round on, and the list refills. Customers you've just cleaned drop to the back and come round again in about five weeks.</div>
-  <div class="tip"><b class="l">Quick way.</b> On the <span class="btn">Customers</span> tab, swipe a row right for <b>Paid</b> or <b>Not paid</b>, or left for <b>Skipped</b>.</div>
+  <div class="good"><b class="l">The list looks after itself.</b> It carries on from where you'd got to at the start of the day, so working out of order never moves anyone else. Customers you've done today stay in today's list with a tick, and their money counts towards the day. The date bar shows <b>£ done</b> and <b>£ left</b>. Tomorrow, they drop off and come round again in about five weeks.</div>
+  <div class="tip"><b class="l">Quick way.</b> On the <span class="btn">Round</span> or <span class="btn">Customers</span> tab, swipe a row right for <b>Paid</b> or <b>Not paid</b>, or left for <b>Skipped</b>.</div>
 </div>
 
 <div class="pair">
@@ -202,6 +202,7 @@
     <li>You'll see the message ready to go. Tap <b>Message next</b>. WhatsApp opens with the message filled in for that customer.</li>
     <li>Press <b>Send</b> in WhatsApp, then come back and tap <b>Message next</b> again. Each customer you've done gets a tick.</li>
   </ol>
+  <p>Messaging someone <b>books them in</b> for that day: they show a purple <b>Booked</b> tag and stay on that day, whatever else changes, until you log them.</p>
   <p>The message fills in each customer's name and the day, for example <i>"Hi Anne, we're planning to clean your windows on Tuesday 13 October."</i> Change the wording any time in <span class="btn">More</span> → <span class="btn">Settings</span> → <b>WhatsApp message</b>.</p>
   <div class="heads-up"><b class="l">Phone numbers.</b> A customer with no number shows <b>Add number from Contacts</b> on their page. Tap it and pick them from your Contacts. WhatsApp itself makes you press Send each time, so the app can open every message ready for you but can't send them for you.</div>
 </div>
@@ -209,7 +210,7 @@
 <figure class="shot"><img src="screens/message.jpg" alt="The Message sheet: one tap per customer"><figcaption>The Message sheet: one tap per customer</figcaption></figure>
 <h2><span class="n">6</span>When someone skips</h2>
 <div class="card">
-  <p>Mark them <b>Skipped</b> when you get there. They move to the back of the round, and the next customers move up to fill the day, so you don't lose the work.</p>
+  <p>Mark them <b>Skipped</b> when you get there. They stay in today's list marked Skipped and don't count towards the day, so the next customers move up to fill it and you don't lose the work.</p>
   <p>Those customers weren't in your original message, so the day's <b>Message</b> button now says something like <b>Message · 3 new</b>. Tap it, and <b>Message next</b> takes you through just the new ones.</p>
   <div class="tip"><b class="l">Owes you money?</b> If you skip someone who still owes you from an earlier clean, the app asks you first, in case you want to collect before moving on.</div>
 </div>
@@ -222,7 +223,8 @@
     <li>Tap <b>Record payment…</b> and type what they paid.</li>
     <li>Save. The money is taken off their oldest unpaid cleans first. Part-payments work too.</li>
   </ol>
-  <p>You can also reach <b>Record payment</b> from any customer's page.</p>
+  <p>Paid more than they owe? Save it anyway: the extra is kept as <b>credit</b> and taken off their next clean automatically. Customers in credit are listed under <b>In credit</b> at the bottom of the Owed tab. Someone who pays ahead when they owe nothing: open their page and tap <b>Payment in advance…</b>.</p>
+  <p>Use the search bar at the top of Owed to find someone by name or address. You can also reach <b>Record payment</b> from any customer's page.</p>
 </div>
 
 <figure class="shot"><img src="screens/owed.jpg" alt="The Owed tab, oldest first"><figcaption>The Owed tab, oldest first</figcaption></figure>
@@ -231,7 +233,11 @@
   <h3>Find someone</h3>
   <p>On the <span class="btn">Customers</span> tab use the search bar (name, address, area or note). You can also filter by <b>Round</b>, <b>Area</b> or <b>Status</b>.</p>
   <h3>Change their details</h3>
-  <p>Tap the customer, then <b>Edit</b>. Changing a price keeps a record of the old one.</p>
+  <p>Tap the customer, then <b>Edit</b>. Changing a price keeps a record of the old one. <b>Second price</b> is for customers who alternate, for example front only £10 and full £17.</p>
+  <h3>Adding someone new</h3>
+  <p>Pick their <b>Round</b> and <b>Area</b> from the lists (or <b>New…</b> for a new one). They go straight after the last customer in that round and area, unless you choose a different place with <b>Place in round</b>.</p>
+  <h3>Correct a visit</h3>
+  <p>Open the customer and tap any visit under <b>History</b> to change its date, what happened, what was charged or paid, or the note. You can delete it there too.</p>
   <h3>Move someone in the round</h3>
   <p>On the Customers tab switch on <b>Reorder round</b> and drag them into place. Handy when a new street opens up.</p>
   <h3>Cancel a customer</h3>
@@ -242,6 +248,8 @@
   <h3>A new person has moved into a cancelled customer's house</h3>
   <p>Open the cancelled customer's page and tap <b>Someone new has moved in…</b>. A new customer form opens with the <b>address, round, area, price and notes</b> already filled in. Type the new person's name and number and save. They go in the round right after the old customer, and start as Active.</p>
   <div class="good"><b class="l">Your stats stay right.</b> The old customer keeps their own history and anything they owed. The new person starts fresh, so cleans, skips, "last cleaned" and what they owe are never mixed up with the person before them.</div>
+  <h3>Delete a customer completely</h3>
+  <p>Only for mistakes, such as a customer added twice. At the bottom of their page tap <b>Delete customer completely…</b>. It tells you how many cleans and how much money will come out of the stats, and saves a backup first. To keep someone's history, cancel them instead.</p>
   <h3>Other statuses</h3>
   <ul>
     <li><b>Paused</b>: away for a while. Not on the round until you reactivate them.</li>
@@ -257,13 +265,15 @@
   <div class="mini"><b>Tax year</b><span>Everything you've earned since 6 April, paid or not.</span></div>
   <div class="mini"><b>Money owed</b><span>Total waiting to be paid.</span></div>
   <div class="mini"><b>Round value</b><span>What one full round of customers is worth.</span></div>
-  <div class="mini"><b>Average per house</b><span>What you charge for the average clean.</span></div>
+  <div class="mini"><b>Average per house</b><span>Each day's £ per house, averaged over the days, the same way as the spreadsheet.</span></div>
   <div class="mini"><b>Houses per workday</b><span>How many houses you do on a working day.</span></div>
   <div class="mini"><b>Pace</b><span>How many weeks between cleans, on the current plan.</span></div>
   <div class="mini"><b>Skip rate</b><span>How often visits end up skipped.</span></div>
   <div class="mini"><b>Price rises due</b><span>Customers who haven't had a rise in two years.</span></div>
 </div>
 <p>Below the cards, a chart shows the last twelve weeks. Green bars hit the target, orange bars fell short.</p>
+<p><b>Tap a card with a ›</b> to see it over time, with a choice of 1, 3, 6 or 12 months or everything. Tax Year opens the full tax year, and Price rises due opens Price Rise.</p>
+<p><b>Ideal</b> lines in blue show what it takes to make your weekly target with a round that takes five weeks, allowing for skips: how big the round should be, how many customers, and the £ per house or houses per day you need. Change the five weeks under <span class="btn">Settings</span> → <b>Target round length</b>.</p>
 
 <figure class="shot"><img src="screens/stats.jpg" alt="The Stats screen"><figcaption>The Stats screen</figcaption></figure>
 <h2><span class="n">10</span>The Round Sheet</h2>
@@ -288,6 +298,7 @@
     <div class="mini"><b>Price Rise</b><span>Preview a rise for every customer, then apply it in one go.</span></div>
     <div class="mini"><b>Frequent Skips</b><span>Customers who skip a lot.</span></div>
     <div class="mini"><b>Checks</b><span>Customers paying under their price, and dates worth a second look.</span></div>
+    <div class="mini"><b>History</b><span>Every visit, day by day, with totals. Search by name and pick the dates.</span></div>
     <div class="mini"><b>Diary</b><span>A calendar. Tap a day to mark a holiday or change the crew.</span></div>
     <div class="mini"><b>Tips</b><span>Record tips. They're never counted as income.</span></div>
     <div class="mini"><b>Exports</b><span>Customer list, tax year income list and a report for analysis.</span></div>
@@ -324,7 +335,11 @@
   <h3>The Round list changed overnight</h3>
   <p>It's recalculated every day from who you've cleaned or skipped, so it always reflects where you've got to.</p>
   <h3>I logged the wrong thing</h3>
-  <p>Tap <b>Undo</b> straight away. Later on, open the customer, find the visit under <b>History</b> and swipe it to delete.</p>
+  <p>Tap <b>Undo</b> straight away. Later on, open the customer and tap the visit under <b>History</b> to change it or delete it.</p>
+  <h3>A day's total doesn't match the spreadsheet</h3>
+  <p>The app counts what was <b>charged</b> for each clean. Open <span class="btn">More</span> → <span class="btn">History</span>, pick the day and look for a clean charged more or less than usual (an extra, or a payment typed as the charge), then tap it to correct it.</p>
+  <h3>What's changed in a new version?</h3>
+  <p><span class="btn">More</span> → <span class="btn">Settings</span> → <b>About</b> → <b>What's new</b>. The app also saves a backup the first time a new version opens.</p>
   <h3>A day shows more than its target</h3>
   <p>That's on purpose. Each day is filled until it reaches the target plus a little extra, so you've always got enough lined up.</p>
   <h3>The WhatsApp button wants a number</h3>

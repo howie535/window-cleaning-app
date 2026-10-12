@@ -52,6 +52,12 @@ The iPad is where the round spreadsheet is used today, in landscape.
 - **Settings row:** each device creates its own settings row on first launch. Before sync is switched on, the app needs to keep only one (and merge crews/team) or the devices will each end up with a copy.
 - **Fresh install** starts with no customers, crews or team. Add the team in Settings first, then crews, then the usual week.
 
-## 4. Known loose ends
+## 4. iPhone 12 and iPad 10th gen (iOS 18)
+
+The app now supports iOS 18 and later (it was iOS 26 only). The one iOS 26-only feature it used, looking up an address's map position, falls back to the older lookup on iOS 18.
+
+**Not yet tested on iOS 18.** Xcode 27 no longer offers an iOS 18 Simulator to download, so the first real test is installing on the iPhone 12 or the iPad, the same way as your phone (plug it in, trust the Mac, switch on Developer Mode, then run the install). Things worth a look on the first run: the Round list and its swipes, Record payment, the Stats charts, and Settings > Backup folder.
+
+## 5. Known loose ends
 
 - Customers priced at £0 aren't flagged anywhere; look through the list for them before the switchover.
