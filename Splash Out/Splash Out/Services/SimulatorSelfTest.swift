@@ -284,12 +284,12 @@ enum SimulatorSelfTest {
         // Ideal figures: weekly target x round length, grossed up for the skip rate.
         let idealStats = stats()
         let weeklyTarget = idealStats.config.usualTargets.reduce(Decimal(0), +)
-        let ideal = Ideal(stats: idealStats, weeks: 5, listAverage: 20, perHouse: 20, housesPerDay: 20)
+        let ideal = Ideal(stats: idealStats, weeks: 5, listAverage: 20, housesPerDay: 20)
         if weeklyTarget > 0, let value = ideal.roundValue {
             let expected = NSDecimalNumber(decimal: weeklyTarget).doubleValue * 5 / (1 - idealStats.skipRate)
             check("ideal round value = weekly target x 5 weeks / (1 - skip rate)", abs(NSDecimalNumber(decimal: value).doubleValue - expected) < 0.01, "\(value) vs \(expected)")
             let days = Decimal(idealStats.config.usualTargets.filter { $0 > 0 }.count)
-            check("ideal £ per house and houses per day come from the daily target", ideal.perHouse == weeklyTarget / days / 20 && ideal.housesPerDay == weeklyTarget / days / 20)
+            check("ideal £ per house = daily target / houses per workday", ideal.perHouse == weeklyTarget / days / 20)
             check("ideal customers = ideal round value / average price, rounded up", ideal.customers == Int((expected / 20).rounded(.up)) || ideal.customers == Int((expected / 20).rounded(.up)) + 1)
         } else {
             check("ideal figures need a usual week with targets", false)

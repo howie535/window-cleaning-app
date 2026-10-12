@@ -38,7 +38,7 @@ struct TodayView: View {
         let listAverage = priced.isEmpty ? Decimal(0) : priced.reduce(Decimal(0)) { $0 + $1.price } / Decimal(priced.count)
         let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
         let ideal = Ideal(stats: stats, weeks: settings.first?.targetRoundWeeks ?? 5, listAverage: listAverage,
-                          perHouse: perHouse?.average, housesPerDay: perDay?.average)
+                          housesPerDay: perDay?.average)
 
         let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
                     NavigationLink { StatDetailView(metric: .weeklyWork) } label: {
@@ -74,8 +74,8 @@ struct TodayView: View {
                     NavigationLink { StatDetailView(metric: .housesPerDay) } label: {
                         Tile(title: "Houses per workday",
                              value: perDay.map { $0.average.formatted(.number.precision(.fractionLength(1))) } ?? "–",
-                             detail: perDay.map { "over \($0.days) worked days this tax year" } ?? "no worked days yet this tax year",
-                             ideal: ideal.housesPerDay.map { $0.formatted(.number.precision(.fractionLength(1))) }, opens: true)
+                             detail: perDay.map { "over \($0.days) worked days this tax year · the work rate the ideal figures are based on" } ?? "no worked days yet this tax year",
+                             opens: true)
                     }
                     Tile(title: "Pace",
                          value: pace.map { $0.weeks.formatted(.number.precision(.fractionLength(1))) + " weeks" } ?? "–",
@@ -117,7 +117,7 @@ struct TodayView: View {
                         tiles
                             .padding(.horizontal)
                         if ideal.roundValue != nil {
-                            Text("Ideal: what it takes to make the weekly target with a \(ideal.weeks)-week round, allowing for the skip rate. Change the round length in Settings.")
+                            Text("Ideal: what it takes to make the weekly target with a \(ideal.weeks)-week round at your current houses per workday, allowing for the skip rate. Change the round length in Settings.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal)
@@ -140,16 +140,16 @@ struct Ideal {
     /// Round value needed: weekly target × weeks, grossed up for skips.
     let roundValue: Decimal?
     let customers: Int?
+    /// £ per house needed at the current work rate (houses per workday, which is taken as given).
     let perHouse: Decimal?
-    let housesPerDay: Decimal?
 
     @MainActor
-    init(stats: RoundStats, weeks: Int, listAverage: Decimal, perHouse actualPerHouse: Decimal?, housesPerDay actualHouses: Decimal?) {
+    init(stats: RoundStats, weeks: Int, listAverage: Decimal, housesPerDay actualHouses: Decimal?) {
         self.weeks = weeks
         let targets = stats.config.usualTargets.filter { $0 > 0 }
         let weekly = targets.reduce(Decimal(0), +)
         guard weekly > 0 else {
-            roundValue = nil; customers = nil; perHouse = nil; housesPerDay = nil
+            roundValue = nil; customers = nil; perHouse = nil
             return
         }
         let keep = Decimal(max(0.5, 1 - stats.skipRate))
@@ -158,7 +158,6 @@ struct Ideal {
         customers = listAverage > 0 ? Int((NSDecimalNumber(decimal: value / listAverage).doubleValue).rounded(.up)) : nil
         let daily = weekly / Decimal(targets.count)
         perHouse = actualHouses.flatMap { $0 > 0 ? daily / $0 : nil }
-        housesPerDay = actualPerHouse.flatMap { $0 > 0 ? daily / $0 : nil }
     }
 }
 
