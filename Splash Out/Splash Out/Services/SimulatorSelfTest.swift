@@ -267,6 +267,34 @@ enum SimulatorSelfTest {
         for c in [advance, twoPrice, editMe] { context.delete(c) }
         try context.save()
 
+        do {
+            let everyone = try context.fetch(FetchDescriptor<Customer>())
+            let clock = ContinuousClock()
+            func ms(_ d: Duration) -> Int { Int(d.components.seconds * 1000 + d.components.attoseconds / 1_000_000_000_000_000) }
+            let tCold = clock.measure { _ = RoundPlanner.plan(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today) }
+            let tPlan = clock.measure { _ = RoundPlanner.plan(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today) }
+            let tStats = clock.measure {
+                let s = RoundStats(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today)
+                _ = s.thisWeek; _ = s.weeks; _ = s.skipRate; _ = s.averagePerHouseByDay(taxYear: s.currentTaxYear)
+                _ = s.housesPerWorkedDay(taxYear: s.currentTaxYear); _ = s.risesDue()
+            }
+            let tOwed = clock.measure { _ = RoundMetrics.moneyOwed(everyone); _ = everyone.map { VisitLogger.unpaidVisits(for: $0) } }
+            lines.append("PERF plan first \(ms(tCold))ms then \(ms(tPlan))ms, stats \(ms(tStats))ms, owed \(ms(tOwed))ms (\(everyone.count) customers)")
+        }
+        // Ideal figures: weekly target x round length, grossed up for the skip rate.
+        let idealStats = stats()
+        let weeklyTarget = idealStats.config.usualTargets.reduce(Decimal(0), +)
+        let ideal = Ideal(stats: idealStats, weeks: 5, listAverage: 20, perHouse: 20, housesPerDay: 20)
+        if weeklyTarget > 0, let value = ideal.roundValue {
+            let expected = NSDecimalNumber(decimal: weeklyTarget).doubleValue * 5 / (1 - idealStats.skipRate)
+            check("ideal round value = weekly target x 5 weeks / (1 - skip rate)", abs(NSDecimalNumber(decimal: value).doubleValue - expected) < 0.01, "\(value) vs \(expected)")
+            let days = Decimal(idealStats.config.usualTargets.filter { $0 > 0 }.count)
+            check("ideal £ per house and houses per day come from the daily target", ideal.perHouse == weeklyTarget / days / 20 && ideal.housesPerDay == weeklyTarget / days / 20)
+            check("ideal customers = ideal round value / average price, rounded up", ideal.customers == Int((expected / 20).rounded(.up)) || ideal.customers == Int((expected / 20).rounded(.up)) + 1)
+        } else {
+            check("ideal figures need a usual week with targets", false)
+        }
+
         if let perHouse = stats().averagePerHouseByDay(taxYear: stats().currentTaxYear) {
             lines.append("AVGPERHOUSE £\(perHouse.average) over \(perHouse.days) days")
         }

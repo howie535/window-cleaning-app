@@ -90,7 +90,14 @@ final class AppSettings {
     var priceRisePercent: Double = 0.10
     var priceRiseDelayMonths: Int = 12
     var priceRiseDueAfterMonths: Int = 24
+    /// How many weeks a full round should take, for the "ideal" figures on Stats (nil = 5).
+    var targetRoundWeeksValue: Int?
     var recordsStart: Date = RoundCalendar.date(year: TaxYear.startYear(containing: Date()), month: 4, day: 6)
 
     init() {}
+
+    var targetRoundWeeks: Int {
+        get { targetRoundWeeksValue ?? 5 }
+        set { targetRoundWeeksValue = newValue }
+    }
 }

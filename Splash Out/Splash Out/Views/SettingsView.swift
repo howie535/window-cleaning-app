@@ -429,11 +429,16 @@ private struct RoundSettingsSections: View {
             Text("The usual week sets each week's target. A day outside it counts as worked once enough houses are cleaned, and adds the extra-day crew's target.")
         }
 
-        Section("Counting and Next Up") {
+        Section {
             Stepper("Houses for a worked day: \(settings.minHousesForWorkingDay)", value: $settings.minHousesForWorkingDay, in: 1...30)
             Stepper("Overbook allowance: \(percentBinding(\.overbook).wrappedValue)%", value: percentBinding(\.overbook), in: 0...50, step: 5)
             Stepper("Due again after: \(settings.nextUpHideWeeks) weeks", value: $settings.nextUpHideWeeks, in: 1...12)
+            Stepper("Target round length: \(settings.targetRoundWeeks) weeks", value: $settings.targetRoundWeeks, in: 2...12)
             DatePicker("Records start", selection: $settings.recordsStart, displayedComponents: .date)
+        } header: {
+            Text("Counting and Next Up")
+        } footer: {
+            Text("Target round length is how long a full round should take. Stats uses it for the \"ideal\" figures: how big the round, and how quick the days, need to be to hit the weekly target in that time.")
         }
 
         Section {

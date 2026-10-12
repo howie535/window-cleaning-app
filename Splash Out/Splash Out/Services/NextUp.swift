@@ -73,9 +73,10 @@ enum NextUp {
 
     // MARK: Helpers
 
-    /// Whole days from `from` to `to` (both start-of-day).
+    /// Whole days from `from` to `to` (both start-of-day). Rounding the hours copes with the 23- and 25-hour days
+    /// when the clocks change, and is far quicker than asking the calendar, which matters with thousands of visits.
     private static func days(from: Date, to: Date, calendar: Calendar) -> Int {
-        calendar.dateComponents([.day], from: from, to: to).day ?? 0
+        Int((to.timeIntervalSince(from) / 86_400).rounded())
     }
 
     /// The customer most recently dealt with (latest visit; on a tie, the one furthest along the round).
