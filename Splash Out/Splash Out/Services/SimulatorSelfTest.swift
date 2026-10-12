@@ -284,13 +284,20 @@ enum SimulatorSelfTest {
         // Ideal figures: weekly target x round length, grossed up for the skip rate.
         let idealStats = stats()
         let weeklyTarget = idealStats.config.usualTargets.reduce(Decimal(0), +)
-        let ideal = Ideal(stats: idealStats, weeks: 5, listAverage: 20, housesPerDay: 20)
-        if weeklyTarget > 0, let value = ideal.roundValue {
-            let expected = NSDecimalNumber(decimal: weeklyTarget).doubleValue * 5 / (1 - idealStats.skipRate)
+        let busy = Ideal(stats: idealStats, weeks: 5, customersPerRound: 1000, housesPerDay: 20)
+        let quiet = Ideal(stats: idealStats, weeks: 5, customersPerRound: 50, housesPerDay: 20)
+        if weeklyTarget > 0, let value = busy.roundValue {
+            let keep = 1 - idealStats.skipRate
+            let expected = NSDecimalNumber(decimal: weeklyTarget).doubleValue * 5 / keep
             check("ideal round value = weekly target x 5 weeks / (1 - skip rate)", abs(NSDecimalNumber(decimal: value).doubleValue - expected) < 0.01, "\(value) vs \(expected)")
-            let days = Decimal(idealStats.config.usualTargets.filter { $0 > 0 }.count)
-            check("ideal £ per house = daily target / houses per workday", ideal.perHouse == weeklyTarget / days / 20)
-            check("ideal customers = ideal round value / average price, rounded up", ideal.customers == Int((expected / 20).rounded(.up)) || ideal.customers == Int((expected / 20).rounded(.up)) + 1)
+            let days = Double(idealStats.config.usualTargets.filter { $0 > 0 }.count)
+            let target = NSDecimalNumber(decimal: weeklyTarget).doubleValue
+            func near(_ a: Decimal?, _ b: Double) -> Bool { a.map { abs(NSDecimalNumber(decimal: $0).doubleValue - b) < 0.01 } ?? false }
+            check("plenty of customers: ideal price = weekly target / (houses a day x days)", !busy.limitedByCustomers && near(busy.perHouse, target / (20 * days)), "\(String(describing: busy.perHouse))")
+            check("too few customers: ideal price = weekly target / houses the round supplies a week", quiet.limitedByCustomers && near(quiet.perHouse, target / (50 * keep / 5)), "\(String(describing: quiet.perHouse))")
+            check("ideal customers = what the crew gets round in 5 weeks", busy.customers == Int((20 * days * 5 / keep).rounded(.up)) || busy.customers == Int((20 * days * 5 / keep).rounded(.up)) + 1, "\(String(describing: busy.customers))")
+            let product = Double(busy.customers ?? 0) * NSDecimalNumber(decimal: busy.perHouse ?? 0).doubleValue * keep / 5
+            check("ideal customers x ideal price over the round comes back to the weekly target", abs(product - target) < target * 0.01, "\(product)")
         } else {
             check("ideal figures need a usual week with targets", false)
         }
