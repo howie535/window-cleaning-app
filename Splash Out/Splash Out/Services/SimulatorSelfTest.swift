@@ -281,26 +281,31 @@ enum SimulatorSelfTest {
             let tOwed = clock.measure { _ = RoundMetrics.moneyOwed(everyone); _ = everyone.map { VisitLogger.unpaidVisits(for: $0) } }
             lines.append("PERF plan first \(ms(tCold))ms then \(ms(tPlan))ms, stats \(ms(tStats))ms, owed \(ms(tOwed))ms (\(everyone.count) customers)")
         }
-        // Ideal figures: weekly target x round length, grossed up for the skip rate.
-        let idealStats = stats()
-        let weeklyTarget = idealStats.config.usualTargets.reduce(Decimal(0), +)
-        let busy = Ideal(stats: idealStats, weeks: 5, customersPerRound: 1000, housesPerDay: 20)
-        let quiet = Ideal(stats: idealStats, weeks: 5, customersPerRound: 50, housesPerDay: 20)
-        if weeklyTarget > 0, let value = busy.roundValue {
-            let keep = 1 - idealStats.skipRate
-            let expected = NSDecimalNumber(decimal: weeklyTarget).doubleValue * 5 / keep
-            check("ideal round value = weekly target x 5 weeks / (1 - skip rate)", abs(NSDecimalNumber(decimal: value).doubleValue - expected) < 0.01, "\(value) vs \(expected)")
-            let days = Double(idealStats.config.usualTargets.filter { $0 > 0 }.count)
-            let target = NSDecimalNumber(decimal: weeklyTarget).doubleValue
-            func near(_ a: Decimal?, _ b: Double) -> Bool { a.map { abs(NSDecimalNumber(decimal: $0).doubleValue - b) < 0.01 } ?? false }
-            check("plenty of customers: ideal price = weekly target / (houses a day x days)", !busy.limitedByCustomers && near(busy.perHouse, target / (20 * days)), "\(String(describing: busy.perHouse))")
-            check("too few customers: ideal price = weekly target / houses the round supplies a week", quiet.limitedByCustomers && near(quiet.perHouse, target / (50 * keep / 5)), "\(String(describing: quiet.perHouse))")
-            check("ideal customers = what the crew gets round in 5 weeks", busy.customers == Int((20 * days * 5 / keep).rounded(.up)) || busy.customers == Int((20 * days * 5 / keep).rounded(.up)) + 1, "\(String(describing: busy.customers))")
-            let product = Double(busy.customers ?? 0) * NSDecimalNumber(decimal: busy.perHouse ?? 0).doubleValue * keep / 5
-            check("ideal customers x ideal price over the round comes back to the weekly target", abs(product - target) < target * 0.01, "\(product)")
+        // Ideal figures, with inputs worked out by hand: 20 houses a workday, 3 usual days (2.5 actually worked),
+        // £16 a house, 4% skips, 400 people = 390 cleans a round, £1,200 a week, 5-week round.
+        let rate = RoundStats.WorkRate(housesPerDay: 20, workedDays: 50, daysPerWeek: 2.5, perHouse: 16, skipRate: 0.04, weeks: 20)
+        let busy = Ideal(weeklyTarget: 1200, usualDays: 3, weeks: 5, rate: rate, people: 400, cleansPerRound: 390, periodLabel: "test")
+        func near(_ a: Decimal?, _ b: Double, _ within: Double = 0.01) -> Bool { a.map { abs(NSDecimalNumber(decimal: $0).doubleValue - b) < within } ?? false }
+        check("ideal round value = £1,200 x 5 / 96%", near(busy.roundValue, 6250))
+        if let p = busy.planned, let w = busy.actual {
+            check("planned: 60 houses a week, £20 a house needed, £960 a week now", near(p.capacity, 60) && near(p.perHouse, 20) && near(p.incomeNow, 960) && !p.limitedByCustomers)
+            check("planned: 312.5 cleans a round = 321 people with the same every-other mix", near(p.cleansNeeded, 312.5) && p.peopleNeeded == 321, "\(p.peopleNeeded)")
+            check("planned: the round takes 6.24 weeks now", near(p.roundWeeksNow, 6.24))
+            check("as worked: 50 houses a week, £24 a house needed, £800 a week now", near(w.capacity, 50) && near(w.perHouse, 24) && near(w.incomeNow, 800))
         } else {
-            check("ideal figures need a usual week with targets", false)
+            check("ideal scenarios worked out", false)
         }
+        let quiet = Ideal(weeklyTarget: 1200, usualDays: 3, weeks: 5, rate: rate, people: 100, cleansPerRound: 100, periodLabel: "test")
+        check("too few customers: price uses the 19.2 houses a week the round supplies", quiet.planned.map { $0.limitedByCustomers && near($0.perHouse, 62.5) } ?? false)
+
+        if let real = stats().workRate() {
+            let s = stats()
+            let houses = s.houses(from: s.analysisStart, through: today)
+            let work = s.work(from: s.analysisStart, through: today)
+            check("work rate £ per house = total £ / total houses", houses > 0 && near(real.perHouse, NSDecimalNumber(decimal: work / Decimal(houses)).doubleValue))
+            lines.append("WORKRATE \(s.analysisLabel): \(real.housesPerDay) a day, \(real.daysPerWeek) days a week, £\(real.perHouse) a house, skips \(real.skipRate)")
+        }
+        if let gap = stats().typicalGapWeeks() { lines.append("GAP typical \(gap.weeks) weeks over \(gap.gaps) gaps") }
 
         if let perHouse = stats().averagePerHouseByDay(taxYear: stats().currentTaxYear) {
             lines.append("AVGPERHOUSE £\(perHouse.average) over \(perHouse.days) days")

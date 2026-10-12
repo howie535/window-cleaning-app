@@ -188,6 +188,81 @@ struct RoundStats {
         return (sum / Decimal(days), days)
     }
 
+    // MARK: Work rate (last 12 months)
+
+    /// The period the work-rate figures use: the last 12 months, or since the first clean while there's less history.
+    var analysisStart: Date {
+        let yearAgo = calendar.date(byAdding: .day, value: -364, to: today)!
+        let first = dayTotals.keys.filter { $0 <= today }.min() ?? today
+        return max(yearAgo, first)
+    }
+
+    /// "last 12 months", or "since 6 Apr" while there's less than a year of history.
+    var analysisLabel: String {
+        let yearAgo = calendar.date(byAdding: .day, value: -364, to: today)!
+        return analysisStart <= yearAgo ? "last 12 months" : "since \(RoundCalendar.short(analysisStart))"
+    }
+
+    /// How the round has actually been worked over the analysis period.
+    struct WorkRate: Equatable {
+        /// Houses per worked day (days with at least the minimum houses).
+        var housesPerDay: Decimal
+        var workedDays: Int
+        /// Worked days per week, holidays and weather included.
+        var daysPerWeek: Decimal
+        /// Total £ ÷ total houses (each house counts once, unlike the spreadsheet's average of days).
+        var perHouse: Decimal
+        /// Skipped share of visits (not-due visits and cancelled customers left out).
+        var skipRate: Double
+        var weeks: Decimal
+    }
+
+    func workRate() -> WorkRate? {
+        let start = analysisStart
+        var houses = 0, workedDays = 0, allHouses = 0
+        var work: Decimal = 0
+        for (date, totals) in dayTotals where date >= start && date <= today {
+            allHouses += totals.houses
+            work += totals.work
+            if totals.houses >= settings.minHousesForWorkingDay {
+                houses += totals.houses
+                workedDays += 1
+            }
+        }
+        guard workedDays > 0, allHouses > 0 else { return nil }
+        let days = (calendar.dateComponents([.day], from: start, to: today).day ?? 0) + 1
+        let weeks = Decimal(max(days, 7)) / 7
+        var skipped = 0, visits = 0
+        for customer in customers where customer.status != .cancelled {
+            for visit in customer.allVisits where visit.kind != .notDue && visit.date >= start && visit.date <= today {
+                visits += 1
+                if visit.kind == .skipped { skipped += 1 }
+            }
+        }
+        return WorkRate(housesPerDay: Decimal(houses) / Decimal(workedDays), workedDays: workedDays,
+                        daysPerWeek: Decimal(workedDays) / weeks, perHouse: work / Decimal(allHouses),
+                        skipRate: visits == 0 ? 0 : Double(skipped) / Double(visits), weeks: weeks)
+    }
+
+    /// The typical (median) gap between one clean and the next for regular customers on the round, over the
+    /// analysis period. Every-other customers are left out, and so are gaps under two weeks (re-cleans).
+    func typicalGapWeeks() -> (weeks: Decimal, gaps: Int)? {
+        let start = analysisStart
+        var gaps: [Int] = []
+        for customer in customers where (customer.status == .active || customer.status == .leaving) && !customer.everyOther {
+            let dates = customer.allVisits.filter { $0.kind == .cleaned }.map(\.date).sorted()
+            for (a, b) in zip(dates, dates.dropFirst()) where b >= start && b <= today {
+                let gap = Int((b.timeIntervalSince(a) / 86_400).rounded())
+                if gap >= 14 { gaps.append(gap) }
+            }
+        }
+        guard gaps.count >= 10 else { return nil }
+        gaps.sort()
+        let middle = gaps.count / 2
+        let median = gaps.count % 2 == 1 ? Decimal(gaps[middle]) : Decimal(gaps[middle - 1] + gaps[middle]) / 2
+        return (median / 7, gaps.count)
+    }
+
     // MARK: Crew averages (4.13)
 
     struct CrewAverage: Equatable {

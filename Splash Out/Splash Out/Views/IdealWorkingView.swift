@@ -1,51 +1,40 @@
 import SwiftUI
 
-/// How the Ideal figures on Stats are worked out, with the actual numbers.
+/// How the Ideal figures on Stats are worked out, with the actual numbers: as planned, and as actually worked.
 struct IdealWorkingView: View {
     let ideal: Ideal
 
     private func n(_ value: Decimal) -> String { value.formatted(.number.precision(.fractionLength(0...2))) }
     private func money(_ value: Decimal) -> String { value.formatted(.currency(code: "GBP").precision(.fractionLength(2))) }
-    private var keepText: String { ideal.keep.formatted(.percent.precision(.fractionLength(1))) }
+    private func percent(_ value: Decimal) -> String {
+        (NSDecimalNumber(decimal: value).doubleValue).formatted(.percent.precision(.fractionLength(1)))
+    }
+    private var keepText: String { percent(ideal.keep) }
 
     var body: some View {
         List {
-            Section("What goes in") {
-                LabeledContent("Weekly target", value: ideal.weeklyTarget.pounds)
-                LabeledContent("Working days", value: "\(ideal.workingDays) a week")
-                LabeledContent("Houses per workday", value: ideal.housesPerDay.map(n) ?? "–")
-                LabeledContent("Customers on the round", value: n(ideal.customersPerRound))
-                LabeledContent("Not skipped", value: keepText)
-                LabeledContent("Round length", value: "\(ideal.weeks) weeks")
-            }
-
-            if let capacity = ideal.capacity, let supply = ideal.supply, let rate = ideal.housesPerDay {
-                let used = min(capacity, supply)
+            if let rate = ideal.rate {
                 Section {
-                    step("Crew can do", "\(n(rate)) × \(ideal.workingDays) days", "\(n(capacity)) a week")
-                    step("Round supplies", "\(n(ideal.customersPerRound)) × \(keepText) ÷ \(ideal.weeks) weeks", "\(n(supply)) a week")
-                    step("Houses a week", "the lower of the two", n(used))
-                    if let price = ideal.perHouse {
-                        step("Ideal per house", "\(ideal.weeklyTarget.pounds) ÷ \(n(used))", money(price)).bold()
-                    }
+                    row("Weekly target", ideal.weeklyTarget.pounds)
+                    row("Houses per workday", n(rate.housesPerDay))
+                    row("Average per house", money(rate.perHouse), "total £ ÷ houses")
+                    row("Not skipped", keepText)
+                    row("Customers", "\(ideal.people)", "\(n(ideal.cleansPerRound)) cleans a round, every-other at half")
+                    row("Round length", "\(ideal.weeks) weeks", "Settings")
                 } header: {
-                    Text("Average per house")
-                } footer: {
-                    Text(ideal.limitedByCustomers ? "Too few customers to keep the crew busy, so customers set the price." : "Your work rate sets the price.")
-                }
-
-                Section("Customers") {
-                    step("Ideal customers", "\(n(capacity)) × \(ideal.weeks) ÷ \(keepText)", ideal.customers.map { "\($0)" } ?? "–").bold()
+                    Text("Your figures, \(ideal.periodLabel)")
                 }
             }
-
+            if let planned = ideal.planned {
+                scenario(planned, title: "Planned: \(ideal.usualDays) days a week", note: "These are the figures on the cards.")
+            }
+            if let actual = ideal.actual, let rate = ideal.rate {
+                scenario(actual, title: "As worked: \(n(actual.daysPerWeek)) days a week",
+                         note: "\(rate.workedDays) days worked in \(n(rate.weeks)) weeks, weather and holidays included.")
+            }
             if let value = ideal.roundValue {
-                Section {
-                    step("Ideal round value", "\(ideal.weeklyTarget.pounds) × \(ideal.weeks) ÷ \(keepText)", money(value)).bold()
-                } header: {
-                    Text("Round value")
-                } footer: {
-                    Text("Change the round length in Settings.")
+                Section("Round value") {
+                    step("Ideal round value", "\(ideal.weeklyTarget.pounds) × \(ideal.weeks) ÷ \(keepText)", money(value))
                 }
             }
         }
@@ -53,12 +42,35 @@ struct IdealWorkingView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func step(_ title: String, _ sum: String, _ result: String) -> some View {
+    @ViewBuilder
+    private func scenario(_ s: Ideal.Scenario, title: String, note: String) -> some View {
+        let rate = ideal.rate
+        Section {
+            step("Houses a week", "\(n(rate?.housesPerDay ?? 0)) × \(n(s.daysPerWeek)) days", n(s.capacity))
+            step("Income now", "\(n(s.housesPerWeek)) × \(money(rate?.perHouse ?? 0))", s.incomeNow.pounds)
+            step("Ideal per house", "\(ideal.weeklyTarget.pounds) ÷ \(n(s.housesPerWeek))", money(s.perHouse)).bold()
+            step("Round takes now", "\(n(ideal.cleansPerRound)) × \(keepText) ÷ \(n(s.capacity))", "\(n(s.roundWeeksNow)) weeks")
+            step("Ideal cleans a round", "\(n(s.capacity)) × \(ideal.weeks) ÷ \(keepText)", n(s.cleansNeeded))
+            step("Ideal customers", "same mix of every-other", "\(s.peopleNeeded)").bold()
+        } header: {
+            Text(title)
+        } footer: {
+            Text(note + (s.limitedByCustomers
+                ? " Too few customers to keep the crew busy, so the price uses the \(n(s.supply)) houses a week the round supplies."
+                : ""))
+        }
+    }
+
+    private func row(_ title: String, _ value: String, _ note: String? = nil) -> some View {
         LabeledContent {
-            Text(result).monospacedDigit()
+            Text(value).monospacedDigit()
         } label: {
             Text(title)
-            Text(sum).monospacedDigit()
+            if let note { Text(note) }
         }
+    }
+
+    private func step(_ title: String, _ sum: String, _ result: String) -> some View {
+        row(title, result, sum)
     }
 }

@@ -71,7 +71,7 @@ struct StatDetailView: View {
             }
             if !shown.isEmpty {
                 Section("In this range") {
-                    ForEach(summary(shown), id: \.0) { row in
+                    ForEach(summary(shown, dayTotals: stats.dayTotals), id: \.0) { row in
                         LabeledContent(row.0, value: row.1)
                     }
                 }
@@ -176,7 +176,7 @@ struct StatDetailView: View {
         Decimal(value).formatted(.currency(code: "GBP").precision(.fractionLength(2)))
     }
 
-    private func summary(_ points: [Point]) -> [(String, String)] {
+    private func summary(_ points: [Point], dayTotals: [Date: WeekMetrics.DayTotals]) -> [(String, String)] {
         let values = points.map(\.value)
         let average = values.reduce(0, +) / Double(values.count)
         switch metric {
@@ -189,7 +189,12 @@ struct StatDetailView: View {
         case .monthlyWork:
             return [("Months", "\(points.count)"), ("Average month", Decimal(average).pounds), ("Total", Decimal(values.reduce(0, +)).pounds)]
         case .perHouse:
+            let shownDays = Set(points.map(\.date))
+            let totals = dayTotals.filter { shownDays.contains($0.key) }
+            let houses = totals.values.reduce(0) { $0 + $1.houses }
+            let work = totals.values.reduce(Decimal(0)) { $0 + $1.work }
             return [("Worked days", "\(points.count)"), ("Average of the days", money(average)),
+                    ("Per house overall", houses > 0 ? (work / Decimal(houses)).formatted(.currency(code: "GBP").precision(.fractionLength(2))) : "–"),
                     ("Latest 28-day average", money(points.last?.second ?? average))]
         case .housesPerDay:
             return [("Worked days", "\(points.count)"), ("Average", average.formatted(.number.precision(.fractionLength(1)))),
