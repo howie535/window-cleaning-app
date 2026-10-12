@@ -175,6 +175,19 @@ struct RoundStats {
         return (Decimal(houses) / Decimal(days), days)
     }
 
+    /// Average per house the spreadsheet's way (Weekly Data AL2): each worked day's £ ÷ houses, averaged over the
+    /// days in the tax year with any cleans. Every day counts the same, however many houses were done.
+    func averagePerHouseByDay(taxYear: Int) -> (average: Decimal, days: Int)? {
+        let range = TaxYear.range(startYear: taxYear)
+        var sum: Decimal = 0, days = 0
+        for (date, totals) in dayTotals where range.contains(date) && date <= today && totals.houses > 0 {
+            sum += totals.work / Decimal(totals.houses)
+            days += 1
+        }
+        guard days > 0 else { return nil }
+        return (sum / Decimal(days), days)
+    }
+
     // MARK: Crew averages (4.13)
 
     struct CrewAverage: Equatable {

@@ -16,6 +16,7 @@ struct MoreView: View {
                     NavigationLink { ChecksView() } label: { Label("Checks", systemImage: "checkmark.shield") }
                 }
                 Section("Records") {
+                    NavigationLink { HistoryView() } label: { Label("History", systemImage: "clock.arrow.circlepath") }
                     NavigationLink { DiaryView() } label: { Label("Diary", systemImage: "book") }
                     NavigationLink { TipsView() } label: { Label("Tips", systemImage: "heart") }
                     NavigationLink { ExportsView() } label: { Label("Exports", systemImage: "square.and.arrow.up") }

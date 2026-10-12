@@ -50,6 +50,11 @@ struct SettingsView: View {
                     LabeledContent("Visits", value: "\(customers.reduce(0) { $0 + $1.allVisits.count })")
                 }
 
+                Section("About") {
+                    LabeledContent("Version", value: ChangeLog.currentVersion)
+                    NavigationLink("What's new") { WhatsNewView() }
+                }
+
                 if let settings = settings.first {
                     RoundSettingsSections(settings: settings, crews: crews)
                 }

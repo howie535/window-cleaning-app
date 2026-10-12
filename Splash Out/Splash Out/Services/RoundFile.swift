@@ -58,6 +58,8 @@ struct RoundFile: Codable {
         var payMethod: String?
         var notes: [String]
         var visits: [VisitRecord]
+        var altPrice: Double? = nil
+        var altPriceLabel: String? = nil
     }
 
     struct VisitRecord: Codable {

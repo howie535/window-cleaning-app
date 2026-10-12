@@ -54,5 +54,4 @@ The iPad is where the round spreadsheet is used today, in landscape.
 
 ## 4. Known loose ends
 
-- Record payment: a brief red "more than is owed" message can flash while the sheet closes after saving a partial payment. Harmless, but untidy.
 - Customers priced at £0 aren't flagged anywhere; look through the list for them before the switchover.

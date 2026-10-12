@@ -35,16 +35,30 @@ struct VisitQuickActions: View {
     @Environment(UndoCenter.self) private var undoCenter
 
     @State private var isConfirmingSkip = false
+    /// Two-price customers: which button asked for the price (true = paid).
+    @State private var choosingPriceFor: Bool?
 
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
     var body: some View {
         Group {
             row("Cleaned & paid", systemImage: "checkmark.circle.fill", tint: .green) {
-                run(.cleanedPaid)
+                if customer.secondPrice != nil { choosingPriceFor = true } else { run(.cleanedPaid) }
             }
             row("Cleaned, not paid", systemImage: "clock.badge.exclamationmark", tint: .orange) {
-                run(.cleanedNotPaid)
+                if customer.secondPrice != nil { choosingPriceFor = false } else { run(.cleanedNotPaid) }
+            }
+            .confirmationDialog("Which price?", isPresented: Binding(get: { choosingPriceFor != nil }, set: { if !$0 { choosingPriceFor = nil } }), titleVisibility: .visible) {
+                if let paid = choosingPriceFor, let second = customer.secondPrice {
+                    // The one not used last time comes first.
+                    let options: [(String, Decimal)] = [("Usual", customer.price), (customer.secondPriceName, second)]
+                    ForEach(customer.nextListPrice == second ? options.reversed() : options, id: \.0) { option in
+                        Button("\(option.0) \(option.1.pounds)") { run(.cleanedAt(price: option.1, paid: paid)) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("\(customer.name) has two prices. The one not used last time is first.")
             }
             row("Cleaned + extra...", systemImage: "plus.circle", tint: .blue) {
                 sheet = .extra

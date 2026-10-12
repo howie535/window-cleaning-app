@@ -67,7 +67,9 @@ enum ExportService {
                 contact: customer.contactRaw,
                 payMethod: customer.payMethodRaw,
                 notes: customer.notes,
-                visits: visits
+                visits: visits,
+                altPrice: customer.altPrice.map(Money.double),
+                altPriceLabel: customer.altPriceLabel
             )
         }
 

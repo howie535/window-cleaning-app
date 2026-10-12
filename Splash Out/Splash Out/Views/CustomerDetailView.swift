@@ -10,6 +10,11 @@ struct CustomerDetailView: View {
     @State private var logSheet: VisitSheet?
     @State private var isConfirmingCancel = false
     @State private var isShowingNewOccupant = false
+    @State private var isConfirmingDelete = false
+    @State private var editingVisit: Visit?
+    /// Set while deleting, so nothing reads the customer once it's gone.
+    @State private var isDeleted = false
+    @Environment(\.dismiss) private var dismiss
 
     private var sortedLogs: [Visit] {
         customer.allVisits.sorted { $0.date > $1.date }
@@ -30,6 +35,40 @@ struct CustomerDetailView: View {
     }
 
     var body: some View {
+        if isDeleted {
+            ContentUnavailableView("Customer deleted", systemImage: "trash")
+        } else {
+            details
+        }
+    }
+
+    /// What deleting would take out of the stats.
+    private var deleteSummary: String {
+        let cleans = customer.allVisits.filter { $0.kind == .cleaned }
+        let work = cleans.reduce(Decimal(0)) { $0 + $1.charged }
+        let owedText = owed.cleans > 0 ? " They owe \(owed.amount.pounds), which will no longer show on Money Owed." : ""
+        return "This removes \(customer.name) and all \(customer.allVisits.count) visits (\(cleans.count) cleans, \(work.pounds) of work) from every total, including the tax year.\(owedText) It can't be undone here, but a backup is saved first. To keep their history, cancel them instead."
+    }
+
+    private func deleteCustomer() {
+        // A one-off backup just before, kept apart from the daily copies.
+        if let data = try? ExportService.data(from: modelContext) {
+            let directory = ExportService.backupDirectory
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).timeSeparator(.omitted))
+            try? data.write(to: directory.appendingPathComponent("splash-out-before-delete-\(stamp).json"), options: .atomic)
+        }
+        isDeleted = true
+        let target = customer
+        dismiss()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            modelContext.delete(target)
+            try? modelContext.save()
+        }
+    }
+
+    private var details: some View {
         List {
             Section {
                 LabeledContent("Address", value: customer.address)
@@ -88,6 +127,9 @@ struct CustomerDetailView: View {
 
             Section("Log") {
                 VisitQuickActions(customer: customer, sheet: $logSheet)
+                if owed.cleans == 0 && customer.lastCleanDate != nil {
+                    Button("Payment in advance...") { isShowingPayment = true }
+                }
             }
 
             Section("Contact") {
@@ -114,22 +156,31 @@ struct CustomerDetailView: View {
                 } else {
                     Button("Cancel this customer...", role: .destructive) { isConfirmingCancel = true }
                 }
+                Button("Delete customer completely...", role: .destructive) { isConfirmingDelete = true }
             } footer: {
-                Text(customer.status == .cancelled
+                Text((customer.status == .cancelled
                      ? "Cancelled customers stay in the list and keep their history and anything they owe. Find them with Status > Cancelled on the Customers screen. If a new person has moved into the house, \"Someone new has moved in\" starts a fresh customer at the same address, so this customer's history stays separate and your stats stay right."
                      : "Use this when a customer stops using you. Their history is kept, and so is anything they owe.")
+                     + " Delete is only for mistakes such as a duplicate: it takes their cleans out of the stats.")
             }
 
-            Section("History") {
+            Section {
                 if sortedLogs.isEmpty {
                     Text("No visits yet.")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedLogs) { log in
-                        CleanLogRow(log: log)
+                        Button { editingVisit = log } label: {
+                            CleanLogRow(log: log).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                     .onDelete(perform: deleteLogs)
                 }
+            } header: {
+                Text("History")
+            } footer: {
+                if !sortedLogs.isEmpty { Text("Tap a visit to correct it or delete it.") }
             }
         }
         .navigationTitle(customer.name)
@@ -152,6 +203,15 @@ struct CustomerDetailView: View {
             } else {
                 Text("They'll come off the round. Their history is kept.")
             }
+        }
+        .alert("Delete \(customer.name) completely?", isPresented: $isConfirmingDelete) {
+            Button("Delete for good", role: .destructive, action: deleteCustomer)
+            Button("Keep them", role: .cancel) {}
+        } message: {
+            Text(deleteSummary)
+        }
+        .sheet(item: $editingVisit) { visit in
+            EditVisitView(visit: visit)
         }
         .sheet(isPresented: $isShowingEdit) {
             AddEditCustomerView(customer: customer)

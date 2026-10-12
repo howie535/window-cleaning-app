@@ -16,6 +16,8 @@ struct AddEditCustomerView: View {
     @State private var address: String = ""
     @State private var phone: String = ""
     @State private var priceText: String = ""
+    @State private var altPriceText: String = ""
+    @State private var altPriceLabel: String = ""
     @State private var round: String = ""
     @State private var area: String = ""
     @State private var notesText: String = ""
@@ -25,6 +27,8 @@ struct AddEditCustomerView: View {
     @State private var contact: ContactMethod = .whatsapp
     @State private var payMethod: PayMethod?
     @State private var placeAfter: Customer?
+    /// Set once a place has been picked by hand; until then a new customer goes after the last one in their round and area.
+    @State private var placeChosen = false
     @State private var isShowingPlace = false
     @State private var isShowingContactPicker = false
     @State private var saveToContacts = true
@@ -36,7 +40,31 @@ struct AddEditCustomerView: View {
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && Decimal(string: priceText) != nil
+            && (altPriceText.trimmingCharacters(in: .whitespaces).isEmpty || Decimal(string: altPriceText) != nil)
     }
+
+    private var roundOptions: [String] {
+        Array(Set(allCustomers.map(\.round).filter { !$0.isEmpty })).sorted()
+    }
+
+    /// Areas in the chosen round (all areas if no round is chosen).
+    private var areaOptions: [String] {
+        let pool = round.isEmpty ? allCustomers : allCustomers.filter { $0.round == round }
+        return Array(Set(pool.map(\.area).filter { !$0.isEmpty })).sorted()
+    }
+
+    /// Where a new customer goes unless placed by hand: after the last customer in the same round and area
+    /// (or the same round), otherwise at the end.
+    private var suggestedPlace: Customer? {
+        let others = allCustomers.filter { $0.id != replacing?.id }
+        if !round.isEmpty {
+            if !area.isEmpty, let last = others.last(where: { $0.round == round && $0.area == area }) { return last }
+            if let last = others.last(where: { $0.round == round }) { return last }
+        }
+        return nil
+    }
+
+    private var effectivePlace: Customer? { placeChosen ? placeAfter : (replacing ?? suggestedPlace) }
 
     var body: some View {
         NavigationStack {
@@ -59,12 +87,8 @@ struct AddEditCustomerView: View {
                         TextField("07700 900123", text: $phone)
                             .keyboardType(.phonePad)
                     }
-                    LabeledField(label: "Round") {
-                        TextField("e.g. Rhyl", text: $round)
-                    }
-                    LabeledField(label: "Area") {
-                        TextField("e.g. Kinmel Bay", text: $area)
-                    }
+                    PickOrTypeField(label: "Round", value: $round, options: roundOptions, placeholder: "e.g. Rhyl")
+                    PickOrTypeField(label: "Area", value: $area, options: areaOptions, placeholder: "e.g. Kinmel Bay")
                     if !isEditing {
                         Toggle("Also save to Contacts", isOn: $saveToContacts)
                     }
@@ -74,6 +98,19 @@ struct AddEditCustomerView: View {
                         TextField("0.00", text: $priceText)
                             .keyboardType(.decimalPad)
                     }
+                }
+                Section {
+                    LabeledField(label: "Second price (optional)") {
+                        TextField("e.g. 10.00", text: $altPriceText)
+                            .keyboardType(.decimalPad)
+                    }
+                    if !altPriceText.trimmingCharacters(in: .whitespaces).isEmpty {
+                        LabeledField(label: "What's the second price for?") {
+                            TextField("e.g. Front only", text: $altPriceLabel)
+                        }
+                    }
+                } footer: {
+                    Text("For customers who alternate, e.g. front only one time and full the next. Logging a clean then asks which, with the one not used last time first.")
                 }
                 Section("Round") {
                     Picker("Status", selection: $status) {
@@ -99,7 +136,7 @@ struct AddEditCustomerView: View {
                             HStack {
                                 Text("Place in round").foregroundStyle(.primary)
                                 Spacer()
-                                Text(placeAfter.map { "After \($0.name)" } ?? "At the end")
+                                Text(effectivePlace.map { "After \($0.name)" } ?? "At the end")
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -121,6 +158,7 @@ struct AddEditCustomerView: View {
                         .disabled(!isValid)
                 }
             }
+            .keyboardDoneButton()
             .onAppear(perform: populateFieldsIfEditing)
             .alert("They still owe money", isPresented: $isConfirmingOwedCancel) {
                 Button("Cancel anyway", role: .destructive) { cancelAnyway = true; save() }
@@ -137,7 +175,7 @@ struct AddEditCustomerView: View {
                 Text(contactsMessage ?? "")
             }
             .sheet(isPresented: $isShowingPlace) {
-                PlaceInRoundView(customers: allCustomers, placeAfter: $placeAfter)
+                PlaceInRoundView(customers: allCustomers, placeAfter: $placeAfter) { placeChosen = true }
             }
             .sheet(isPresented: $isShowingContactPicker) {
                 ContactPicker { contact in
@@ -163,6 +201,9 @@ struct AddEditCustomerView: View {
             payMethod = old.payMethod
             status = .active
             placeAfter = old
+            placeChosen = true
+            if let alt = old.altPrice { altPriceText = NSDecimalNumber(decimal: alt).stringValue }
+            altPriceLabel = old.altPriceLabel ?? ""
             return
         }
         guard let customer else { return }
@@ -170,6 +211,8 @@ struct AddEditCustomerView: View {
         address = customer.address
         phone = customer.phone
         priceText = NSDecimalNumber(decimal: customer.price).stringValue
+        if let alt = customer.altPrice { altPriceText = NSDecimalNumber(decimal: alt).stringValue }
+        altPriceLabel = customer.altPriceLabel ?? ""
         round = customer.round
         area = customer.area
         notesText = customer.notesText
@@ -187,6 +230,9 @@ struct AddEditCustomerView: View {
             return
         }
         let price = Decimal(string: priceText) ?? 0
+        let altText = altPriceText.trimmingCharacters(in: .whitespaces)
+        let altPrice: Decimal? = altText.isEmpty ? nil : Decimal(string: altText)
+        let altLabel = altPriceLabel.trimmingCharacters(in: .whitespaces)
         let addressChanged = address != customer?.address
         let target: Customer
 
@@ -207,6 +253,8 @@ struct AddEditCustomerView: View {
             customer.frontOnly = frontOnly
             customer.contact = contact
             customer.payMethod = payMethod
+            customer.altPrice = altPrice
+            customer.altPriceLabel = altLabel.isEmpty ? nil : altLabel
             target = customer
         } else {
             let newCustomer = Customer(
@@ -223,8 +271,11 @@ struct AddEditCustomerView: View {
             newCustomer.frontOnly = frontOnly
             newCustomer.contact = contact
             newCustomer.payMethod = payMethod
+            newCustomer.altPrice = altPrice
+            newCustomer.altPriceLabel = altLabel.isEmpty ? nil : altLabel
+            let place = effectivePlace
             modelContext.insert(newCustomer)
-            RoundOrder.place(newCustomer, after: placeAfter, among: allCustomers)
+            RoundOrder.place(newCustomer, after: place, among: allCustomers)
             target = newCustomer
         }
 

@@ -4,6 +4,8 @@ import SwiftUI
 struct PlaceInRoundView: View {
     let customers: [Customer]
     @Binding var placeAfter: Customer?
+    /// Called when a place is picked (including "at the end").
+    var onChoose: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
@@ -23,6 +25,7 @@ struct PlaceInRoundView: View {
             List {
                 Button {
                     placeAfter = nil
+                    onChoose()
                     dismiss()
                 } label: {
                     HStack {
@@ -36,6 +39,7 @@ struct PlaceInRoundView: View {
                     ForEach(matches) { customer in
                         Button {
                             placeAfter = customer
+                            onChoose()
                             dismiss()
                         } label: {
                             HStack {

@@ -45,6 +45,7 @@ struct RootTabView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 clock.refresh()
+                ChangeLog.backupIfNewVersion(context: modelContext)
                 AutoBackup.runIfDue(context: modelContext)
                 Task { await CalendarSync.syncIfEnabled(context: modelContext) }
             }

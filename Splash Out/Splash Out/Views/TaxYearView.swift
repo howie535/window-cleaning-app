@@ -3,6 +3,7 @@ import SwiftData
 
 /// Months with work, paid and not yet paid, then totals by round, for any tax year (Docs/SPEC.md sections 4.2 and 5).
 struct TaxYearView: View {
+    @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
@@ -16,7 +17,7 @@ struct TaxYearView: View {
     }
 
     var body: some View {
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let years = Array(Set(RoundMetrics.taxYearsWithWork(customers) + [stats.currentTaxYear])).sorted()
         let year = chosenYear ?? stats.currentTaxYear

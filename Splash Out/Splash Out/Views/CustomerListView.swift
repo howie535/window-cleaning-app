@@ -85,7 +85,7 @@ struct CustomerListView: View {
     }
 
     private func customerList(_ shown: [Customer]) -> some View {
-        List(selection: $selectedID) {
+        List(selection: sizeClass == .regular ? $selectedID : .constant(nil)) {
             if !customers.isEmpty {
             Section {
                 Picker("Round", selection: $criteria.round) {

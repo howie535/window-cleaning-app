@@ -3,6 +3,7 @@ import SwiftData
 
 /// One row per week from records start (Docs/SPEC.md section 5), with crew averages underneath.
 struct WeeklyView: View {
+    @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
@@ -30,7 +31,7 @@ struct WeeklyView: View {
     }
 
     var body: some View {
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
 
         List {

@@ -4,6 +4,7 @@ import Charts
 
 /// The dashboard (Docs/SPEC.md section 5): tiles for the week, today, money owed and so on.
 struct TodayView: View {
+    @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
@@ -18,7 +19,7 @@ struct TodayView: View {
     }
 
     var body: some View {
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let week = stats.thisWeek
         let owed = RoundMetrics.moneyOwed(customers)
@@ -32,6 +33,7 @@ struct TodayView: View {
         let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let pace = RoundPlanner.paceWeeks(of: plan)
         let perDay = stats.housesPerWorkedDay(taxYear: taxYear)
+        let perHouse = stats.averagePerHouseByDay(taxYear: taxYear)
         let priced = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
         let listAverage = priced.isEmpty ? Decimal(0) : priced.reduce(Decimal(0)) { $0 + $1.price } / Decimal(priced.count)
         let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
@@ -54,10 +56,9 @@ struct TodayView: View {
                     Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
                          detail: "per cycle")
                     Tile(title: "Average per house",
-                         value: yearTotals.cleans > 0 ? pounds2(yearTotals.work / Decimal(yearTotals.cleans)) : pounds2(listAverage),
-                         detail: yearTotals.cleans > 0
-                            ? "charged per clean this tax year, paid or not · list price average \(pounds2(listAverage))"
-                            : "list price average across \(priced.count) customers")
+                         value: perHouse.map { pounds2($0.average) } ?? pounds2(listAverage),
+                         detail: perHouse.map { "average of each day's £ per house, \($0.days) days this tax year (as the spreadsheet) · list prices \(pounds2(listAverage))" }
+                            ?? "list price average across \(priced.count) customers")
                     Tile(title: "Houses per workday",
                          value: perDay.map { $0.average.formatted(.number.precision(.fractionLength(1))) } ?? "–",
                          detail: perDay.map { "over \($0.days) worked days this tax year" } ?? "no worked days yet this tax year")

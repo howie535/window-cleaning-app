@@ -3,12 +3,14 @@ import SwiftData
 
 /// Every unpaid clean, by customer, oldest first (Docs/SPEC.md section 4.8).
 struct MoneyOwedView: View {
+    @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var payingCustomer: Customer?
     /// Regular width (iPad): the chosen customer is shown in the right-hand panel, with Record payment on it.
     @State private var selectedID: UUID?
+    @State private var search = ""
 
     struct Row: Identifiable {
         var customer: Customer
@@ -16,6 +18,20 @@ struct MoneyOwedView: View {
         var cleans: Int
         var oldest: Date
         var id: UUID { customer.id }
+    }
+
+    private func matches(_ customer: Customer) -> Bool {
+        let term = search.trimmingCharacters(in: .whitespaces)
+        return term.isEmpty || customer.name.localizedCaseInsensitiveContains(term) || customer.address.localizedCaseInsensitiveContains(term)
+    }
+
+    /// Customers who've paid more than they've been charged (taken off their next clean).
+    private var inCredit: [(customer: Customer, credit: Decimal)] {
+        customers.compactMap { customer in
+            let balance = customer.outstandingBalance
+            return balance > 0 ? (customer, balance) : nil
+        }
+        .sorted { $0.customer.name < $1.customer.name }
     }
 
     private var rows: [Row] {
@@ -36,7 +52,7 @@ struct MoneyOwedView: View {
         let rows = rows
         let total = rows.reduce(Decimal(0)) { $0 + $1.amount }
         let cleans = rows.reduce(0) { $0 + $1.cleans }
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
 
         if sizeClass == .regular {
             NavigationSplitView {
@@ -66,7 +82,9 @@ struct MoneyOwedView: View {
     }
 
     private func owedList(rows: [Row], total: Decimal, cleans: Int, today: Date) -> some View {
-        List(selection: $selectedID) {
+        let shown = rows.filter { matches($0.customer) }
+        let credits = inCredit.filter { matches($0.customer) }
+        return List(selection: sizeClass == .regular ? $selectedID : .constant(nil)) {
             Section {
                 LabeledContent("Total owed") {
                     Text(total, format: .currency(code: "GBP"))
@@ -78,11 +96,11 @@ struct MoneyOwedView: View {
             }
 
             Section("Oldest first") {
-                if rows.isEmpty {
-                    Text("Nobody owes anything.")
+                if shown.isEmpty {
+                    Text(search.isEmpty ? "Nobody owes anything." : "Nobody owing matches \"\(search)\".")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(rows) { row in
+                ForEach(shown) { row in
                     if sizeClass == .regular {
                         rowContent(row, today: today).tag(row.customer.id)
                     } else {
@@ -93,7 +111,32 @@ struct MoneyOwedView: View {
                     }
                 }
             }
+
+            if !credits.isEmpty {
+                Section {
+                    ForEach(credits, id: \.customer.id) { item in
+                        let label = HStack {
+                            Text(item.customer.name).font(.headline)
+                            Spacer()
+                            Text(item.credit, format: .currency(code: "GBP"))
+                                .font(.headline)
+                                .foregroundStyle(.blue)
+                        }
+                        .contentShape(Rectangle())
+                        if sizeClass == .regular {
+                            label.tag(item.customer.id)
+                        } else {
+                            NavigationLink { CustomerDetailView(customer: item.customer) } label: { label }
+                        }
+                    }
+                } header: {
+                    Text("In credit")
+                } footer: {
+                    Text("Paid more than they were charged. It's taken off their next clean.")
+                }
+            }
         }
+        .searchable(text: $search, prompt: "Name or address")
     }
 
     private func rowContent(_ row: Row, today: Date) -> some View {

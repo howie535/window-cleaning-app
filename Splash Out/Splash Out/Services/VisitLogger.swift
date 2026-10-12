@@ -11,6 +11,8 @@ enum VisitLogger {
         case cleanedNotPaid
         /// Extra (or less, if negative) on top of the usual charge, e.g. conservatory roof or front only.
         case cleanedExtra(extra: Decimal, note: String?, paid: Bool)
+        /// Cleaned at a chosen list price (for customers with two prices).
+        case cleanedAt(price: Decimal, paid: Bool)
         case skipped
         case notDue
 
@@ -19,6 +21,7 @@ enum VisitLogger {
             case .cleanedPaid: "cleaned and paid"
             case .cleanedNotPaid: "cleaned, not paid"
             case .cleanedExtra: "cleaned with extra"
+            case .cleanedAt(_, let paid): paid ? "cleaned and paid" : "cleaned, not paid"
             case .skipped: "skipped"
             case .notDue: "not due"
             }
@@ -34,11 +37,13 @@ enum VisitLogger {
         let visit: Visit
         switch action {
         case .cleanedPaid:
-            visit = cleaned(customer, day: day, extra: 0, note: nil, paid: true)
+            visit = cleaned(customer, day: day, base: customer.nextListPrice, extra: 0, note: nil, paid: true)
         case .cleanedNotPaid:
-            visit = cleaned(customer, day: day, extra: 0, note: nil, paid: false)
+            visit = cleaned(customer, day: day, base: customer.nextListPrice, extra: 0, note: nil, paid: false)
         case .cleanedExtra(let extra, let note, let paid):
-            visit = cleaned(customer, day: day, extra: extra, note: note, paid: paid)
+            visit = cleaned(customer, day: day, base: customer.price, extra: extra, note: note, paid: paid)
+        case .cleanedAt(let price, let paid):
+            visit = cleaned(customer, day: day, base: price, extra: 0, note: nil, paid: paid)
         case .skipped:
             visit = Visit(date: day, kind: .skipped, listPrice: customer.price, charged: 0)
         case .notDue:
@@ -104,19 +109,20 @@ enum VisitLogger {
         try? context.save()
     }
 
-    private static func cleaned(_ customer: Customer, day: Date, extra: Decimal, note: String?, paid: Bool) -> Visit {
-        let suggested = customer.suggestedNextPrice
+    /// A clean at `base` (the usual or second price) plus `extra`, with any credit or shortfall netted in.
+    private static func cleaned(_ customer: Customer, day: Date, base: Decimal, extra: Decimal, note: String?, paid: Bool) -> Visit {
+        let suggested = max(0, base - customer.outstandingBalance)
         let charged = max(0, suggested + extra)
         let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         return Visit(
             date: day,
             kind: .cleaned,
-            listPrice: customer.price,
+            listPrice: base,
             charged: charged,
             paid: paid ? charged : 0,
             paidDate: paid ? day : nil,
             note: (trimmed?.isEmpty ?? true) ? nil : trimmed,
-            creditApplied: customer.price - suggested
+            creditApplied: base - suggested
         )
     }
 
@@ -131,18 +137,31 @@ enum VisitLogger {
     static func recordPayment(
         _ amount: Decimal,
         across visits: [Visit],
-        on date: Date = Date()
+        on date: Date = Date(),
+        creditTo creditTarget: Visit? = nil
     ) -> (undo: () -> Void, leftover: Decimal) {
         let day = RoundCalendar.startOfDay(date)
         let ordered = visits.sorted { $0.date < $1.date }
         let result = PaymentAllocator.allocate(amount, owed: ordered.map { $0.charged - $0.paid })
 
+        // Anything over what's owed is kept as credit on the newest clean (paid more than charged), which
+        // Customer.outstandingBalance picks up and takes off their next clean. Work done isn't changed by it.
+        let creditVisit = ordered.last ?? creditTarget
+        var all = ordered
+        if let creditVisit, !all.contains(where: { $0 === creditVisit }) { all.append(creditVisit) }
+
         // Snapshot for undo.
-        let before = ordered.map { (visit: $0, paid: $0.paid, paidDate: $0.paidDate) }
+        let before = all.map { (visit: $0, paid: $0.paid, paidDate: $0.paidDate) }
 
         for (visit, share) in zip(ordered, result.allocations) where share > 0 {
             visit.paid += share
             if visit.paid >= visit.charged { visit.paidDate = day }
+        }
+        var leftover = result.leftover
+        if leftover > 0, let creditVisit {
+            creditVisit.paid += leftover
+            creditVisit.paidDate = day
+            leftover = 0
         }
 
         let undo = {
@@ -151,7 +170,7 @@ enum VisitLogger {
                 entry.visit.paidDate = entry.paidDate
             }
         }
-        return (undo, result.leftover)
+        return (undo, leftover)
     }
 }
 

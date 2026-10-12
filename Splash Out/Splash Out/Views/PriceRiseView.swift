@@ -5,6 +5,7 @@ import SwiftData
 /// With no rise date set in Settings this is a preview of the next 6 April.
 struct PriceRiseView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
@@ -20,7 +21,7 @@ struct PriceRiseView: View {
     }
 
     var body: some View {
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let rise = stats.riseDateInUse
         let rows = stats.risePreview()

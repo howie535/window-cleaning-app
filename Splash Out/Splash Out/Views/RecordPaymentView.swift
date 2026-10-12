@@ -19,18 +19,34 @@ struct RecordPaymentView: View {
     private var selectedOwed: Decimal { selectedVisits.reduce(0) { $0 + $1.charged - $1.paid } }
     private var amount: Decimal? { Decimal(string: amountText) }
 
+    /// Where money paid in advance goes when nothing is owed: their latest clean.
+    private var latestClean: Visit? { customer.allVisits.filter { $0.kind == .cleaned }.max { $0.date < $1.date } }
+
     private var problem: String? {
         guard let amount, amount > 0 else { return "Enter the amount received." }
-        if selectedVisits.isEmpty { return "Pick at least one clean." }
-        if amount > selectedOwed {
-            return "That's \((amount - selectedOwed).formatted(.currency(code: "GBP"))) more than is owed on these cleans."
-        }
+        if selectedVisits.isEmpty && !unpaid.isEmpty { return "Pick at least one clean." }
+        if unpaid.isEmpty && latestClean == nil { return "They haven't had a clean yet, so there's nothing to put a payment against." }
         return nil
+    }
+
+    private var footer: String {
+        if let problem { return problem }
+        if let amount, amount > selectedOwed {
+            return "\((amount - selectedOwed).formatted(.currency(code: "GBP"))) more than is owed: it's kept as credit and taken off their next clean."
+        }
+        return "A lump sum pays the oldest selected cleans first."
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                if unpaid.isEmpty {
+                    Section {
+                        Text("Nothing is owed. A payment now is kept as credit and taken off their next clean.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !unpaid.isEmpty {
                 Section("Cleans owed") {
                     ForEach(unpaid) { visit in
                         Button {
@@ -51,6 +67,7 @@ struct RecordPaymentView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                }
 
                 Section {
                     LabeledField(label: "Amount received") {
@@ -62,7 +79,7 @@ struct RecordPaymentView: View {
                     }
                     DatePicker("Date paid", selection: $date, displayedComponents: .date)
                 } footer: {
-                    Text(problem ?? "A lump sum pays the oldest selected cleans first.")
+                    Text(footer)
                         .foregroundStyle(problem == nil ? Color.secondary : Color.red)
                 }
             }
@@ -97,7 +114,7 @@ struct RecordPaymentView: View {
 
     private func save() {
         guard let amount, problem == nil else { return }
-        let result = VisitLogger.recordPayment(amount, across: selectedVisits, on: date)
+        let result = VisitLogger.recordPayment(amount, across: selectedVisits, on: date, creditTo: latestClean)
         undoCenter.offer("\(customer.name): payment of \(amount.formatted(.currency(code: "GBP"))) recorded", undo: result.undo)
         dismiss()
     }

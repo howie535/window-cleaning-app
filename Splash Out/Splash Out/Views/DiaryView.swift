@@ -9,6 +9,7 @@ struct DiaryView: View {
     @Query private var settings: [AppSettings]
     @Query private var customers: [Customer]
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(RoundClock.self) private var clock
 
     @State private var month = DiaryView.firstOfMonth(RoundCalendar.startOfDay())
     @State private var selected: DiaryDay?
@@ -50,7 +51,7 @@ struct DiaryView: View {
         let appSettings = settings.first ?? AppSettings()
         let resolver = RoundPlanner.DayResolver(settings: appSettings, crews: crews, workDays: entries, customers: customers)
         let byDate = Dictionary(entries.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
-        let today = RoundCalendar.startOfDay()
+        let today = clock.today
 
         ScrollView {
             VStack(spacing: 14) {
@@ -96,13 +97,13 @@ struct DiaryView: View {
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) {
-            if month != Self.firstOfMonth(RoundCalendar.startOfDay()) {
-                Button("Today") { month = Self.firstOfMonth(RoundCalendar.startOfDay()) }
+            if month != Self.firstOfMonth(clock.today) {
+                Button("Today") { month = Self.firstOfMonth(clock.today) }
                     .font(.footnote.weight(.semibold))
                     .offset(y: 14)
             }
         }
-        .padding(.bottom, month != Self.firstOfMonth(RoundCalendar.startOfDay()) ? 10 : 0)
+        .padding(.bottom, month != Self.firstOfMonth(clock.today) ? 10 : 0)
     }
 
     private var weekdayRow: some View {

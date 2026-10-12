@@ -95,8 +95,9 @@ enum SimulatorSelfTest {
             check("undo part payment restores owed", Snapshot(all) == owedBefore)
 
             let total = unpaid.reduce(Decimal(0)) { $0 + $1.charged - $1.paid }
+            let balanceBefore = debtor.outstandingBalance
             payment = VisitLogger.recordPayment(total + 10, across: unpaid, on: today)
-            check("paying more than owed reports the leftover", payment.leftover == 10, "\(payment.leftover)")
+            check("paying more than owed keeps the extra as credit", payment.leftover == 0 && debtor.outstandingBalance == balanceBefore + 10, "\(payment.leftover) \(debtor.outstandingBalance)")
             check("paying everything clears the customer and dates it", VisitLogger.unpaidVisits(for: debtor).isEmpty && unpaid.allSatisfy { $0.paidDate == today })
             payment.undo()
             check("undo full payment restores owed and dates", Snapshot(all) == owedBefore && unpaid.allSatisfy { $0.paidDate == nil })
@@ -222,6 +223,52 @@ enum SimulatorSelfTest {
         func add(_ c: Customer, _ kind: VisitKind, daysAgo: Int, charged: Decimal = 20, paid: Decimal = 20, listPrice: Decimal = 20) {
             let v = Visit(date: RoundCalendar.london.date(byAdding: .day, value: -daysAgo, to: today)!, kind: kind, listPrice: listPrice, charged: kind == .cleaned ? charged : 0, paid: kind == .cleaned ? paid : 0)
             context.insert(v); v.customer = c
+        }
+
+        // ---- Day-one fixes (Phase B): payments in advance, second price, edit and delete
+        let advance = synthetic("ST advance"); add(advance, .cleaned, daysAgo: 30)
+        let ahead = VisitLogger.recordPayment(15, across: [], on: today, creditTo: advance.allVisits.first)
+        check("payment with nothing owed becomes credit", ahead.leftover == 0 && advance.outstandingBalance == 15 && advance.suggestedNextPrice == 5, "\(advance.outstandingBalance)")
+        ahead.undo()
+        check("undo advance payment removes the credit", advance.outstandingBalance == 0)
+
+        let twoPrice = synthetic("ST two prices"); twoPrice.altPrice = 12; twoPrice.altPriceLabel = "Front only"
+        add(twoPrice, .cleaned, daysAgo: 35)
+        check("two prices: the one not used last time comes next", twoPrice.nextListPrice == 12)
+        let altUndo = VisitLogger.perform(.cleanedPaid, for: twoPrice, in: context)
+        let altVisit = twoPrice.allVisits.first { $0.date == today }
+        check("two prices: one tap charges the second price", altVisit?.charged == 12 && altVisit?.listPrice == 12, "\(String(describing: altVisit?.charged))")
+        check("two prices: then back to the usual price", twoPrice.nextListPrice == 20)
+        altUndo()
+        let chosen = VisitLogger.perform(.cleanedAt(price: 20, paid: false), for: twoPrice, in: context)
+        check("two prices: a chosen price is used", twoPrice.allVisits.first { $0.date == today }?.charged == 20 && RoundMetrics.moneyOwed([twoPrice]).amount == 20)
+        chosen()
+        twoPrice.altPrice = 20
+        check("a second price equal to the usual one is ignored", twoPrice.secondPrice == nil && twoPrice.nextListPrice == 20)
+
+        let editMe = synthetic("ST edit"); add(editMe, .cleaned, daysAgo: 3, charged: 45, paid: 0)
+        let editVisit = editMe.allVisits[0]
+        let saved = VisitSnapshot(editVisit)
+        let workBefore = stats().work(from: editVisit.date, through: editVisit.date)
+        editVisit.charged = 17
+        check("editing a clean's charge changes the day's work", stats().work(from: editVisit.date, through: editVisit.date) == workBefore - 28)
+        saved.restore(editVisit)
+        check("undoing an edit puts it back", editVisit.charged == 45 && stats().work(from: editVisit.date, through: editVisit.date) == workBefore)
+
+        let doomed = synthetic("ST delete me"); add(doomed, .cleaned, daysAgo: 2); add(doomed, .skipped, daysAgo: 40)
+        try context.save()
+        let visitCount = try context.fetchCount(FetchDescriptor<Visit>())
+        let goneDay = RoundCalendar.london.date(byAdding: .day, value: -2, to: today)!
+        let dayWork = stats().work(from: goneDay, through: goneDay)
+        context.delete(doomed)
+        try context.save()
+        check("deleting a customer removes their visits", try context.fetchCount(FetchDescriptor<Visit>()) == visitCount - 2)
+        check("deleting a customer takes their cleans out of the totals", stats().work(from: goneDay, through: goneDay) == dayWork - 20)
+        for c in [advance, twoPrice, editMe] { context.delete(c) }
+        try context.save()
+
+        if let perHouse = stats().averagePerHouseByDay(taxYear: stats().currentTaxYear) {
+            lines.append("AVGPERHOUSE £\(perHouse.average) over \(perHouse.days) days")
         }
         func listed(_ rows: [RoundStats.SkipRow], _ c: Customer) -> Bool { rows.contains { $0.customer === c } }
 

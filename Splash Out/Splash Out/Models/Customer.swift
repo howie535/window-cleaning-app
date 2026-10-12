@@ -17,6 +17,10 @@ final class Customer {
     var phone: String = ""
     var price: Decimal = 0
     var priceSince: Date?
+    /// A second price for customers who alternate (e.g. front only one time, full the next).
+    var altPrice: Decimal?
+    /// What the second price is for, e.g. "Front only".
+    var altPriceLabel: String?
     var everyOther: Bool = false
     var frontOnly: Bool = false
     var contactRaw: String = ContactMethod.whatsapp.rawValue
@@ -104,5 +108,23 @@ final class Customer {
     /// The regular price adjusted to claw back a credit or recoup a shortfall from past cleans.
     var suggestedNextPrice: Decimal {
         max(0, price - outstandingBalance)
+    }
+
+    /// The second price, when one is set and differs from the usual price.
+    var secondPrice: Decimal? {
+        guard let altPrice, altPrice != price else { return nil }
+        return altPrice
+    }
+
+    var secondPriceName: String {
+        let label = altPriceLabel?.trimmingCharacters(in: .whitespaces) ?? ""
+        return label.isEmpty ? "Second price" : label
+    }
+
+    /// For customers with two prices: the one not used last time. Otherwise the usual price.
+    var nextListPrice: Decimal {
+        guard let second = secondPrice else { return price }
+        let last = allVisits.filter { $0.kind == .cleaned }.max { $0.date < $1.date }
+        return last?.listPrice == second ? price : second
     }
 }

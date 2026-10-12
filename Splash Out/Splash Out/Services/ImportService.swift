@@ -70,6 +70,8 @@ enum ImportService {
             customer.frontOnly = record.frontOnly
             customer.contact = ContactMethod(rawValue: record.contact) ?? .whatsapp
             customer.payMethod = PayMethod.fromImport(record.payMethod)
+            customer.altPrice = record.altPrice.map(Money.decimal)
+            customer.altPriceLabel = record.altPriceLabel
             context.insert(customer)
             summary.customers += 1
             summary.statusCounts[customer.statusRaw, default: 0] += 1
