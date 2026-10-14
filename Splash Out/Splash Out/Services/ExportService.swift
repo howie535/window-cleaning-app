@@ -70,7 +70,10 @@ enum ExportService {
                 visits: visits,
                 altPrice: customer.altPrice.map(Money.double),
                 altPriceLabel: customer.altPriceLabel,
-                groupWithPrevious: customer.groupWithPrevious
+                groupWithPrevious: customer.groupWithPrevious,
+                pendingPrice: customer.pendingPrice.map(Money.double),
+                pendingPriceFrom: customer.pendingPriceFrom.map(RoundCalendar.dayString),
+                pendingPriceToldAt: customer.pendingPriceToldAt.map(RoundCalendar.dayString)
             )
         }
 

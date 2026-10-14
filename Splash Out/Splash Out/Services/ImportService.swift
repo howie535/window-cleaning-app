@@ -73,6 +73,9 @@ enum ImportService {
             customer.altPrice = record.altPrice.map(Money.decimal)
             customer.altPriceLabel = record.altPriceLabel
             customer.groupWithPrevious = record.groupWithPrevious
+            customer.pendingPrice = record.pendingPrice.map(Money.decimal)
+            customer.pendingPriceFrom = record.pendingPriceFrom.flatMap(RoundCalendar.parseDay)
+            customer.pendingPriceToldAt = record.pendingPriceToldAt.flatMap(RoundCalendar.parseDay)
             context.insert(customer)
             summary.customers += 1
             summary.statusCounts[customer.statusRaw, default: 0] += 1

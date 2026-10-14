@@ -73,6 +73,9 @@ struct CustomerListView: View {
         )
         .owedOnPaidPrompt($paidRequest)
         .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
+            if OwedReminder.canSend(to: person) {
+                Button("Skip and send a reminder") { OwedReminder.open(for: person); perform(.skipped, for: person) }
+            }
             Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
             Button("Go back", role: .cancel) {}
         } message: { person in

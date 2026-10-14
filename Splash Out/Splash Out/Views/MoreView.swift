@@ -12,6 +12,7 @@ struct MoreView: View {
                     NavigationLink { WeeklyView() } label: { Label("Weekly", systemImage: "calendar") }
                     NavigationLink { TaxYearView() } label: { Label("Tax Year", systemImage: "sterlingsign.square") }
                     NavigationLink { PriceRiseView() } label: { Label("Price Rise", systemImage: "arrow.up.right.circle") }
+                    NavigationLink { RoundReviewView() } label: { Label("Round review", systemImage: "exclamationmark.magnifyingglass") }
                     NavigationLink { FrequentSkipsView() } label: { Label("Frequent Skips", systemImage: "forward.circle") }
                     NavigationLink { ChecksView() } label: { Label("Checks", systemImage: "checkmark.shield") }
                 }

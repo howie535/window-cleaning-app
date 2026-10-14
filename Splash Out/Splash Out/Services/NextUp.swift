@@ -160,6 +160,7 @@ enum NextUp {
         let capacity = days.map { $0.target * (1 + overbook) }
         var load = [Decimal](repeating: 0, count: days.count)
         let todayIndex = days.firstIndex { $0.date == today }
+        var someoneSkippedToday = false
         var placed = Set<Int>()
         var result: [Placement] = []
 
@@ -172,6 +173,7 @@ enum NextUp {
             case .notDue: .notDueToday
             }
             if state == .cleanedToday { load[todayIndex] += c.chargedToday }
+            if state == .skippedToday { someoneSkippedToday = true }
             result.append(Placement(key: c.key, dayIndex: todayIndex, state: state, order: order))
             placed.insert(c.key)
         }
@@ -228,14 +230,19 @@ enum NextUp {
         }
 
         var day = 0
-        func skipFullDays() { while day < days.count && load[day] >= capacity[day] { day += 1 } }
+        /// A day is full at its target plus overbook. Once someone has been skipped today, today only tops back up to its
+        /// real target: a skip shouldn't pull tomorrow's customers in when the day's already past target.
+        func full(_ d: Int) -> Bool {
+            load[d] >= capacity[d] || (d == todayIndex && someoneSkippedToday && load[d] >= days[d].target)
+        }
+        func skipFullDays() { while day < days.count && full(day) { day += 1 } }
         skipFullDays()
         var queue = units
         /// Puts the front cluster on today up to capacity; the rest of it goes first tomorrow.
         func splitFront() {
             var rest: [Member] = []
             for m in queue[0] {
-                if !rest.isEmpty || load[day] >= capacity[day] { rest.append(m); continue }
+                if !rest.isEmpty || full(day) { rest.append(m); continue }
                 place([m], day)
             }
             if rest.isEmpty { queue.removeFirst() } else { queue[0] = rest }
@@ -250,7 +257,7 @@ enum NextUp {
             let front = need(queue[0], day)
             if front == 0 || load[day] + front <= capacity[day] {
                 place(queue.removeFirst(), day)
-                if load[day] >= capacity[day] { day += 1; skipFullDays() }
+                if full(day) { day += 1; skipFullDays() }
                 continue
             }
             // The front cluster doesn't fit in what's left of the day.
@@ -270,7 +277,7 @@ enum NextUp {
                 return size > 0 && load[day] + size <= capacity[day]
             }) {
                 place(queue.remove(at: later), day)
-                if load[day] >= capacity[day] { day += 1; skipFullDays() }
+                if full(day) { day += 1; skipFullDays() }
                 continue
             }
             splitFront()                                                                  // nothing fits: split it

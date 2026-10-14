@@ -168,8 +168,9 @@
     <li><b>Tap the customer you're at.</b> A panel opens with their address, notes and anything they owe.</li>
     <li><b>Tap what happened:</b>
       <ul>
-        <li><b>Cleaned &amp; paid</b>: done, and they paid. For a customer with two prices (say front only one time, full the next) it asks which, with the one you didn't use last time first.</li>
+        <li><b>Cleaned &amp; paid</b>: done, and they paid. If they owe for earlier cleans, it asks whether they paid those too. For a customer with two prices (say front only one time, full the next) it asks which, with the one you didn't use last time first.</li>
         <li><b>Cleaned, not paid</b>: done, they'll pay later. It goes on the Owed list.</li>
+        <li><b>Front only…</b>: asks the amount (it remembers last time's).</li>
         <li><b>Cleaned + extra…</b>: for something extra (conservatory roof) or less (front only). Add a note.</li>
         <li><b>Skipped</b>: you couldn't do them today. They stay in today's list marked Skipped, and come round again next time.</li>
         <li><b>Not due</b>: for an every-other customer on their off round. You rarely need it: the app spots off rounds itself and shows those customers greyed with <b>EO · not this round</b>.</li>
@@ -177,7 +178,7 @@
       </ul></li>
     <li><b>Made a mistake?</b> A bar appears at the bottom for a few seconds. Tap <b>Undo</b>.</li>
   </ol>
-  <div class="good"><b class="l">The list looks after itself.</b> It carries on from where you'd got to at the start of the day, so working out of order never moves anyone else. Customers you've done today stay in today's list with a tick, and their money counts towards the day. The date bar shows <b>£ done</b> and <b>£ left</b>. Tomorrow, they drop off and come round again in about five weeks.</div>
+  <div class="good"><b class="l">The list looks after itself.</b> It carries on from where you'd got to at the start of the day, so working out of order never moves anyone else. Customers you've done today fold into one <b>Done today</b> row at the top (tap it to see them), and their money counts towards the day. The date bar shows <b>£ done</b> and <b>£ left</b>. Tomorrow, they drop off and come round again in about five weeks.</div>
   <div class="tip"><b class="l">Quick way.</b> On the <span class="btn">Round</span> or <span class="btn">Customers</span> tab, swipe a row right for <b>Paid</b> or <b>Not paid</b>, or left for <b>Skipped</b>.</div>
 </div>
 
@@ -187,6 +188,8 @@
 </div>
 <figure class="shot wide"><img src="screens/ipad.jpg" alt="On an iPad the round and the logging panel sit side by side"><figcaption>On an iPad the round and the logging panel sit side by side</figcaption></figure>
 <div class="card">
+  <h3>Neighbours stay together</h3>
+  <p>Customers next to each other in the round on the same street are kept on the same day, shown by a coloured bar down the side. If a street won't fit in what's left of a day, it starts the next day, and a later street that does fit fills the gap. If two halves of a street really belong to different days (or two streets belong together), open the customer and set <b>Edit</b> → <b>Same day as the customer before</b> to Never or Always.</p>
   <h3>New customers show greyed out</h3>
   <p>Someone who hasn't started yet appears in the round, greyed out, at the place where they belong. They don't count towards the day's total. Tap them and choose <b>Start … put them on the round</b> to make them active.</p>
 </div>
@@ -212,7 +215,9 @@
 <div class="card">
   <p>Mark them <b>Skipped</b> when you get there. They stay in today's list marked Skipped and don't count towards the day, so the next customers move up to fill it and you don't lose the work.</p>
   <p>Those customers weren't in your original message, so the day's <b>Message</b> button now says something like <b>Message · 3 new</b>. Tap it, and <b>Message next</b> takes you through just the new ones.</p>
-  <div class="tip"><b class="l">Owes you money?</b> If you skip someone who still owes you from an earlier clean, the app asks you first, in case you want to collect before moving on.</div>
+  <div class="tip"><b class="l">Owes you money?</b> If you skip someone who still owes you from an earlier clean, the app asks you first, and offers <b>Skip and send a reminder</b>, which opens WhatsApp with a reminder of what they owe (wording in Settings).</div>
+  <p>If someone's skipped, today only tops back up to its real target: once you've passed it, nobody is pulled forward from the next day.</p>
+  <p><b>Fitting someone in:</b> swipe left on a customer on a later day and tap <b>Do today</b>. They're booked for today.</p>
 </div>
 
 <h2><span class="n">7</span>Getting paid</h2>
@@ -295,7 +300,8 @@
   <div class="grid2">
     <div class="mini"><b>Weekly</b><span>Each week against its target.</span></div>
     <div class="mini"><b>Tax Year</b><span>Month by month totals. Share a file for your accounts.</span></div>
-    <div class="mini"><b>Price Rise</b><span>Preview a rise for every customer, then apply it in one go.</span></div>
+    <div class="mini"><b>Price Rise</b><span>Choose who gets a rise, set it, and tell them by WhatsApp. See below.</span></div>
+    <div class="mini"><b>Round review</b><span>Houses that may be harming the round: cheap for the round, on their own, skipping a lot or slow to pay.</span></div>
     <div class="mini"><b>Frequent Skips</b><span>Customers who skip a lot.</span></div>
     <div class="mini"><b>Checks</b><span>Customers paying under their price, and dates worth a second look.</span></div>
     <div class="mini"><b>History</b><span>Every visit, day by day, with totals. Search by name and pick the dates.</span></div>
@@ -307,6 +313,13 @@
 <figure class="shot"><img src="screens/more2.jpg" alt="The More menu"><figcaption>The More menu</figcaption></figure>
 <figure class="shot"><img src="screens/diary.jpg" alt="The Diary calendar"><figcaption>The Diary calendar</figcaption></figure>
 </div>
+  <h3>Price rises</h3>
+  <ol class="steps">
+    <li><b>Choose.</b> <span class="btn">More</span> → <span class="btn">Price Rise</span> lists everyone due a rise, already ticked. Untick anyone to leave out, or tap their new price to change it.</li>
+    <li><b>Set.</b> Tap <b>Set rises</b>. Each customer's page now shows "Rising to £16 from 6 Apr", with buttons to start it now, change it or cancel it.</li>
+    <li><b>Tell them.</b> Tap <b>Tell customers</b>. Like the day messages, each tap opens WhatsApp with their message ready (wording in Settings), and ticks them off.</li>
+  </ol>
+  <p>On the day, the new prices start by themselves and go in each customer's price history.</p>
   <h3>Share your working days</h3>
   <p>In <b>Settings → Calendar</b>, switch on <b>Keep a calendar up to date</b>. Splash Out adds a calendar to your phone showing who works each day (no money or customer details). Share it from the Calendar app with the people who need to see it. Switching it off removes it.</p>
 </div>
@@ -341,7 +354,9 @@
   <h3>What's changed in a new version?</h3>
   <p><span class="btn">More</span> → <span class="btn">Settings</span> → <b>About</b> → <b>What's new</b>. The app also saves a backup the first time a new version opens.</p>
   <h3>A day shows more than its target</h3>
-  <p>That's on purpose. Each day is filled until it reaches the target plus a little extra, so you've always got enough lined up.</p>
+  <p>That's on purpose. Each day is filled until it reaches the target plus a little extra, so you've always got enough lined up. Keeping a street together can take it up to about 20% over.</p>
+  <h3>Someone missed last time is further down the list</h3>
+  <p>Customers are due when the round reaches them, so someone missed last time waits for their neighbours rather than jumping to the front.</p>
   <h3>The WhatsApp button wants a number</h3>
   <p>Tap <b>Add number from Contacts</b> on the customer's page and choose them.</p>
 </div>

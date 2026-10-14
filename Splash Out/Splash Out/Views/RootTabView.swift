@@ -50,10 +50,12 @@ struct RootTabView: View {
         .environment(tabState)
         .onAppear { if !onboardingSeen { showTour = true } }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
+        .onChange(of: clock.today) { _, today in PriceRise.applyDue(in: modelContext, today: today) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 clock.refresh()
                 ChangeLog.backupIfNewVersion(context: modelContext)
+                PriceRise.applyDue(in: modelContext, today: clock.today)
                 AutoBackup.runIfDue(context: modelContext)
                 Task { await CalendarSync.syncIfEnabled(context: modelContext) }
             }

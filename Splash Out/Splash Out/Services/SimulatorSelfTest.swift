@@ -247,11 +247,34 @@ enum SimulatorSelfTest {
             check("today carries on in round order from the start of the day", day0 == [6, 7, 8, 9, 10], "\(day0)")
         }
 
+        // ---- Skips only top today back up to its real target (day three: Jay jumped from Monday to today)
+        do {
+            let cal = RoundCalendar.london
+            let old = cal.date(byAdding: .day, value: -40, to: today)!
+            func visited(_ seq: Int, _ kind: VisitKind, _ charged: Decimal) -> NextUp.Candidate {
+                NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: 20, everyOther: false, lastCleaned: kind == .cleaned ? today : old,
+                                 lastNotDue: nil, lastVisit: today, lastVisitBeforeToday: old, visitedToday: kind, chargedToday: charged)
+            }
+            let jay = NextUp.Candidate(key: 9, sequence: 9, isListable: true, price: 20, everyOther: false, lastCleaned: old,
+                                       lastNotDue: nil, lastVisit: old, lastVisitBeforeToday: old)
+            let days = [NextUp.Day(date: today, target: 300), NextUp.Day(date: cal.date(byAdding: .day, value: 5, to: today)!, target: 300)]
+            let pastTarget = [visited(1, .cleaned, 100), visited(2, .cleaned, 100), visited(3, .cleaned, 110), visited(4, .skipped, 0), jay]   // £310: Jay would fit in £330
+            let placedPast = NextUp.plan(pastTarget, days: days, today: today, overbook: 0.1, hideWeeks: 5, lapDays: 35, calendar: cal)
+            check("a skip doesn't pull tomorrow's customer in once today is past its target", placedPast.first { $0.key == 9 }?.dayIndex == 1)
+            let noSkip = [visited(1, .cleaned, 100), visited(2, .cleaned, 100), visited(3, .cleaned, 110), jay]
+            check("without a skip the day still fills to target + 10%", NextUp.plan(noSkip, days: days, today: today, overbook: 0.1, hideWeeks: 5, lapDays: 35, calendar: cal).first { $0.key == 9 }?.dayIndex == 0)
+            let short = [visited(1, .cleaned, 100), visited(2, .cleaned, 100), visited(3, .cleaned, 80), visited(4, .skipped, 0), jay]
+            let placedShort = NextUp.plan(short, days: days, today: today, overbook: 0.1, hideWeeks: 5, lapDays: 35, calendar: cal)
+            check("a skip that takes today below target tops it back up", placedShort.first { $0.key == 9 }?.dayIndex == 0)
+        }
+
         // ---- Clusters kept together (day two)
         do {
             check("street match ignores house numbers and names", RoundGrouping.sameStreet("Blue Haze Lon Pendyffryn", "34 Lon Pendyffryn")
                   && RoundGrouping.sameStreet("2 Spring Gardens", "5 spring gardens") && RoundGrouping.sameStreet("12 Broadway", "25 Broadway")
-                  && RoundGrouping.sameStreet("Unit 1 Kinmel Dr, Bodelwyddan", "4 Kinmel Dr"))
+                  && RoundGrouping.sameStreet("Unit 1 Kinmel Dr, Bodelwyddan", "4 Kinmel Dr")
+                  && RoundGrouping.sameStreet("122 Llysfaen Road", "120 Llysfaen Rd")
+                  && RoundGrouping.sameStreet("Coddington, High St", "12 High Street"))
             check("different streets don't match", !RoundGrouping.sameStreet("12 The Dale", "9 Spring Gardens")
                   && !RoundGrouping.sameStreet("Rd to Llanddulas", "Tan yr Ogof Hall") && !RoundGrouping.sameStreet("", ""))
             let auto = RoundGrouping.groups([("1 A Street", nil), ("3 A Street", nil), ("2 B Road", nil), ("5 A Street", nil)])
@@ -296,6 +319,54 @@ enum SimulatorSelfTest {
         check("one undo takes back the clean and the payment", debtor2.allVisits.count == 2 && RoundMetrics.moneyOwed([debtor2]).amount == 40)
         context.delete(debtor2)
 
+        // Price rise: set, then switched over on its date with a history entry; a clean on that day uses the new price.
+        do {
+            let cal = RoundCalendar.london
+            let nextWeek = cal.date(byAdding: .day, value: 7, to: today)!
+            let riser2 = synthetic("ST rise"); add(riser2, .cleaned, daysAgo: 30)
+            let bystander = synthetic("ST no rise")
+            PriceRise.set(riser2, to: 22, from: nextWeek)
+            check("a set rise waits for its date", !PriceRise.applyIfDue(riser2, today: today, in: context) && riser2.price == 20 && riser2.pendingPrice == 22)
+            let defaults = UserDefaults(suiteName: "selftest.rise")!
+            let switched = PriceRise.applyDue(in: context, today: nextWeek, defaults: defaults)
+            let history = (riser2.priceChanges ?? []).filter { $0.reason == .rise && $0.oldPrice == 20 && $0.newPrice == 22 }
+            check("on its date the new price starts, with a history entry", switched >= 1 && riser2.price == 22 && riser2.priceSince == nextWeek
+                  && riser2.pendingPrice == nil && history.count == 1)
+            check("customers without a rise are left alone", bystander.price == 20 && bystander.priceChanges?.isEmpty != false)
+            let sameDay = synthetic("ST rise today"); add(sameDay, .cleaned, daysAgo: 30)
+            PriceRise.set(sameDay, to: 25, from: today)
+            let undoRise = VisitLogger.perform(.cleanedPaid, for: sameDay, in: context)
+            check("a clean on the rise's first day uses the new price", sameDay.allVisits.first { $0.date == today }?.charged == 25 && sameDay.price == 25)
+            undoRise()
+            let text = PriceRise.message(template: PriceRise.defaultMessage, name: "Anne", old: 15, new: 16, from: nextWeek)
+            check("price rise message fills in name, old and new price and date", text.contains("Anne") && text.contains("£15") && text.contains("£16")
+                  && text.contains(DayMessage.fullDate(nextWeek)) && !text.contains("{"))
+            defaults.removePersistentDomain(forName: "selftest.rise")
+            for c in [riser2, bystander, sameDay] { context.delete(c) }
+        }
+
+        // Day three: front only, the owed reminder and the round review.
+        do {
+            let front = synthetic("ST front only"); add(front, .cleaned, daysAgo: 35)
+            check("no front-only price before the first one", VisitLogger.lastFrontOnlyPrice(for: front) == nil)
+            let undoFront = VisitLogger.perform(.frontOnly(price: 9, paid: false), for: front, in: context)
+            let frontVisit = front.allVisits.first { $0.date == today }
+            check("front only charges the amount given and is marked front only", frontVisit?.charged == 9 && frontVisit?.note == "Front only"
+                  && VisitLogger.lastFrontOnlyPrice(for: front) == 9 && RoundMetrics.moneyOwed([front]).amount == 9)
+            let reminder = OwedReminder.text(template: OwedReminder.defaultTemplate, for: front)
+            check("owed reminder fills in name, amount and cleans", reminder.contains("ST front only") && reminder.contains("£9") && reminder.contains("clean") && !reminder.contains("{"))
+            undoFront()
+            check("cheap points: 1 per 10% under the average, none under 10%, at most 4", RoundReview.cheapPoints(price: 20, average: 20) == 0
+                  && RoundReview.cheapPoints(price: 15, average: 20) == 2 && RoundReview.cheapPoints(price: 2, average: 20) == 4)
+            let lonely = synthetic("ST lonely", price: 8); lonely.address = "1 Nowhere Lane Test"; lonely.sequence = 99_999
+            add(lonely, .skipped, daysAgo: 30); add(lonely, .skipped, daysAgo: 60); add(lonely, .cleaned, daysAgo: 90, paid: 0)
+            let review = RoundReview.rows(customers: (try? context.fetch(FetchDescriptor<Customer>())) ?? [], today: today)
+            let lonelyRow = review.rows.first { $0.customer === lonely }
+            check("a cheap house on its own that skips is near the top of the round review", lonelyRow != nil && (lonelyRow?.reasons.contains("On its own") ?? false)
+                  && (lonelyRow?.reasons.contains { $0.hasPrefix("Skipped") } ?? false), "\(String(describing: lonelyRow?.reasons))")
+            for c in [front, lonely] { context.delete(c) }
+        }
+
         let twoPrice = synthetic("ST two prices"); twoPrice.altPrice = 12; twoPrice.altPriceLabel = "Front only"
         add(twoPrice, .cleaned, daysAgo: 35)
         check("two prices: the one not used last time comes next", twoPrice.nextListPrice == 12)
@@ -339,8 +410,8 @@ enum SimulatorSelfTest {
             let tPlan = clock.measure { _ = RoundPlanner.plan(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today) }
             let tStats = clock.measure {
                 let s = RoundStats(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today)
-                _ = s.thisWeek; _ = s.weeks; _ = s.skipRate; _ = s.averagePerHouseByDay(taxYear: s.currentTaxYear)
-                _ = s.housesPerWorkedDay(taxYear: s.currentTaxYear); _ = s.risesDue()
+                _ = s.thisWeek; _ = s.weeks; _ = s.skipRate; _ = s.averagePerHouseByDay()
+                _ = s.workRate(); _ = s.risesDue()
             }
             let tOwed = clock.measure { _ = RoundMetrics.moneyOwed(everyone); _ = everyone.map { VisitLogger.unpaidVisits(for: $0) } }
             // What a save does to the next plan (the second wave of lag after logging).
@@ -395,16 +466,16 @@ enum SimulatorSelfTest {
 
         // Averages only count finished days: a pricey first clean this morning mustn't move them.
         do {
-            let before = (stats().averagePerHouseByDay(taxYear: stats().currentTaxYear)?.average, stats().workRate())
+            let before = (stats().averagePerHouseByDay()?.average, stats().workRate())
             let early = synthetic("ST early bird", price: 95); add(early, .cleaned, daysAgo: 0, charged: 95, paid: 95, listPrice: 95)
-            let after = (stats().averagePerHouseByDay(taxYear: stats().currentTaxYear)?.average, stats().workRate())
+            let after = (stats().averagePerHouseByDay()?.average, stats().workRate())
             func same(_ a: Decimal?, _ b: Decimal?) -> Bool { abs(NSDecimalNumber(decimal: (a ?? 0) - (b ?? 0)).doubleValue) < 0.000001 }
             check("today's cleans don't move the averages until the day is over",
                   same(before.0, after.0) && same(before.1?.perHouse, after.1?.perHouse) && same(before.1?.housesPerDay, after.1?.housesPerDay)
                   && before.1?.workedDays == after.1?.workedDays, "\(String(describing: before.0)) vs \(String(describing: after.0))")
             context.delete(early)
         }
-        if let perHouse = stats().averagePerHouseByDay(taxYear: stats().currentTaxYear) {
+        if let perHouse = stats().averagePerHouseByDay() {
             lines.append("AVGPERHOUSE £\(perHouse.average) over \(perHouse.days) days")
         }
         func listed(_ rows: [RoundStats.SkipRow], _ c: Customer) -> Bool { rows.contains { $0.customer === c } }
@@ -488,10 +559,17 @@ enum SimulatorSelfTest {
         check("15 rises to 16", row(riser)?.newPrice == 16 && row(riser)?.effective == today)
         check("a price changed 6 months ago waits", row(recent)?.effective == RoundCalendar.london.date(byAdding: .month, value: 6, to: today))
         check("a price that starts today gets no rise", row(brandNew)?.effective == nil && row(brandNew)?.extraPerCycle == 0)
-        let applied = RoundStats.applyRises(rows.filter { ($0.effective.map { $0 <= today } ?? false) && ($0.customer === riser || $0.customer === recent || $0.customer === brandNew) }, in: context)
-        check("apply changes only those whose rise has taken effect", applied == 1 && riser.price == 16 && recent.price == 20 && brandNew.price == 20, "\(applied) \(riser.price)")
-        check("apply records the price history and price since", riser.priceSince == today && (riser.priceChanges ?? []).contains { $0.oldPrice == 15 && $0.newPrice == 16 && $0.reason == .rise })
-        check("applying twice does nothing more", RoundStats.applyRises(stats().risePreview().filter { $0.customer === riser }, in: context) == 0 && riser.price == 16)
+        // Set every rise that applies, then start the ones whose date has come (as the app does on opening).
+        for r in rows where r.effective != nil && (r.customer === riser || r.customer === recent || r.customer === brandNew) {
+            PriceRise.set(r.customer, to: r.newPrice, from: r.effective!)
+        }
+        let riseDefaults = UserDefaults(suiteName: "selftest.rise2")!
+        let applied = PriceRise.applyDue(in: context, today: today, defaults: riseDefaults)
+        check("only rises whose date has come start", applied >= 1 && riser.price == 16 && recent.price == 20 && recent.pendingPrice != nil && brandNew.price == 20, "\(applied) \(riser.price)")
+        check("starting a rise records the price history and price since", riser.priceSince == today && (riser.priceChanges ?? []).contains { $0.oldPrice == 15 && $0.newPrice == 16 && $0.reason == .rise })
+        check("starting again does nothing more", !PriceRise.applyIfDue(riser, today: today, in: context) && riser.price == 16)
+        PriceRise.cancel(recent)
+        riseDefaults.removePersistentDomain(forName: "selftest.rise2")
         settings?.priceRiseDate = savedRiseDate
 
         // ---- Customers screen: filters and reordering

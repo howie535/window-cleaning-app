@@ -65,6 +65,10 @@ struct SettingsView: View {
 
                 MessageSection()
 
+                OwedReminderSection()
+
+                PriceRiseMessageSection()
+
                 Section {
                     LabeledContent("Saved on this phone") {
                         Text(lastAuto > 0 ? Date(timeIntervalSince1970: lastAuto).formatted(date: .abbreviated, time: .shortened) : "Not yet")
@@ -240,6 +244,48 @@ private struct MessageSection: View {
             Text("WhatsApp message")
         } footer: {
             Text("Sent to everyone on a day from the Message button on the Round screen. {name} becomes the customer's name and {date} the day, like \"Tuesday 13 October\". {when} gives \"tomorrow\" or \"on Tuesday\" instead.")
+        }
+    }
+}
+
+private struct OwedReminderSection: View {
+    @AppStorage(OwedReminder.templateKey) private var template = OwedReminder.defaultTemplate
+
+    var body: some View {
+        Section {
+            TextField("Message", text: $template, axis: .vertical)
+                .lineLimit(3...6)
+            if template != OwedReminder.defaultTemplate {
+                Button("Reset to the standard message") { template = OwedReminder.defaultTemplate }
+            }
+        } header: {
+            Text("Reminder for money owed")
+        } footer: {
+            Text("Offered when you skip someone who owes. {name} becomes their name, {amount} what they owe (like £32) and {cleans} \"clean\" or \"2 cleans\".")
+        }
+    }
+}
+
+private struct PriceRiseMessageSection: View {
+    @AppStorage(PriceRise.messageKey) private var template = PriceRise.defaultMessage
+
+    var body: some View {
+        Section {
+            TextField("Message", text: $template, axis: .vertical)
+                .lineLimit(3...6)
+            if template != PriceRise.defaultMessage {
+                Button("Reset to the standard message") { template = PriceRise.defaultMessage }
+            }
+            LabeledContent("Looks like") {
+                Text(PriceRise.message(template: template, name: "Anne", old: 15, new: 16,
+                                       from: PriceRise.previewDate(after: .now, calendar: RoundCalendar.london)))
+                    .font(.footnote)
+                    .multilineTextAlignment(.trailing)
+            }
+        } header: {
+            Text("Price rise message")
+        } footer: {
+            Text("Sent from More > Price Rise > Tell customers. {name}, {old}, {new} and {date} are filled in for each customer.")
         }
     }
 }

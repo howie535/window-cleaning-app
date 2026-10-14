@@ -79,12 +79,13 @@ struct NextUpView: View {
                     let done = day.rows.filter(\.isDone)
                     if day.date == today && !done.isEmpty {
                         doneSummary(done, total: day.doneTotal)
-                        if showDone {
-                            ForEach(done) { dayRow in row(for: dayRow) }
+                        // One list with stable identities, so a row that becomes done never hands its open swipe to
+                        // whichever row slides into its place.
+                        ForEach(showDone ? day.rows : day.rows.filter { !$0.isDone }) { dayRow in
+                            row(for: dayRow, on: day.date, today: today)
                         }
-                        ForEach(day.rows.filter { !$0.isDone }) { dayRow in row(for: dayRow) }
                     } else {
-                        ForEach(day.rows) { dayRow in row(for: dayRow) }
+                        ForEach(day.rows) { dayRow in row(for: dayRow, on: day.date, today: today) }
                     }
                 } header: {
                     DayHeader(day: day, isToday: day.date == today, onMessage: { messageDay = day })
@@ -105,6 +106,9 @@ struct NextUpView: View {
         .sheet(item: $messageDay) { MessageDayView(day: $0) }
         .owedOnPaidPrompt($paidRequest)
         .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
+            if OwedReminder.canSend(to: person) {
+                Button("Skip and send a reminder") { OwedReminder.open(for: person); perform(.skipped, for: person) }
+            }
             Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
             Button("Go back", role: .cancel) {}
         } message: { person in
@@ -139,7 +143,7 @@ struct NextUpView: View {
     }
 
     @ViewBuilder
-    private func row(for dayRow: RoundPlanner.DayRow) -> some View {
+    private func row(for dayRow: RoundPlanner.DayRow, on date: Date, today: Date) -> some View {
         let customer = dayRow.customer
         Group {
             if sizeClass == .regular {
@@ -173,6 +177,19 @@ struct NextUpView: View {
             if !dayRow.isDone {
                 Button { log(.skipped, for: customer) } label: { Label("Skipped", systemImage: "forward.circle") }
                     .tint(.red)
+                if date > today && !dayRow.isPending {
+                    // Pull a later day's customer into today's work (books them for today).
+                    Button { withAnimation { customer.bookedFor = today } } label: { Label("Do today", systemImage: "arrow.up.to.line") }
+                        .tint(.purple)
+                }
+            }
+        }
+        .contextMenu {
+            if date > today && !dayRow.isDone && !dayRow.isPending {
+                Button { withAnimation { customer.bookedFor = today } } label: { Label("Do today", systemImage: "arrow.up.to.line") }
+            }
+            if customer.bookedFor != nil {
+                Button(role: .destructive) { withAnimation { customer.bookedFor = nil } } label: { Label("Remove booking", systemImage: "xmark.circle") }
             }
         }
     }

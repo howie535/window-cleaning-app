@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// The WhatsApp message for a day's customers, and the link that opens it.
 enum DayMessage {
@@ -51,5 +52,30 @@ enum DayMessage {
         var components = URLComponents(string: "https://wa.me/\(digits)")
         components?.queryItems = [URLQueryItem(name: "text", value: text)]
         return components?.url
+    }
+}
+
+/// A WhatsApp reminder for a customer who owes, offered when skipping them (wording in Settings).
+enum OwedReminder {
+    static let templateKey = "whatsapp.owedReminder"
+    static let defaultTemplate = "Hi {name}, we called today but weren't able to clean. Just a reminder that {amount} is still owing from your last {cleans}. Thank you!"
+
+    @MainActor
+    static func text(template: String, for customer: Customer) -> String {
+        let owed = RoundMetrics.moneyOwed([customer])
+        return template
+            .replacingOccurrences(of: "{name}", with: customer.name)
+            .replacingOccurrences(of: "{amount}", with: owed.amount.pounds)
+            .replacingOccurrences(of: "{cleans}", with: owed.cleans == 1 ? "clean" : "\(owed.cleans) cleans")
+    }
+
+    static func canSend(to customer: Customer) -> Bool { customer.contact == .whatsapp && !customer.whatsAppDigits.isEmpty }
+
+    /// Opens WhatsApp with the reminder ready to send.
+    @MainActor
+    static func open(for customer: Customer) {
+        let template = UserDefaults.standard.string(forKey: templateKey) ?? defaultTemplate
+        guard let url = DayMessage.whatsAppURL(digits: customer.whatsAppDigits, text: text(template: template, for: customer)) else { return }
+        UIApplication.shared.open(url)
     }
 }

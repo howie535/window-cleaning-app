@@ -17,6 +17,11 @@ final class Customer {
     var phone: String = ""
     var price: Decimal = 0
     var priceSince: Date?
+    /// A price rise that's been set but hasn't started yet: the new price and the day it starts.
+    var pendingPrice: Decimal?
+    var pendingPriceFrom: Date?
+    /// When they were sent the price rise message (nil = not told yet).
+    var pendingPriceToldAt: Date?
     /// A second price for customers who alternate (e.g. front only one time, full the next).
     var altPrice: Decimal?
     /// What the second price is for, e.g. "Front only".

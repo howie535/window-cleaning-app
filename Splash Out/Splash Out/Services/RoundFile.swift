@@ -61,6 +61,9 @@ struct RoundFile: Codable {
         var altPrice: Double? = nil
         var altPriceLabel: String? = nil
         var groupWithPrevious: Bool? = nil
+        var pendingPrice: Double? = nil
+        var pendingPriceFrom: String? = nil
+        var pendingPriceToldAt: String? = nil
     }
 
     struct VisitRecord: Codable {

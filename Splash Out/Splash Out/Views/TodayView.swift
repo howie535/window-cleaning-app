@@ -48,7 +48,7 @@ struct TodayView: View {
         let yearTotals = RoundMetrics.totals(for: customers, in: TaxYear.range(startYear: taxYear))
         let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let pace = RoundPlanner.paceWeeks(of: plan)
-        let perHouse = stats.averagePerHouseByDay(taxYear: taxYear)
+        let perHouse = stats.averagePerHouseByDay()
         let priced = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
         let listAverage = priced.isEmpty ? Decimal(0) : priced.reduce(Decimal(0)) { $0 + $1.price } / Decimal(priced.count)
         let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
@@ -64,6 +64,8 @@ struct TodayView: View {
         let riseMonths = settings.first?.priceRiseDueAfterMonths ?? 24
         let risesKnown = onRoundList.filter { $0.priceSince != nil && PriceRise.isDue(priceSince: $0.priceSince, today: today, dueAfterMonths: riseMonths, calendar: RoundCalendar.london) }.count
         let noPriceDate = onRoundList.filter { $0.priceSince == nil }.count
+        let risesSet = customers.filter { $0.pendingPrice != nil }
+        let risesNotTold = risesSet.filter { $0.pendingPriceToldAt == nil }.count
         let notStarted = customers.filter { $0.status == .notStarted }.count
         let everyOther = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.everyOther }.count
         let _ = PerfProbe.end("Stats", perfStart)
@@ -89,7 +91,7 @@ struct TodayView: View {
                          ideal: ideal.roundValue.map { pounds($0) }, onIdeal: showIdeal))
                     card(.perHouse, Tile(title: "Average per house",
                          value: perHouse.map { pounds2($0.average) } ?? pounds2(listAverage),
-                         detail: perHouse.map { "over \($0.days) days this tax year" } ?? "list prices",
+                         detail: perHouse.map { "over \($0.days) days, \(stats.analysisLabel)" } ?? "list prices",
                          ideal: ideal.planned.map { pounds2($0.perHouse) }, onIdeal: showIdeal))
                     card(.housesPerDay, Tile(title: "Houses per workday",
                          value: rate.map { $0.housesPerDay.formatted(.number.precision(.fractionLength(1))) } ?? "–",
@@ -105,8 +107,11 @@ struct TodayView: View {
                     card(nil, Tile(title: "New vs lost", value: newVsLost,
                          detail: "this tax year"))
                     card(.priceRise, Tile(title: "Price rises due", value: "\(risesDueCount)",
-                         detail: noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years"))
-                    card(.skipRate, Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))), detail: "all time"))
+                         detail: !risesSet.isEmpty
+                            ? "\(risesSet.count) set" + (risesNotTold > 0 ? " · \(risesNotTold) not told" : " · all told")
+                            : (noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years")))
+                    card(.skipRate, Tile(title: "Skip rate", value: (rate?.skipRate ?? stats.skipRate).formatted(.percent.precision(.fractionLength(1))),
+                             detail: rate == nil ? "all time" : stats.analysisLabel))
                 }
 
         NavigationStack {
@@ -117,6 +122,13 @@ struct TodayView: View {
                     BackupReminder()
                         .padding(.horizontal)
                         .padding(.bottom, 4)
+                    if let started = startedToday(today) {
+                        Label("\(started) new price\(started == 1 ? "" : "s") started today", systemImage: "arrow.up.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.purple)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                    }
                     if sideBySide {
                         HStack(alignment: .top, spacing: 12) {
                             tiles
@@ -148,6 +160,14 @@ struct TodayView: View {
                 }
             }
         }
+    }
+
+    /// How many price rises switched over today, if any (saved by `PriceRise.applyDue`).
+    private func startedToday(_ today: Date) -> Int? {
+        guard let saved = UserDefaults.standard.string(forKey: PriceRise.lastAppliedKey) else { return nil }
+        let parts = saved.split(separator: ":")
+        guard parts.count == 2, String(parts[0]) == RoundCalendar.dayString(today) else { return nil }
+        return Int(parts[1])
     }
 
     /// Where tapping a card (or an Ideal line) goes.

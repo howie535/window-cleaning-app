@@ -13,6 +13,8 @@ enum VisitLogger {
         case cleanedExtra(extra: Decimal, note: String?, paid: Bool)
         /// Cleaned at a chosen list price (for customers with two prices).
         case cleanedAt(price: Decimal, paid: Bool)
+        /// Front only, at an amount given each time.
+        case frontOnly(price: Decimal, paid: Bool)
         case skipped
         case notDue
 
@@ -22,6 +24,7 @@ enum VisitLogger {
             case .cleanedNotPaid: "cleaned, not paid"
             case .cleanedExtra: "cleaned with extra"
             case .cleanedAt(_, let paid): paid ? "cleaned and paid" : "cleaned, not paid"
+            case .frontOnly(_, let paid): paid ? "front only, paid" : "front only, not paid"
             case .skipped: "skipped"
             case .notDue: "not due"
             }
@@ -31,6 +34,8 @@ enum VisitLogger {
     @discardableResult
     static func perform(_ action: Action, for customer: Customer, on date: Date = Date(), in context: ModelContext) -> () -> Void {
         let day = RoundCalendar.startOfDay(date)
+        // A price rise that has started is used from its first day, even if the app hasn't switched it over yet.
+        PriceRise.applyIfDue(customer, today: day, in: context)
         let previousStatus = customer.status
         let previousBooking = customer.bookedFor
 
@@ -44,6 +49,8 @@ enum VisitLogger {
             visit = cleaned(customer, day: day, base: customer.price, extra: extra, note: note, paid: paid)
         case .cleanedAt(let price, let paid):
             visit = cleaned(customer, day: day, base: price, extra: 0, note: nil, paid: paid)
+        case .frontOnly(let price, let paid):
+            visit = cleaned(customer, day: day, base: price, extra: 0, note: frontOnlyNote, paid: paid)
         case .skipped:
             visit = Visit(date: day, kind: .skipped, listPrice: customer.price, charged: 0)
         case .notDue:
@@ -77,6 +84,7 @@ enum VisitLogger {
         in context: ModelContext
     ) -> () -> Void {
         let day = RoundCalendar.startOfDay(date)
+        PriceRise.applyIfDue(customer, today: day, in: context)
         let previousStatus = customer.status
         let previousBooking = customer.bookedFor
         let suggested = customer.suggestedNextPrice
@@ -102,12 +110,19 @@ enum VisitLogger {
         }
     }
 
+    static let frontOnlyNote = "Front only"
+
+    /// What they were charged for their last front-only clean, to start from next time.
+    static func lastFrontOnlyPrice(for customer: Customer) -> Decimal? {
+        customer.allVisits.filter { $0.kind == .cleaned && $0.note == frontOnlyNote }.max { $0.date < $1.date }?.listPrice
+    }
+
     /// Runs `work` once a swipe or sheet animation has finished (about a third of a second), so the screens updating
     /// for the new visit never stall the animation.
     static func afterAnimation(_ work: @escaping @MainActor () -> Void) {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
-            work()
+            withAnimation { work() }
         }
     }
 

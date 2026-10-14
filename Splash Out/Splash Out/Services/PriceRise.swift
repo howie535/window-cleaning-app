@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// Price rise rules (Docs/SPEC.md 4.10).
 /// Pure logic on plain values, so it can be tested alone.
@@ -37,5 +38,66 @@ enum PriceRise {
         let year = calendar.component(.year, from: today)
         let thisYears = calendar.date(from: DateComponents(year: year, month: 4, day: 6))!
         return today <= thisYears ? thisYears : calendar.date(from: DateComponents(year: year + 1, month: 4, day: 6))!
+    }
+
+    // MARK: Rises that have been set (pending)
+
+    static let messageKey = "whatsapp.priceRiseTemplate"
+    static let defaultMessage = "Hi {name}, from {date} your window clean will be {new} (currently {old}). Thank you for your custom."
+
+    /// The price rise message for a customer.
+    static func message(template: String, name: String, old: Decimal, new: Decimal, from date: Date) -> String {
+        template
+            .replacingOccurrences(of: "{name}", with: name)
+            .replacingOccurrences(of: "{old}", with: old.pounds)
+            .replacingOccurrences(of: "{new}", with: new.pounds)
+            .replacingOccurrences(of: "{date}", with: DayMessage.fullDate(date))
+    }
+
+    /// Sets a rise for a customer: the new price starts on `from`.
+    @MainActor
+    static func set(_ customer: Customer, to price: Decimal, from date: Date) {
+        customer.pendingPrice = price
+        customer.pendingPriceFrom = RoundCalendar.startOfDay(date)
+        customer.pendingPriceToldAt = nil
+    }
+
+    @MainActor
+    static func cancel(_ customer: Customer) {
+        customer.pendingPrice = nil
+        customer.pendingPriceFrom = nil
+        customer.pendingPriceToldAt = nil
+    }
+
+    /// Switches a customer to their new price if its day has come (or `now` is true), recording it in their history.
+    /// Returns true if the price changed.
+    @MainActor @discardableResult
+    static func applyIfDue(_ customer: Customer, today: Date = RoundCalendar.startOfDay(), now: Bool = false, in context: ModelContext) -> Bool {
+        guard let price = customer.pendingPrice, let from = customer.pendingPriceFrom, now || from <= today else { return false }
+        let effective = now ? min(from, today) : from
+        if price != customer.price {
+            context.insert(PriceChange(date: effective, oldPrice: customer.price, newPrice: price, reason: .rise, customer: customer))
+            customer.price = price
+            customer.priceSince = effective
+        }
+        cancel(customer)
+        return true
+    }
+
+    static let lastAppliedKey = "priceRise.lastApplied"
+
+    /// Every rise whose day has come. Run when the app opens and at midnight. Returns how many prices changed.
+    @MainActor @discardableResult
+    static func applyDue(in context: ModelContext, today: Date = RoundCalendar.startOfDay(), defaults: UserDefaults = .standard) -> Int {
+        let customers = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
+        var changed = 0
+        for customer in customers where customer.pendingPrice != nil {
+            if applyIfDue(customer, today: today, in: context) { changed += 1 }
+        }
+        if changed > 0 {
+            try? context.save()
+            defaults.set("\(RoundCalendar.dayString(today)):\(changed)", forKey: lastAppliedKey)
+        }
+        return changed
     }
 }

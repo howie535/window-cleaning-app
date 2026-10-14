@@ -49,21 +49,6 @@ extension RoundStats {
         }
     }
 
-    /// Applies rises that have taken effect: updates each price, records a PriceChange, and sets "price since".
-    /// Past visits are left alone. Returns how many customers changed.
-    @discardableResult
-    static func applyRises(_ rows: [RiseRow], in context: ModelContext) -> Int {
-        var changed = 0
-        for row in rows {
-            guard let effective = row.effective, row.newPrice != row.customer.price else { continue }
-            context.insert(PriceChange(date: effective, oldPrice: row.customer.price, newPrice: row.newPrice, reason: .rise, customer: row.customer))
-            row.customer.price = row.newPrice
-            row.customer.priceSince = effective
-            changed += 1
-        }
-        return changed
-    }
-
     // MARK: Frequent skips (4.9)
 
     struct SkipRow: Identifiable {

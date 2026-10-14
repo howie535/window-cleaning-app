@@ -167,24 +167,12 @@ struct RoundStats {
         return total == 0 ? 0 : Double(skipped) / Double(total)
     }
 
-    /// Houses cleaned per worked day over a tax year so far (a worked day has at least the minimum houses).
-    func housesPerWorkedDay(taxYear: Int) -> (average: Decimal, days: Int)? {
-        let range = TaxYear.range(startYear: taxYear)
-        var houses = 0, days = 0
-        for (date, totals) in dayTotals where range.contains(date) && date < today && totals.houses >= settings.minHousesForWorkingDay {
-            houses += totals.houses
-            days += 1
-        }
-        guard days > 0 else { return nil }
-        return (Decimal(houses) / Decimal(days), days)
-    }
-
-    /// Average per house the spreadsheet's way (Weekly Data AL2): each worked day's £ ÷ houses, averaged over the
-    /// days in the tax year with any cleans. Every day counts the same, however many houses were done.
-    func averagePerHouseByDay(taxYear: Int) -> (average: Decimal, days: Int)? {
-        let range = TaxYear.range(startYear: taxYear)
+    /// Average per house the spreadsheet's way (each finished day's £ ÷ houses, averaged over the days), over the
+    /// last 12 months like the other averages.
+    func averagePerHouseByDay() -> (average: Decimal, days: Int)? {
+        let start = analysisStart
         var sum: Decimal = 0, days = 0
-        for (date, totals) in dayTotals where range.contains(date) && date < today && totals.houses > 0 {
+        for (date, totals) in dayTotals where date >= start && date < today && totals.houses > 0 {
             sum += totals.work / Decimal(totals.houses)
             days += 1
         }

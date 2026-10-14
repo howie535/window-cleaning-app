@@ -5,9 +5,15 @@ import SwiftData
 /// (see `visitLogSheets`), not the rows: a sheet attached to each row of a list fights with its neighbours
 /// and closes straight after opening.
 enum VisitSheet: Identifiable {
-    case extra, custom
+    case extra, custom, frontOnly
 
-    var id: Int { self == .extra ? 0 : 1 }
+    var id: Int {
+        switch self {
+        case .extra: 0
+        case .custom: 1
+        case .frontOnly: 2
+        }
+    }
 }
 
 extension View {
@@ -17,6 +23,7 @@ extension View {
             switch kind {
             case .extra: ExtraCleanSheet(customer: customer, onSaved: onLogged)
             case .custom: AddCleanLogView(customer: customer)
+            case .frontOnly: FrontOnlySheet(customer: customer, onSaved: onLogged)
             }
         }
     }
@@ -66,6 +73,9 @@ struct VisitQuickActions: View {
             } message: {
                 Text("\(customer.name) has two prices. The one not used last time is first.")
             }
+            row("Front only...", systemImage: "house.lodge", tint: .teal) {
+                sheet = .frontOnly
+            }
             row("Cleaned + extra...", systemImage: "plus.circle", tint: .blue) {
                 sheet = .extra
             }
@@ -73,6 +83,9 @@ struct VisitQuickActions: View {
                 if owed.cleans > 0 { isConfirmingSkip = true } else { run(.skipped) }
             }
             .alert("\(customer.name) owes money", isPresented: $isConfirmingSkip) {
+                if OwedReminder.canSend(to: customer) {
+                    Button("Skip and send a reminder") { OwedReminder.open(for: customer); run(.skipped) }
+                }
                 Button("Skip anyway", role: .destructive) { run(.skipped) }
                 Button("Go back", role: .cancel) {}
             } message: {
@@ -118,6 +131,61 @@ struct VisitQuickActions: View {
         let undoCenter = undoCenter
         let customer = customer
         onLogged()
+        VisitLogger.afterAnimation {
+            let undo = VisitLogger.perform(action, for: customer, in: context)
+            undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        }
+    }
+}
+
+/// "Front only": asks for the amount (starting from last time's), and whether they paid.
+struct FrontOnlySheet: View {
+    let customer: Customer
+    var onSaved: () -> Void = {}
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(UndoCenter.self) private var undoCenter
+
+    @State private var amountText = ""
+    @State private var isPaid = true
+
+    private var amount: Decimal? { Decimal(string: amountText).flatMap { $0 > 0 ? $0 : nil } }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledField(label: "Front only price (£)") {
+                        TextField("0.00", text: $amountText).keyboardType(.decimalPad)
+                    }
+                    Toggle("Paid", isOn: $isPaid)
+                } footer: {
+                    Text(VisitLogger.lastFrontOnlyPrice(for: customer).map { "Last time: \($0.pounds). Their full price is \(customer.price.pounds)." }
+                         ?? "Their full price is \(customer.price.pounds).")
+                }
+            }
+            .navigationTitle("Front only")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(amount == nil) }
+            }
+            .onAppear {
+                if let last = VisitLogger.lastFrontOnlyPrice(for: customer) { amountText = NSDecimalNumber(decimal: last).stringValue }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func save() {
+        guard let amount else { return }
+        let action = VisitLogger.Action.frontOnly(price: amount, paid: isPaid)
+        let context = modelContext
+        let undoCenter = undoCenter
+        let customer = customer
+        dismiss()
+        onSaved()
         VisitLogger.afterAnimation {
             let undo = VisitLogger.perform(action, for: customer, in: context)
             undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)

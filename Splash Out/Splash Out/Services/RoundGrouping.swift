@@ -6,12 +6,30 @@ import Foundation
 enum RoundGrouping {
     /// The street part of an address: first line, lower case, punctuation gone, house numbers ("33a") dropped.
     static func streetKey(_ address: String) -> String {
-        let firstLine = address.split(separator: ",").first.map(String.init) ?? address
-        let cleaned = String(firstLine.lowercased().map { $0.isLetter || $0.isNumber ? $0 : " " })
+        // The part of the address that names the street: the first with a house number or a street word
+        // ("Coddington, High St" is High St), otherwise the first part.
+        let parts = address.split(separator: ",").map { String($0).lowercased() }
+        let streetPart = parts.first { part in
+            part.contains(where: \.isNumber) || part.split(whereSeparator: { !$0.isLetter }).contains { streetWords.contains(String($0)) }
+        } ?? parts.first ?? ""
+        let cleaned = String(streetPart.map { $0.isLetter || $0.isNumber ? $0 : " " })
         var words = cleaned.split(separator: " ").map(String.init)
         words.removeAll { $0.contains(where: \.isNumber) }
-        return words.joined(separator: " ")
+        return words.map { abbreviations[$0] ?? $0 }.joined(separator: " ")
     }
+
+    private static let streetWords: Set<String> = [
+        "road", "rd", "street", "st", "avenue", "ave", "drive", "dr", "lane", "ln", "close", "cl", "crescent", "cres",
+        "court", "ct", "place", "pl", "gardens", "gdns", "terrace", "terr", "way", "park", "grove", "hill", "view", "rise",
+        "walk", "square", "mews", "parade", "lon", "ffordd", "heol", "stryd", "maes", "rhodfa", "llys", "cae", "bryn",
+    ]
+
+    /// "Rd" and "Road" are the same street.
+    private static let abbreviations: [String: String] = [
+        "rd": "road", "st": "street", "ave": "avenue", "av": "avenue", "dr": "drive", "ln": "lane", "cl": "close",
+        "cres": "crescent", "ct": "court", "pl": "place", "gdns": "gardens", "gdn": "gardens", "terr": "terrace",
+        "ter": "terrace", "sq": "square", "pk": "park", "gr": "grove",
+    ]
 
     /// Same street: the keys match, or one is the other with a house name in front
     /// ("blue haze lon pendyffryn" and "lon pendyffryn"). A one-word street must match exactly.
