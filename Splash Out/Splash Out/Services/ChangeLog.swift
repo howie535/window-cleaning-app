@@ -17,6 +17,7 @@ enum ChangeLog {
             "Cleaned & paid for someone who already owes asks whether they paid the older cleans too.",
             "Averages only count finished days, so the first cleans of the morning don't skew them.",
             "Smoother, clearer charts.",
+            "Faster logging: swipes and the log sheet finish their animation before the clean is saved, and the screens no longer re-read every customer's history after each save.",
         ]),
         Release(version: "1.1", date: "October 2026", changes: [
             "Round: the list carries on from where the day started, so cleaning someone out of order no longer moves anyone else.",

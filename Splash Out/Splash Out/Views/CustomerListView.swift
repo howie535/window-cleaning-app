@@ -33,7 +33,9 @@ struct CustomerListView: View {
     }
 
     var body: some View {
+        let perfStart = PerfProbe.now()
         let shown = CustomerFilter.apply(criteria, to: customers)
+        let _ = PerfProbe.end("Customers", perfStart)
         Group {
             if sizeClass == .regular {
                 NavigationSplitView {
@@ -212,8 +214,12 @@ struct CustomerListView: View {
     }
 
     private func perform(_ action: VisitLogger.Action, for customer: Customer) {
-        let undo = VisitLogger.perform(action, for: customer, in: modelContext)
-        undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        let context = modelContext
+        let undoCenter = undoCenter
+        VisitLogger.afterAnimation {
+            let undo = VisitLogger.perform(action, for: customer, in: context)
+            undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        }
     }
 
     private func handleFileImport(_ result: Result<URL, Error>) {

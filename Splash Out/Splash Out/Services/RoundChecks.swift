@@ -78,7 +78,7 @@ extension RoundStats {
     func frequentSkippers() -> [SkipRow] {
         var rows: [SkipRow] = []
         for customer in customers where customer.status == .active || customer.status == .leaving {
-            let visits = customer.allVisits.filter { $0.kind != .notDue }.sorted { $0.date < $1.date }
+            let visits = visitsOf(customer).filter { $0.kind != .notDue }.sorted { $0.date < $1.date }
             guard let first = visits.firstIndex(where: { $0.kind == .cleaned }) else { continue }
             let yearAgo = RoundCalendar.london.date(byAdding: .month, value: -12, to: today) ?? today
             let recent = visits[first...].filter { $0.date >= yearAgo }
@@ -100,7 +100,7 @@ extension RoundStats {
     func payingUnderPrice() -> [UnderPriceRow] {
         customers.compactMap { customer in
             guard customer.status == .active || customer.status == .leaving, !customer.frontOnly,
-                  let last = customer.allVisits.filter({ $0.kind == .cleaned }).max(by: { $0.date < $1.date }),
+                  let last = visitsOf(customer).filter({ $0.kind == .cleaned }).max(by: { $0.date < $1.date }),
                   last.paid > 0, last.paid < last.listPrice
             else { return nil }
             return UnderPriceRow(customer: customer, lastPaid: last.paid)
@@ -119,7 +119,7 @@ extension RoundStats {
     func dataIssues() -> [DataIssue] {
         var issues: [DataIssue] = []
         for customer in customers {
-            let visits = customer.allVisits
+            let visits = visitsOf(customer)
             let future = visits.filter { $0.date > today }.count
             if future > 0 {
                 issues.append(DataIssue(customer: customer, message: "\(future) visit\(future == 1 ? "" : "s") dated in the future"))

@@ -308,6 +308,27 @@ enum SimulatorSelfTest {
                 _ = s.housesPerWorkedDay(taxYear: s.currentTaxYear); _ = s.risesDue()
             }
             let tOwed = clock.measure { _ = RoundMetrics.moneyOwed(everyone); _ = everyone.map { VisitLogger.unpaidVisits(for: $0) } }
+            // What a save does to the next plan (the second wave of lag after logging).
+            let tWarm = clock.measure { _ = RoundPlanner.plan(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today) }
+            try context.save()
+            let tAfterSave = clock.measure { _ = RoundPlanner.plan(customers: everyone, settings: settings, crews: crews, workDays: workDays, today: today) }
+            let refetched = try context.fetch(FetchDescriptor<Customer>())
+            let tRefetch = clock.measure { _ = RoundPlanner.plan(customers: refetched, settings: settings, crews: crews, workDays: workDays, today: today) }
+            try context.save()
+            var withVisits = FetchDescriptor<Customer>()
+            withVisits.relationshipKeyPathsForPrefetching = [\.visits]
+            let prefetched = try context.fetch(withVisits)
+            let tPrefetch = clock.measure { _ = RoundPlanner.plan(customers: prefetched, settings: settings, crews: crews, workDays: workDays, today: today) }
+            try context.save()
+            var visitCount = 0
+            let tAllVisits = try clock.measure {
+                let all = try context.fetch(FetchDescriptor<Visit>())
+                var byCustomer: [PersistentIdentifier: Int] = [:]
+                for v in all { _ = v.date; _ = v.kindRaw; _ = v.charged; if let id = v.customer?.persistentModelID { byCustomer[id, default: 0] += 1 } }
+                visitCount = all.count
+            }
+            lines.append("PERF after save: customers fetched with visits \(ms(tPrefetch))ms; all \(visitCount) visits in one fetch \(ms(tAllVisits))ms")
+            lines.append("PERF warm \(ms(tWarm))ms, after save \(ms(tAfterSave))ms, after save and refetch \(ms(tRefetch))ms")
             lines.append("PERF plan first \(ms(tCold))ms then \(ms(tPlan))ms, stats \(ms(tStats))ms, owed \(ms(tOwed))ms (\(everyone.count) customers)")
         }
         // Ideal figures, with inputs worked out by hand: 20 houses a workday, 3 usual days (2.5 actually worked),

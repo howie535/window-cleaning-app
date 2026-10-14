@@ -10,6 +10,10 @@ struct RoundStats {
     let today: Date
 
     private let calendar = RoundCalendar.london
+    /// The visit index in use when these stats were made, so functions called later in the same update use it too.
+    private let index = VisitLookup.current
+
+    func visitsOf(_ customer: Customer) -> [Visit] { index?.visits(for: customer) ?? customer.allVisits }
 
     /// Cleaned visits per date.
     let dayTotals: [Date: WeekMetrics.DayTotals]
@@ -68,7 +72,7 @@ struct RoundStats {
         WeekMetrics.monthRanges(taxYearStart: taxYear, calendar: calendar).map { range in
             var row = WeekMetrics.MonthRow(label: range.label, from: range.from, to: range.to)
             for customer in customers {
-                for visit in customer.allVisits where visit.kind == .cleaned && visit.date >= range.from && visit.date <= range.to {
+                for visit in visitsOf(customer) where visit.kind == .cleaned && visit.date >= range.from && visit.date <= range.to {
                     row.work += visit.charged
                     row.paid += visit.paid
                     row.notYetPaid += max(0, visit.charged - visit.paid)
@@ -97,7 +101,7 @@ struct RoundStats {
         var byRound: [String: RoundRow] = [:]
         for customer in customers {
             let name = customer.round.isEmpty ? "No round" : customer.round
-            for visit in customer.allVisits where visit.kind == .cleaned && range.contains(visit.date) {
+            for visit in visitsOf(customer) where visit.kind == .cleaned && range.contains(visit.date) {
                 var row = byRound[name] ?? RoundRow(round: name, work: 0, paid: 0, notYetPaid: 0, cleans: 0)
                 row.work += visit.charged
                 row.paid += visit.paid
@@ -140,7 +144,7 @@ struct RoundStats {
         let range = TaxYear.range(startYear: taxYear)
         let floor: Date? = taxYear == 2026 ? RoundCalendar.date(year: 2026, month: 5, day: 18) : nil
         return customers.filter { customer in
-            guard let first = customer.allVisits.filter({ $0.kind == .cleaned }).map(\.date).min() else { return false }
+            guard let first = visitsOf(customer).filter({ $0.kind == .cleaned }).map(\.date).min() else { return false }
             return range.contains(first) && (floor.map { first >= $0 } ?? true)
         }.count
     }
@@ -155,7 +159,7 @@ struct RoundStats {
     var skipRate: Double {
         var skipped = 0, total = 0
         for customer in customers where customer.status != .cancelled {
-            for visit in customer.allVisits where visit.kind != .notDue {
+            for visit in visitsOf(customer) where visit.kind != .notDue {
                 total += 1
                 if visit.kind == .skipped { skipped += 1 }
             }
@@ -235,7 +239,7 @@ struct RoundStats {
         let weeks = Decimal(max(days, 7)) / 7
         var skipped = 0, visits = 0
         for customer in customers where customer.status != .cancelled {
-            for visit in customer.allVisits where visit.kind != .notDue && visit.date >= start && visit.date < today {
+            for visit in visitsOf(customer) where visit.kind != .notDue && visit.date >= start && visit.date < today {
                 visits += 1
                 if visit.kind == .skipped { skipped += 1 }
             }
@@ -251,7 +255,7 @@ struct RoundStats {
         let start = analysisStart
         var gaps: [Int] = []
         for customer in customers where (customer.status == .active || customer.status == .leaving) && !customer.everyOther {
-            let dates = customer.allVisits.filter { $0.kind == .cleaned }.map(\.date).sorted()
+            let dates = visitsOf(customer).filter { $0.kind == .cleaned }.map(\.date).sorted()
             for (a, b) in zip(dates, dates.dropFirst()) where b >= start && b < today {
                 let gap = Int((b.timeIntervalSince(a) / 86_400).rounded())
                 if gap >= 14 { gaps.append(gap) }

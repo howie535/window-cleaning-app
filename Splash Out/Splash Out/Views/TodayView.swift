@@ -5,7 +5,10 @@ import Charts
 /// The dashboard (Docs/SPEC.md section 5): tiles for the week, today, money owed and so on.
 struct TodayView: View {
     @Environment(RoundClock.self) private var clock
+    /// nil outside the tab bar (always shown).
+    @Environment(TabState.self) private var tabs: TabState?
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
@@ -20,7 +23,19 @@ struct TodayView: View {
     }
 
     var body: some View {
+        // Hidden tabs stay alive; skip the sums until this tab is showing again.
+        if tabs == nil || tabs?.selection == .today {
+            content
+        } else {
+            Color(.systemGroupedBackground)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        let perfStart = PerfProbe.now()
         let today = clock.today
+        let _ = VisitLookup.begin(visits)
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let week = stats.thisWeek
         let owed = RoundMetrics.moneyOwed(customers)
@@ -51,6 +66,10 @@ struct TodayView: View {
         let noPriceDate = onRoundList.filter { $0.priceSince == nil }.count
         let notStarted = customers.filter { $0.status == .notStarted }.count
         let everyOther = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.everyOther }.count
+        let _ = PerfProbe.end("Stats", perfStart)
+        let newVsLost = "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))"
+        let risesDueCount = risesKnown
+        let _ = VisitLookup.end()
         let showIdeal = { destination = .ideal }
         let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
                     card(.weeklyWork, Tile(title: "This week", value: pounds(week.work),
@@ -83,9 +102,9 @@ struct TodayView: View {
                     card(nil, Tile(title: "Customers", value: "\(listed)",
                          detail: "\(everyOther) every-other · \(notStarted) not started · \(customers.filter { $0.status == .paused }.count) paused",
                          ideal: ideal.planned.map { "\($0.peopleNeeded)" }, onIdeal: showIdeal))
-                    card(nil, Tile(title: "New vs lost", value: "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))",
+                    card(nil, Tile(title: "New vs lost", value: newVsLost,
                          detail: "this tax year"))
-                    card(.priceRise, Tile(title: "Price rises due", value: "\(risesKnown)",
+                    card(.priceRise, Tile(title: "Price rises due", value: "\(risesDueCount)",
                          detail: noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years"))
                     card(.skipRate, Tile(title: "Skip rate", value: stats.skipRate.formatted(.percent.precision(.fractionLength(1))), detail: "all time"))
                 }

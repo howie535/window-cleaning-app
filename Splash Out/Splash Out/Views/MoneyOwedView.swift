@@ -4,7 +4,10 @@ import SwiftData
 /// Every unpaid clean, by customer, oldest first (Docs/SPEC.md section 4.8).
 struct MoneyOwedView: View {
     @Environment(RoundClock.self) private var clock
+    /// nil outside the tab bar (always shown).
+    @Environment(TabState.self) private var tabs: TabState?
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var payingCustomer: Customer?
@@ -49,14 +52,29 @@ struct MoneyOwedView: View {
     }
 
     var body: some View {
+        // Hidden tabs stay alive; skip the sums until this tab is showing again.
+        if tabs == nil || tabs?.selection == .owed {
+            content
+        } else {
+            Color(.systemGroupedBackground)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        let perfStart = PerfProbe.now()
+        let _ = VisitLookup.begin(visits)
         let rows = rows
+        let credits = inCredit
+        let _ = VisitLookup.end()
         let total = rows.reduce(Decimal(0)) { $0 + $1.amount }
         let cleans = rows.reduce(0) { $0 + $1.cleans }
         let today = clock.today
+        let _ = PerfProbe.end("Owed", perfStart)
 
         if sizeClass == .regular {
             NavigationSplitView {
-                owedList(rows: rows, total: total, cleans: cleans, today: today)
+                owedList(rows: rows, credits: credits, total: total, cleans: cleans, today: today)
                     .roomyRows()
                     .navigationTitle("Money Owed")
             } detail: {
@@ -72,7 +90,7 @@ struct MoneyOwedView: View {
             .navigationSplitViewStyle(.balanced)
         } else {
             NavigationStack {
-                owedList(rows: rows, total: total, cleans: cleans, today: today)
+                owedList(rows: rows, credits: credits, total: total, cleans: cleans, today: today)
                     .navigationTitle("Money Owed")
                     .sheet(item: $payingCustomer) { customer in
                         RecordPaymentView(customer: customer)
@@ -81,9 +99,9 @@ struct MoneyOwedView: View {
         }
     }
 
-    private func owedList(rows: [Row], total: Decimal, cleans: Int, today: Date) -> some View {
+    private func owedList(rows: [Row], credits allCredits: [(customer: Customer, credit: Decimal)], total: Decimal, cleans: Int, today: Date) -> some View {
         let shown = rows.filter { matches($0.customer) }
-        let credits = inCredit.filter { matches($0.customer) }
+        let credits = allCredits.filter { matches($0.customer) }
         return List(selection: sizeClass == .regular ? $selectedID : .constant(nil)) {
             Section {
                 LabeledContent("Total owed") {

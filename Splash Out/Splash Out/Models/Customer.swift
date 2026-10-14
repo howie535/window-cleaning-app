@@ -74,7 +74,8 @@ final class Customer {
         set { payMethodRaw = newValue?.rawValue }
     }
 
-    var allVisits: [Visit] { visits ?? [] }
+    /// From the current screen's visit index while it works out its figures (see `VisitLookup`), otherwise the relationship.
+    var allVisits: [Visit] { VisitLookup.current?.visits(for: self) ?? (visits ?? []) }
 
     var coordinate: CLLocationCoordinate2D? {
         guard let latitude, let longitude else { return nil }

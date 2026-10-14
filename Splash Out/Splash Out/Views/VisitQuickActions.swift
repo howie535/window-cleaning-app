@@ -113,9 +113,15 @@ struct VisitQuickActions: View {
     }
 
     private func run(_ action: VisitLogger.Action) {
-        let undo = VisitLogger.perform(action, for: customer, in: modelContext)
-        undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        // Close the sheet (or move on) first; the visit is saved once that animation has finished.
+        let context = modelContext
+        let undoCenter = undoCenter
+        let customer = customer
         onLogged()
+        VisitLogger.afterAnimation {
+            let undo = VisitLogger.perform(action, for: customer, in: context)
+            undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        }
     }
 }
 

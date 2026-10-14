@@ -102,6 +102,15 @@ enum VisitLogger {
         }
     }
 
+    /// Runs `work` once a swipe or sheet animation has finished (about a third of a second), so the screens updating
+    /// for the new visit never stall the animation.
+    static func afterAnimation(_ work: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            work()
+        }
+    }
+
     /// A paid clean that also settles everything they owed from earlier cleans. One undo reverses both.
     static func cleanAndPayOff(_ action: Action, for customer: Customer, in context: ModelContext) -> (undo: () -> Void, paidOff: Decimal) {
         let earlier = unpaidVisits(for: customer)

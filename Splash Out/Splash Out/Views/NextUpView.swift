@@ -4,6 +4,7 @@ import SwiftData
 /// The working screen: who's next, day by day (Docs/SPEC.md sections 3 and 4.6).
 struct NextUpView: View {
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
@@ -27,8 +28,12 @@ struct NextUpView: View {
     @State private var showDone = false
 
     var body: some View {
+        let perfStart = PerfProbe.now()
         let today = clock.today
+        let _ = VisitLookup.begin(visits)
         let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
+        let _ = VisitLookup.end()
+        let _ = PerfProbe.end("Round", perfStart)
 
         if sizeClass == .regular {
             NavigationSplitView {
@@ -175,8 +180,12 @@ struct NextUpView: View {
     }
 
     private func perform(_ action: VisitLogger.Action, for customer: Customer) {
-        let undo = VisitLogger.perform(action, for: customer, in: modelContext)
-        undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        let context = modelContext
+        let undoCenter = undoCenter
+        VisitLogger.afterAnimation {
+            let undo = VisitLogger.perform(action, for: customer, in: context)
+            undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
+        }
     }
 
     /// After logging, move on to whoever is next in the round.
@@ -250,6 +259,7 @@ private struct NextUpRow: View {
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
     var body: some View {
+        let owed = owed
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
