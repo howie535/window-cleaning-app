@@ -24,11 +24,18 @@ enum MapPositions {
         return true
     }
 
-    /// Works through customers with no position, one every couple of seconds (Apple limits how fast this can go).
+    /// Positions found but not yet saved. Saving each one as it came made every screen rebuild every couple of
+    /// seconds (a hitch at the end of scrolling), so they're saved together instead.
+    private static var found: [PersistentIdentifier: CLLocationCoordinate2D] = [:]
+    private static weak var foundContext: ModelContext?
+
+    /// Works through customers with no position, one every couple of seconds (Apple limits how fast this can go),
+    /// saving them all together every 100, at the end, or when the app goes to the background.
     /// Addresses that couldn't be found are retried after two weeks.
     static func fillMissing(in context: ModelContext, defaults: UserDefaults = .standard) {
         // Not during the Simulator's self-test and import runs.
         guard running == nil, !CommandLine.arguments.contains("-ImportFile") else { return }
+        foundContext = context
         running = Task { @MainActor in
             defer { running = nil }
             let customers = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
@@ -38,19 +45,39 @@ enum MapPositions {
                 .filter { $0.coordinate == nil && $0.status != .cancelled && !$0.address.isEmpty }
                 .filter { (failed[$0.id.uuidString] ?? 0) < twoWeeksAgo }
                 .sorted { $0.sequence < $1.sequence }
-            for customer in todo {
+                .map { (id: $0.persistentModelID, key: $0.id.uuidString, query: query(for: $0)) }
+            for item in todo {
                 if Task.isCancelled { break }
-                if await find(customer) { failed[customer.id.uuidString] = nil } else { failed[customer.id.uuidString] = Date().timeIntervalSince1970 }
+                if let coordinate = await Geocoding.coordinate(for: item.query) {
+                    found[item.id] = coordinate
+                    failed[item.key] = nil
+                } else {
+                    failed[item.key] = Date().timeIntervalSince1970
+                }
                 defaults.set(failed, forKey: failedKey)
-                try? context.save()
+                if found.count >= 100 { saveFound() }
                 try? await Task.sleep(for: .seconds(2))
             }
+            saveFound()
         }
     }
 
-    /// Stops looking things up (the app is going to the background).
+    /// Writes the positions found so far, in one save.
+    static func saveFound() {
+        guard !found.isEmpty, let context = foundContext else { return }
+        for (id, coordinate) in found {
+            guard let customer = context.model(for: id) as? Customer, customer.coordinate == nil else { continue }
+            customer.latitude = coordinate.latitude
+            customer.longitude = coordinate.longitude
+        }
+        found = [:]
+        try? context.save()
+    }
+
+    /// Stops looking things up (the app is going to the background) and saves what was found.
     static func stop() {
         running?.cancel()
         running = nil
+        saveFound()
     }
 }
