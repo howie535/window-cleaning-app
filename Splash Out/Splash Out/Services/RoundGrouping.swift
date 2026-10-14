@@ -24,6 +24,18 @@ enum RoundGrouping {
         "walk", "square", "mews", "parade", "lon", "ffordd", "heol", "stryd", "maes", "rhodfa", "llys", "cae", "bryn",
     ]
 
+    /// The street as written, for showing: the street part of the address without house numbers ("Spring Gardens").
+    static func streetName(_ address: String) -> String {
+        let parts = address.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+        let streetPart = parts.first { part in
+            part.contains(where: \.isNumber) || part.lowercased().split(whereSeparator: { !$0.isLetter }).contains { streetWords.contains(String($0)) }
+        } ?? parts.first ?? ""
+        let skip: Set<String> = ["unit", "flat", "apartment", "apt", "no"]
+        let words = streetPart.split(separator: " ").filter { !$0.contains(where: \.isNumber) && !skip.contains($0.lowercased()) }
+        let name = words.joined(separator: " ")
+        return name.isEmpty ? address : name
+    }
+
     /// "Rd" and "Road" are the same street.
     private static let abbreviations: [String: String] = [
         "rd": "road", "st": "street", "ave": "avenue", "av": "avenue", "dr": "drive", "ln": "lane", "cl": "close",

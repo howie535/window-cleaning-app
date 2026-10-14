@@ -24,6 +24,8 @@ struct NextUpView: View {
     @State private var selectedID: UUID?
     /// The day whose customers are being messaged.
     @State private var messageDay: RoundPlanner.DayPlan?
+    /// The customer whose group is being changed (from the row's menu).
+    @State private var grouping: Customer?
     /// Today's done customers are folded into one row unless this is on.
     @State private var showDone = false
 
@@ -104,6 +106,7 @@ struct NextUpView: View {
         .listStyle(.plain)
         .contentMargins(.top, 0, for: .scrollContent)
         .sheet(item: $messageDay) { MessageDayView(day: $0) }
+        .sheet(item: $grouping) { GroupPickerView(customer: $0) }
         .owedOnPaidPrompt($paidRequest)
         .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
             if OwedReminder.canSend(to: person) {
@@ -188,6 +191,7 @@ struct NextUpView: View {
             if date > today && !dayRow.isDone && !dayRow.isPending {
                 Button { withAnimation { customer.bookedFor = today } } label: { Label("Do today", systemImage: "arrow.up.to.line") }
             }
+            Button { grouping = customer } label: { Label("Change group...", systemImage: "square.stack.3d.up") }
             if customer.bookedFor != nil {
                 Button(role: .destructive) { withAnimation { customer.bookedFor = nil } } label: { Label("Remove booking", systemImage: "xmark.circle") }
             }

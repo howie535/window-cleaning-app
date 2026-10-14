@@ -13,6 +13,8 @@ struct CustomerDetailView: View {
     @State private var isConfirmingDelete = false
     @State private var editingVisit: Visit?
     @State private var isChangingRise = false
+    @State private var isChangingGroup = false
+    @Query private var everyone: [Customer]
     @State private var riseText = ""
     /// Set while deleting, so nothing reads the customer once it's gone.
     @State private var isDeleted = false
@@ -73,6 +75,9 @@ struct CustomerDetailView: View {
     private var details: some View {
         List {
             Section {
+                CustomerMapView(customer: customer)
+            }
+            Section {
                 LabeledContent("Address", value: customer.address)
                 LabeledContent("Phone", value: customer.phone)
                 LabeledContent("Price", value: customer.price, format: .currency(code: "GBP"))
@@ -97,6 +102,18 @@ struct CustomerDetailView: View {
                     LabeledContent("Last Clean") {
                         Text(lastClean, style: .date)
                     }
+                }
+            }
+
+            if customer.status != .cancelled && customer.status != .paused {
+                Section {
+                    let cluster = GroupEditing.clusters(everyone).first { $0.members.contains { $0 === customer } }
+                    if let cluster {
+                        LabeledContent("Group", value: "\(cluster.name) · \(cluster.members.count) house\(cluster.members.count == 1 ? "" : "s")")
+                    }
+                    Button("Change group...") { isChangingGroup = true }
+                } footer: {
+                    Text("Houses in a group are kept on the same day.")
                 }
             }
 
@@ -242,6 +259,7 @@ struct CustomerDetailView: View {
         } message: {
             Text(deleteSummary)
         }
+        .sheet(isPresented: $isChangingGroup) { GroupPickerView(customer: customer) }
         .sheet(item: $editingVisit) { visit in
             EditVisitView(visit: visit)
         }

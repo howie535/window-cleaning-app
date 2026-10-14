@@ -265,7 +265,7 @@ private struct WeeksChart: View {
                 ForEach(weeks.filter { $0.target > 0 }, id: \.start) { week in
                     LineMark(x: .value("Week", week.start, unit: .weekOfYear),
                              y: .value("Target", NSDecimalNumber(decimal: week.target).doubleValue))
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.stepCenter)
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                         .foregroundStyle(Color.primary.opacity(0.6))
                 }

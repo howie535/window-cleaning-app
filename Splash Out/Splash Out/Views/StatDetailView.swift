@@ -43,6 +43,11 @@ struct StatDetailView: View {
         var value: Double
         /// Rolling average (lines) or target (weekly bars), when there is one.
         var second: Double?
+        /// For weekly averages: the finished days behind the bar, and their totals (for the summary).
+        var days = 0
+        var sumOfDays = 0.0
+        var houses = 0
+        var work = 0.0
         var id: Date { date }
     }
 
@@ -71,7 +76,7 @@ struct StatDetailView: View {
             }
             if !shown.isEmpty {
                 Section("In this range") {
-                    ForEach(summary(shown, dayTotals: stats.dayTotals), id: \.0) { row in
+                    ForEach(summary(shown), id: \.0) { row in
                         LabeledContent(row.0, value: row.1)
                     }
                 }
@@ -99,12 +104,12 @@ struct StatDetailView: View {
             }
             return byMonth.keys.sorted().map { Point(date: $0, value: double(byMonth[$0]!)) }
         case .perHouse:
-            // Finished days only: today's first few cleans would skew the line.
-            let days = stats.dayTotals.filter { $0.key < today && $0.value.houses > 0 }.sorted { $0.key < $1.key }
-            return rolling(days.map { ($0.key, double($0.value.work) / Double($0.value.houses)) })
+            // Finished days only: today's first few cleans would skew it.
+            let days = stats.dayTotals.filter { $0.key < today && $0.value.houses > 0 }
+            return weekly(days.map { ($0.key, double($0.value.work) / Double($0.value.houses), $0.value.houses, double($0.value.work)) })
         case .housesPerDay:
-            let days = stats.dayTotals.filter { $0.key < today && $0.value.houses >= minHouses }.sorted { $0.key < $1.key }
-            return rolling(days.map { ($0.key, Double($0.value.houses)) })
+            let days = stats.dayTotals.filter { $0.key < today && $0.value.houses >= minHouses }
+            return weekly(days.map { ($0.key, Double($0.value.houses), $0.value.houses, double($0.value.work)) })
         case .skipRate:
             var counts: [Date: (skipped: Int, total: Int)] = [:]
             for customer in customers where customer.status != .cancelled {
@@ -118,13 +123,25 @@ struct StatDetailView: View {
         }
     }
 
-    /// Each day's value with the average of the last 28 days (that day included) alongside.
-    private func rolling(_ values: [(Date, Double)]) -> [Point] {
-        values.enumerated().map { index, item in
-            let start = calendar.date(byAdding: .day, value: -27, to: item.0)!
-            let window = values[...index].filter { $0.0 >= start }.map(\.1)
-            return Point(date: item.0, value: item.1, second: window.reduce(0, +) / Double(window.count))
+    /// Days grouped into weeks: each week's average of its days, with the average of the last 4 weeks alongside.
+    private func weekly(_ days: [(date: Date, value: Double, houses: Int, work: Double)]) -> [Point] {
+        var byWeek: [Date: [(date: Date, value: Double, houses: Int, work: Double)]] = [:]
+        for day in days { byWeek[WeekMetrics.monday(onOrBefore: day.date, calendar: calendar), default: []].append(day) }
+        var points = byWeek.keys.sorted().map { week -> Point in
+            let list = byWeek[week]!
+            let sum = list.reduce(0) { $0 + $1.value }
+            var point = Point(date: week, value: sum / Double(list.count))
+            point.days = list.count
+            point.sumOfDays = sum
+            point.houses = list.reduce(0) { $0 + $1.houses }
+            point.work = list.reduce(0) { $0 + $1.work }
+            return point
         }
+        for index in points.indices {
+            let window = points[max(0, index - 3)...index]
+            points[index].second = window.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, window.reduce(0) { $0 + $1.days }))
+        }
+        return points
     }
 
     // MARK: Chart
@@ -145,7 +162,7 @@ struct StatDetailView: View {
                 }
                 ForEach(points.filter { $0.second != nil }) { point in
                     LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Target", point.second ?? 0))
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.stepCenter)
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                         .foregroundStyle(Color.primary.opacity(0.6))
                 }
@@ -169,28 +186,29 @@ struct StatDetailView: View {
                 AxisValueLabel { if let v = value.as(Double.self) { Text("\(Int(v))%") } }
             } }
         case .perHouse, .housesPerDay:
-            let floor = (points.map(\.value).min() ?? 0) * 0.9
+            let values = points.map(\.value)
+            let low = (values.min() ?? 0), high = (values.max() ?? 0)
+            let floor = max(0, low - (high - low) * 0.6 - 1)
+            let overall = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, points.reduce(0) { $0 + $1.days }))
             Chart {
                 ForEach(points) { point in
-                    AreaMark(x: .value("Day", point.date, unit: .day),
-                             yStart: .value("Floor", floor), yEnd: .value("28-day average", point.second ?? point.value))
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.25), Color.accentColor.opacity(0.02)],
-                                                        startPoint: .top, endPoint: .bottom))
+                    BarMark(x: .value("Week", point.date, unit: .weekOfYear),
+                            yStart: .value("Base", floor), yEnd: .value("Week", point.value), width: .ratio(0.7))
+                        .cornerRadius(5)
+                        .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.8)],
+                                                        startPoint: .bottom, endPoint: .top))
                 }
                 ForEach(points) { point in
-                    PointMark(x: .value("Day", point.date, unit: .day), y: .value("Each day", point.value))
-                        .foregroundStyle(Color.secondary.opacity(0.35))
-                        .symbolSize(12)
-                }
-                ForEach(points) { point in
-                    LineMark(x: .value("Day", point.date, unit: .day), y: .value("28-day average", point.second ?? point.value))
+                    LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("4-week trend", point.second ?? point.value))
                         .interpolationMethod(.catmullRom)
-                        .foregroundStyle(Color.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(Color.orange)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                 }
+                RuleMark(y: .value("Average", overall))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(Color.secondary)
             }
-            .chartYScale(domain: .automatic(includesZero: false))
+            .chartYScale(domain: floor...(high + (high - low) * 0.15 + 0.5))
             .chartYAxis {
                 if metric == .perHouse { poundsAxis } else { AxisMarks { AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)); AxisValueLabel() } }
             }
@@ -203,7 +221,7 @@ struct StatDetailView: View {
         Decimal(value).formatted(.currency(code: "GBP").precision(.fractionLength(2)))
     }
 
-    private func summary(_ points: [Point], dayTotals: [Date: WeekMetrics.DayTotals]) -> [(String, String)] {
+    private func summary(_ points: [Point]) -> [(String, String)] {
         let values = points.map(\.value)
         let average = values.reduce(0, +) / Double(values.count)
         switch metric {
@@ -216,16 +234,17 @@ struct StatDetailView: View {
         case .monthlyWork:
             return [("Months", "\(points.count)"), ("Average month", Decimal(average).pounds), ("Total", Decimal(values.reduce(0, +)).pounds)]
         case .perHouse:
-            let shownDays = Set(points.map(\.date))
-            let totals = dayTotals.filter { shownDays.contains($0.key) }
-            let houses = totals.values.reduce(0) { $0 + $1.houses }
-            let work = totals.values.reduce(Decimal(0)) { $0 + $1.work }
-            return [("Worked days", "\(points.count)"), ("Average of the days", money(average)),
-                    ("Per house overall", houses > 0 ? (work / Decimal(houses)).formatted(.currency(code: "GBP").precision(.fractionLength(2))) : "–"),
-                    ("Latest 28-day average", money(points.last?.second ?? average))]
+            let days = points.reduce(0) { $0 + $1.days }
+            let houses = points.reduce(0) { $0 + $1.houses }
+            let work = points.reduce(0.0) { $0 + $1.work }
+            return [("Worked days", "\(days)"), ("Average of the days", money(points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days)))),
+                    ("Per house overall", houses > 0 ? money(work / Double(houses)) : "–"),
+                    ("Latest 4 weeks", money(points.last?.second ?? average))]
         case .housesPerDay:
-            return [("Worked days", "\(points.count)"), ("Average", average.formatted(.number.precision(.fractionLength(1)))),
-                    ("Latest 28-day average", (points.last?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
+            let days = points.reduce(0) { $0 + $1.days }
+            let perDay = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days))
+            return [("Worked days", "\(days)"), ("Average", perDay.formatted(.number.precision(.fractionLength(1)))),
+                    ("Latest 4 weeks", (points.last?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
         case .skipRate:
             return [("Months", "\(points.count)"), ("Average month", (average / 100).formatted(.percent.precision(.fractionLength(1))))]
         }
@@ -235,8 +254,8 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork: "Work charged each week. Line: the target."
         case .monthlyWork: "Work charged each month."
-        case .perHouse: "Dots: each day's £ per house. Line: 28-day average. The card averages the days, like the spreadsheet."
-        case .housesPerDay: "Dots: houses each worked day. Line: 28-day average."
+        case .perHouse: "Bars: each week's £ per house. Orange: 4-week trend. Dashed: average for the range."
+        case .housesPerDay: "Bars: houses per worked day each week. Orange: 4-week trend. Dashed: average for the range."
         case .skipRate: "Skips as a share of visits each month."
         }
     }

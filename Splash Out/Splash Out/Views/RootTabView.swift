@@ -56,10 +56,14 @@ struct RootTabView: View {
                 clock.refresh()
                 ChangeLog.backupIfNewVersion(context: modelContext)
                 PriceRise.applyDue(in: modelContext, today: clock.today)
+                MapPositions.fillMissing(in: modelContext)
                 AutoBackup.runIfDue(context: modelContext)
                 Task { await CalendarSync.syncIfEnabled(context: modelContext) }
             }
-            if phase == .background { AutoBackup.run(context: modelContext) }
+            if phase == .background {
+                MapPositions.stop()
+                AutoBackup.run(context: modelContext)
+            }
         }
         .background {
             // Keyboard shortcuts for a keyboard case: Command-1 to Command-5 switch tab.

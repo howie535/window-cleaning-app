@@ -292,9 +292,9 @@ struct AddEditCustomerView: View {
 
         if addressChanged {
             Task {
-                let coordinate = await Geocoding.coordinate(for: target.address)
-                target.latitude = coordinate?.latitude
-                target.longitude = coordinate?.longitude
+                target.latitude = nil
+                target.longitude = nil
+                await MapPositions.find(target)
             }
         }
 

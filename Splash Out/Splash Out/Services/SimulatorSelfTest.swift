@@ -367,6 +367,39 @@ enum SimulatorSelfTest {
             for c in [front, lonely] { context.delete(c) }
         }
 
+        // Changing groups by hand.
+        do {
+            let specs = [("ST g1", "1 Zzalpha Street"), ("ST g2", "3 Zzalpha Street"), ("ST g3", "2 Zzbravo Road"), ("ST g4", "4 Zzbravo Road"),
+                         ("ST g5", "Lone House Zzcharlie Lane"), ("ST g6", "1 Zzdelta Avenue"), ("ST g7", "5 Zzdelta Avenue")]
+            var made: [Customer] = []
+            for (i, spec) in specs.enumerated() {
+                let c = synthetic(spec.0); c.address = spec.1; c.sequence = 900_000 + i; made.append(c)
+            }
+            let (g1, g3, g4, g5, g6) = (made[0], made[2], made[3], made[4], made[5])
+            func everyone() -> [Customer] { (try? context.fetch(FetchDescriptor<Customer>())) ?? [] }
+            func names() -> [[String]] {
+                GroupEditing.clusters(everyone()).map { $0.members.filter { made.contains($0) }.map(\.name) }.filter { !$0.isEmpty }
+            }
+            func cluster(of c: Customer) -> GroupEditing.Cluster { GroupEditing.clusters(everyone()).first { $0.members.contains { $0 === c } }! }
+            check("groups start as the streets", names() == [["ST g1", "ST g2"], ["ST g3", "ST g4"], ["ST g5"], ["ST g6", "ST g7"]], "\(names())")
+            GroupEditing.join([g5], into: cluster(of: g4), all: everyone())
+            check("joining the group before needs no move", names() == [["ST g1", "ST g2"], ["ST g3", "ST g4", "ST g5"], ["ST g6", "ST g7"]] && g5.sequence == 900_004, "\(names())")
+            GroupEditing.standAlone(g5, all: everyone())
+            check("on its own again", names() == [["ST g1", "ST g2"], ["ST g3", "ST g4"], ["ST g5"], ["ST g6", "ST g7"]], "\(names())")
+            GroupEditing.join([g5], into: cluster(of: g6), all: everyone())
+            check("joining the group after makes it lead that group", names() == [["ST g1", "ST g2"], ["ST g3", "ST g4"], ["ST g5", "ST g6", "ST g7"]], "\(names())")
+            GroupEditing.standAlone(g5, all: everyone())
+            GroupEditing.join([g5], into: cluster(of: g1), all: everyone())
+            let order = made.sorted { $0.sequence < $1.sequence }.map(\.name)
+            check("joining a group further away moves the house in the round", order == ["ST g1", "ST g2", "ST g5", "ST g3", "ST g4", "ST g6", "ST g7"]
+                  && names() == [["ST g1", "ST g2", "ST g5"], ["ST g3", "ST g4"], ["ST g6", "ST g7"]], "\(order) \(names())")
+            GroupEditing.join(cluster(of: g3).members, into: cluster(of: g6), all: everyone())
+            check("whole groups merge with the group next to them", names() == [["ST g1", "ST g2", "ST g5"], ["ST g3", "ST g4", "ST g6", "ST g7"]], "\(names())")
+            check("street names read as written", RoundGrouping.streetName("27 Bron Wern") == "Bron Wern" && RoundGrouping.streetName("Coddington, High St") == "High St")
+            for c in made { context.delete(c) }
+            try context.save()
+        }
+
         let twoPrice = synthetic("ST two prices"); twoPrice.altPrice = 12; twoPrice.altPriceLabel = "Front only"
         add(twoPrice, .cleaned, daysAgo: 35)
         check("two prices: the one not used last time comes next", twoPrice.nextListPrice == 12)

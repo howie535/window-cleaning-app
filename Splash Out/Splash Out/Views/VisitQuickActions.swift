@@ -73,7 +73,7 @@ struct VisitQuickActions: View {
             } message: {
                 Text("\(customer.name) has two prices. The one not used last time is first.")
             }
-            row("Front only...", systemImage: "house.lodge", tint: .teal) {
+            row("Front only...", systemImage: "house", tint: .teal) {
                 sheet = .frontOnly
             }
             row("Cleaned + extra...", systemImage: "plus.circle", tint: .blue) {
