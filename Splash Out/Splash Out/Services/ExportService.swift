@@ -69,7 +69,8 @@ enum ExportService {
                 notes: customer.notes,
                 visits: visits,
                 altPrice: customer.altPrice.map(Money.double),
-                altPriceLabel: customer.altPriceLabel
+                altPriceLabel: customer.altPriceLabel,
+                groupWithPrevious: customer.groupWithPrevious
             )
         }
 

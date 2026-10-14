@@ -247,6 +247,41 @@ enum SimulatorSelfTest {
             check("today carries on in round order from the start of the day", day0 == [6, 7, 8, 9, 10], "\(day0)")
         }
 
+        // ---- Clusters kept together (day two)
+        do {
+            check("street match ignores house numbers and names", RoundGrouping.sameStreet("Blue Haze Lon Pendyffryn", "34 Lon Pendyffryn")
+                  && RoundGrouping.sameStreet("2 Spring Gardens", "5 spring gardens") && RoundGrouping.sameStreet("12 Broadway", "25 Broadway")
+                  && RoundGrouping.sameStreet("Unit 1 Kinmel Dr, Bodelwyddan", "4 Kinmel Dr"))
+            check("different streets don't match", !RoundGrouping.sameStreet("12 The Dale", "9 Spring Gardens")
+                  && !RoundGrouping.sameStreet("Rd to Llanddulas", "Tan yr Ogof Hall") && !RoundGrouping.sameStreet("", ""))
+            let auto = RoundGrouping.groups([("1 A Street", nil), ("3 A Street", nil), ("2 B Road", nil), ("5 A Street", nil)])
+            check("clusters are runs of neighbours on one street", auto == [0, 0, 1, 2], "\(auto)")
+            let manual = RoundGrouping.groups([("1 A Street", nil), ("3 A Street", false), ("2 B Road", true), ("4 B Road", nil)])
+            check("never / always override the street", manual == [0, 1, 1, 1], "\(manual)")
+
+            let cal = RoundCalendar.london
+            func cand(_ seq: Int, _ group: Int) -> NextUp.Candidate {
+                let last = cal.date(byAdding: .day, value: -40, to: today)!
+                return NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: 20, everyOther: false, lastCleaned: last,
+                                        lastNotDue: nil, lastVisit: last, lastVisitBeforeToday: last, group: group)
+            }
+            // 1-4 one street (£80), 5-7 another (£60), 8 on its own (£20), 9-12 a third street (£80). £100 a day.
+            let people = (1...4).map { cand($0, 0) } + (5...7).map { cand($0, 1) } + [cand(8, 2)] + (9...12).map { cand($0, 3) }
+            let days = (0..<4).map { NextUp.Day(date: cal.date(byAdding: .day, value: $0 * 2, to: today)!, target: 100) }
+            let placed = NextUp.plan(people, days: days, today: today, overbook: 0, hideWeeks: 5, lapDays: 35, calendar: cal)
+            func on(_ day: Int) -> [Int] { placed.filter { $0.dayIndex == day }.map(\.key).sorted() }
+            check("a cluster that won't fit starts the next day; a later one that fits fills the gap", on(0) == [1, 2, 3, 4, 8] && on(1).starts(with: [5, 6, 7]),
+                  "\(on(0)) / \(on(1))")
+            check("everyone placed exactly once with clusters", placed.count == 12 && Set(placed.map(\.key)).count == 12)
+            let big = (1...8).map { cand($0, 0) }
+            let bigPlaced = NextUp.plan(big, days: days, today: today, overbook: 0, hideWeeks: 5, lapDays: 35, calendar: cal)
+            check("a cluster bigger than a whole day is split", bigPlaced.filter { $0.dayIndex == 0 }.count == 5 && bigPlaced.filter { $0.dayIndex == 1 }.count == 3)
+            // £90 done, next cluster £20: only a little over (£110 of £100), so it goes on whole and keeps round order.
+            let small = [cand(1, 0), cand(2, 0), cand(3, 0), cand(4, 0)].map { var c = $0; c.price = 22.5; return c } + [cand(5, 1), cand(6, 1)].map { var c = $0; c.price = 10; return c } + [cand(7, 2)]
+            let smallPlaced = NextUp.plan(small, days: days, today: today, overbook: 0, hideWeeks: 5, lapDays: 35, calendar: cal)
+            check("a cluster that only goes a little over stays in round order", smallPlaced.filter { $0.dayIndex == 0 }.map(\.key).sorted() == [1, 2, 3, 4, 5, 6])
+        }
+
         // ---- Day-one fixes (Phase B): payments in advance, second price, edit and delete
         let advance = synthetic("ST advance"); add(advance, .cleaned, daysAgo: 30)
         let ahead = VisitLogger.recordPayment(15, across: [], on: today, creditTo: advance.allVisits.first)
@@ -498,11 +533,13 @@ enum SimulatorSelfTest {
             let placed = planned.days.flatMap(\.customers) + planned.later
             let shownIDs = planned.days.flatMap(\.rows).map(\.customer.id)
             check("plan: nobody appears twice", Set(shownIDs).count == shownIDs.count && Set(placed.map(\.id)).count == placed.count)
-            var reachesTarget = true
+            var reachesTarget = true, overTarget = true
             for day in planned.days.dropLast() where !day.customers.isEmpty && day.bookedCount == 0 {
-                if day.total + day.doneTotal < day.bookTo { reachesTarget = false }
+                if day.total + day.doneTotal < day.target { reachesTarget = false }
+                if day.total + day.doneTotal > day.target * Decimal(1.2) + 50 { overTarget = false }
             }
-            check("plan: every full day reaches or exceeds its booking target", reachesTarget)
+            check("plan: every full day reaches its target", reachesTarget)
+            check("plan: no day goes far over (keeping a cluster whole allows up to about 20% over)", overTarget)
             var pendingSeen: [UUID: Int] = [:]
             var pendingCounted = false, totalsMatch = true
             for day in planned.days {

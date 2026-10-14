@@ -13,7 +13,8 @@ import Foundation
 ///   clean never pulls new customers onto the day. A skip doesn't count, so the next customers move up.
 /// - **Booked** customers (messaged for a day) stay on that day whatever else happens.
 /// - **Every-other** customers who were cleaned last lap are shown greyed as "not this round" and aren't counted.
-/// - Each day is then filled in round order until it reaches its target plus the overbook allowance.
+/// - Each day is then filled in round order, a whole cluster of neighbours at a time, until it reaches its target plus
+///   the overbook allowance. A cluster that won't fit starts the next day and a later one that fits fills the gap.
 enum NextUp {
     struct Candidate: Equatable {
         /// Caller's handle for the customer (e.g. an index).
@@ -38,6 +39,8 @@ enum NextUp {
         var chargedToday: Decimal = 0
         /// The day they've been booked in for (messaged), if any.
         var bookedFor: Date? = nil
+        /// Their cluster (neighbours kept on the same day). nil: a cluster of their own.
+        var group: Int? = nil
     }
 
     struct Day: Equatable {
@@ -181,30 +184,96 @@ enum NextUp {
             placed.insert(c.key)
         }
 
-        // 3. Everyone else due, in lap order, filling each day to its target plus overbook.
+        // 3. Everyone else, in lap order, a whole cluster at a time, filling each day to its target plus overbook.
+        //    A cluster that won't fit in the space left starts the next day, and a later cluster that does fit (looking a
+        //    few ahead) fills the gap. A cluster bigger than a whole day is split.
+        //    Due "when it's their turn": measured from the day the round reaches them, not from today, so a customer
+        //    missed last time waits for their neighbours instead of jumping to the front.
+        struct Member { var order: Int; var c: Candidate }
+        var units: [[Member]] = []
+        func groupID(_ c: Candidate) -> Int { c.group ?? -1 - c.key }
+        for (order, c) in lap.enumerated() where !placed.contains(c.key) {
+            if let last = units.last?.last, groupID(last.c) == groupID(c) {
+                units[units.count - 1].append(Member(order: order, c: c))
+            } else {
+                units.append([Member(order: order, c: c)])
+            }
+        }
+
+        enum Role { case counts, notStarted, everyOtherOff, skip }
+        func turn(_ day: Int) -> Date {
+            day < days.count ? days[day].date : (days.last.map { calendar.date(byAdding: .day, value: 1, to: $0.date)! } ?? today)
+        }
+        func role(_ c: Candidate, _ day: Int) -> Role {
+            if c.isPending { return .notStarted }
+            let date = turn(day)
+            guard c.isListable, !isDoneThisLap(c, today: date, hideWeeks: hideWeeks, calendar: calendar) else { return .skip }
+            if isEveryOtherOff(c, today: date, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar) { return .everyOtherOff }
+            return .counts
+        }
+        func need(_ unit: [Member], _ day: Int) -> Decimal {
+            unit.filter { role($0.c, day) == .counts }.reduce(0) { $0 + $1.c.price }
+        }
+        func place(_ unit: [Member], _ day: Int?) {
+            for m in unit {
+                switch role(m.c, day ?? days.count) {
+                case .skip: continue
+                case .notStarted: if let day { result.append(Placement(key: m.c.key, dayIndex: day, state: .notStarted, order: m.order)) }
+                case .everyOtherOff: if let day { result.append(Placement(key: m.c.key, dayIndex: day, state: .everyOtherOff, order: m.order)) }
+                case .counts:
+                    if let day { load[day] += m.c.price }
+                    result.append(Placement(key: m.c.key, dayIndex: day, state: .planned, order: m.order))
+                }
+            }
+        }
+
         var day = 0
         func skipFullDays() { while day < days.count && load[day] >= capacity[day] { day += 1 } }
         skipFullDays()
-        for (order, c) in lap.enumerated() where !placed.contains(c.key) {
-            if c.isPending {
-                if day < days.count { result.append(Placement(key: c.key, dayIndex: day, state: .notStarted, order: order)) }
-                continue
+        var queue = units
+        /// Puts the front cluster on today up to capacity; the rest of it goes first tomorrow.
+        func splitFront() {
+            var rest: [Member] = []
+            for m in queue[0] {
+                if !rest.isEmpty || load[day] >= capacity[day] { rest.append(m); continue }
+                place([m], day)
             }
-            // Due "when it's their turn": measured from the day the round reaches them, not from today, so a customer
-            // missed last time waits for their neighbours instead of jumping to the front.
-            let turn = day < days.count ? days[day].date : (days.last.map { calendar.date(byAdding: .day, value: 1, to: $0.date)! } ?? today)
-            guard c.isListable, !isDoneThisLap(c, today: turn, hideWeeks: hideWeeks, calendar: calendar) else { continue }
-            if isEveryOtherOff(c, today: turn, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar) {
-                if day < days.count { result.append(Placement(key: c.key, dayIndex: day, state: .everyOtherOff, order: order)) }
-                continue
-            }
+            if rest.isEmpty { queue.removeFirst() } else { queue[0] = rest }
+            day += 1
+            skipFullDays()
+        }
+        while !queue.isEmpty {
             guard day < days.count else {
-                result.append(Placement(key: c.key, dayIndex: nil, state: .planned, order: order))
+                for unit in queue { place(unit, nil) }
+                break
+            }
+            let front = need(queue[0], day)
+            if front == 0 || load[day] + front <= capacity[day] {
+                place(queue.removeFirst(), day)
+                if load[day] >= capacity[day] { day += 1; skipFullDays() }
                 continue
             }
-            load[day] += c.price
-            result.append(Placement(key: c.key, dayIndex: day, state: .planned, order: order))
-            if load[day] >= capacity[day] { day += 1; skipFullDays() }
+            // The front cluster doesn't fit in what's left of the day.
+            if load[day] == 0 { splitFront(); continue }                                   // bigger than a whole day
+            if load[day] >= days[day].target { day += 1; skipFullDays(); continue }       // day's done; it starts tomorrow
+            // Short of target. If the cluster only takes the day a little over (about 20% over target in all), it goes on
+            // whole and round order is kept.
+            if load[day] + front <= capacity[day] + days[day].target / 10 {
+                place(queue.removeFirst(), day)
+                day += 1
+                skipFullDays()
+                continue
+            }
+            // Otherwise it starts tomorrow, and a later cluster that fits fills the gap.
+            if let later = queue.indices.dropFirst().prefix(6).first(where: { index in
+                let size = need(queue[index], day)
+                return size > 0 && load[day] + size <= capacity[day]
+            }) {
+                place(queue.remove(at: later), day)
+                if load[day] >= capacity[day] { day += 1; skipFullDays() }
+                continue
+            }
+            splitFront()                                                                  // nothing fits: split it
         }
         return result
     }

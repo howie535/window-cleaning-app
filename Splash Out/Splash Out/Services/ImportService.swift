@@ -72,6 +72,7 @@ enum ImportService {
             customer.payMethod = PayMethod.fromImport(record.payMethod)
             customer.altPrice = record.altPrice.map(Money.decimal)
             customer.altPriceLabel = record.altPriceLabel
+            customer.groupWithPrevious = record.groupWithPrevious
             context.insert(customer)
             summary.customers += 1
             summary.statusCounts[customer.statusRaw, default: 0] += 1

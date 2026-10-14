@@ -151,6 +151,16 @@ struct NextUpView: View {
                 .buttonStyle(.plain)
             }
         }
+        .overlay(alignment: .leading) {
+            // Neighbours kept together on the same day: a bar down the side, alternating colours between clusters.
+            if dayRow.inCluster {
+                Capsule()
+                    .fill((dayRow.group ?? 0).isMultiple(of: 2) ? Color.blue.opacity(0.55) : Color.teal.opacity(0.7))
+                    .frame(width: 4)
+                    .padding(.vertical, 2)
+                    .offset(x: -12)
+            }
+        }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !dayRow.isDone {
                 Button { log(.cleanedPaid, for: customer) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }

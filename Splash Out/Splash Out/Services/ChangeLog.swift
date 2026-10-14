@@ -16,6 +16,7 @@ enum ChangeLog {
             "Round: today's done customers fold into one \"Done today\" row (tap to show them), so the next customer is always at the top.",
             "Cleaned & paid for someone who already owes asks whether they paid the older cleans too.",
             "Averages only count finished days, so the first cleans of the morning don't skew them.",
+            "Round: neighbours on the same street are kept on the same day (shown with a bar down the side). A cluster that won't fit starts the next day, and a later one that fits fills the gap. Change it per customer under Edit > Same day as the customer before.",
             "Smoother, clearer charts.",
             "Faster logging: swipes and the log sheet finish their animation before the clean is saved, and the screens no longer re-read every customer's history after each save.",
         ]),

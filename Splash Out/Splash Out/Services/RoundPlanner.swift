@@ -7,6 +7,9 @@ enum RoundPlanner {
     struct DayRow: Identifiable {
         var customer: Customer
         var state: NextUp.State
+        /// Their cluster, and whether it has more than one customer on this day (shown with a bar down the side).
+        var group: Int? = nil
+        var inCluster = false
         var id: UUID { customer.id }
         /// Shown but not counted (not started yet, or an every-other customer's off round).
         var isPending: Bool { state == .notStarted || state == .everyOtherOff }
@@ -51,6 +54,14 @@ enum RoundPlanner {
         let settings = settings ?? AppSettings()
         let calendar = RoundCalendar.london
 
+        // Clusters: runs of neighbours in round order on the same street (or joined by hand). Paused and cancelled
+        // customers don't break a run.
+        let onRound = customers.indices.filter { customers[$0].status != .cancelled && customers[$0].status != .paused }
+            .sorted { customers[$0].sequence < customers[$1].sequence }
+        let groupNumbers = RoundGrouping.groups(onRound.map { (customers[$0].address, customers[$0].groupWithPrevious) })
+        var groupOf: [Int: Int] = [:]
+        for (position, index) in onRound.enumerated() { groupOf[index] = groupNumbers[position] }
+
         // Candidates carry an index back into `customers`.
         var regularCleans: [[Date]] = []
         let candidates = customers.enumerated().map { index, customer -> NextUp.Candidate in
@@ -89,7 +100,8 @@ enum RoundPlanner {
                 isPending: customer.status == .notStarted,
                 visitedToday: visitedToday,
                 chargedToday: chargedToday,
-                bookedFor: customer.bookedFor.map { RoundCalendar.startOfDay($0) }
+                bookedFor: customer.bookedFor.map { RoundCalendar.startOfDay($0) },
+                group: groupOf[index]
             )
         }
 
@@ -117,12 +129,19 @@ enum RoundPlanner {
         for placement in placements.sorted(by: { $0.order < $1.order }) {
             let customer = customers[placement.key]
             if let index = placement.dayIndex {
-                dayPlans[index].rows.append(DayRow(customer: customer, state: placement.state))
+                dayPlans[index].rows.append(DayRow(customer: customer, state: placement.state, group: groupOf[placement.key]))
                 if placement.state.counts { dayPlans[index].customers.append(customer) }
                 if placement.state == .cleanedToday { dayPlans[index].doneTotal += candidates[placement.key].chargedToday }
             } else if placement.state.counts {
                 later.append(customer)
             }
+        }
+
+        // Mark rows that share their cluster with a neighbour on the same day.
+        for d in dayPlans.indices {
+            var counts: [Int: Int] = [:]
+            for row in dayPlans[d].rows { if let g = row.group { counts[g, default: 0] += 1 } }
+            for r in dayPlans[d].rows.indices { dayPlans[d].rows[r].inCluster = (dayPlans[d].rows[r].group.flatMap { counts[$0] } ?? 0) > 1 }
         }
 
         // One full round, no empty days on the end.

@@ -28,6 +28,9 @@ final class Customer {
     var notes: [String] = []
     /// The day they've been booked in for (messaged). Cleared when they're next visited.
     var bookedFor: Date?
+    /// Whether they're in the same cluster as the customer before them in round order (kept on the same day):
+    /// nil = automatic (same street), true = always, false = never.
+    var groupWithPrevious: Bool?
     var latitude: Double?
     var longitude: Double?
 

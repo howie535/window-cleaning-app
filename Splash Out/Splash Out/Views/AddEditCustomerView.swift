@@ -26,6 +26,8 @@ struct AddEditCustomerView: View {
     @State private var frontOnly = false
     @State private var contact: ContactMethod = .whatsapp
     @State private var payMethod: PayMethod?
+    /// nil = automatic (same street), true = always with the customer before, false = never.
+    @State private var groupWithPrevious: Bool?
     @State private var placeAfter: Customer?
     /// Set once a place has been picked by hand; until then a new customer goes after the last one in their round and area.
     @State private var placeChosen = false
@@ -129,6 +131,12 @@ struct AddEditCustomerView: View {
                         ForEach(PayMethod.allCases) { Text($0.label).tag(PayMethod?.some($0)) }
                     }
                     .pickerStyle(.navigationLink)
+                    Picker("Same day as the customer before", selection: $groupWithPrevious) {
+                        Text("Automatic (same street)").tag(Bool?.none)
+                        Text("Always").tag(Bool?.some(true))
+                        Text("Never").tag(Bool?.some(false))
+                    }
+                    .pickerStyle(.navigationLink)
                     if !isEditing {
                         Button {
                             isShowingPlace = true
@@ -221,6 +229,7 @@ struct AddEditCustomerView: View {
         frontOnly = customer.frontOnly
         contact = customer.contact
         payMethod = customer.payMethod
+        groupWithPrevious = customer.groupWithPrevious
     }
 
     private func save() {
@@ -253,6 +262,7 @@ struct AddEditCustomerView: View {
             customer.frontOnly = frontOnly
             customer.contact = contact
             customer.payMethod = payMethod
+            customer.groupWithPrevious = groupWithPrevious
             customer.altPrice = altPrice
             customer.altPriceLabel = altLabel.isEmpty ? nil : altLabel
             target = customer
@@ -271,6 +281,7 @@ struct AddEditCustomerView: View {
             newCustomer.frontOnly = frontOnly
             newCustomer.contact = contact
             newCustomer.payMethod = payMethod
+            newCustomer.groupWithPrevious = groupWithPrevious
             newCustomer.altPrice = altPrice
             newCustomer.altPriceLabel = altLabel.isEmpty ? nil : altLabel
             let place = effectivePlace

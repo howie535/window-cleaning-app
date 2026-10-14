@@ -60,6 +60,7 @@ struct RoundFile: Codable {
         var visits: [VisitRecord]
         var altPrice: Double? = nil
         var altPriceLabel: String? = nil
+        var groupWithPrevious: Bool? = nil
     }
 
     struct VisitRecord: Codable {
