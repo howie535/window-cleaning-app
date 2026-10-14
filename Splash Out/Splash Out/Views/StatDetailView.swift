@@ -113,13 +113,18 @@ struct StatDetailView: View {
         case .skipRate:
             var counts: [Date: (skipped: Int, total: Int)] = [:]
             for customer in customers where customer.status != .cancelled {
-                for visit in customer.allVisits where visit.kind != .notDue && visit.date <= today {
+                for visit in customer.allVisits where visit.kind != .notDue && visit.date < today {
                     let month = calendar.date(from: calendar.dateComponents([.year, .month], from: visit.date))!
                     counts[month, default: (0, 0)].total += 1
                     if visit.kind == .skipped { counts[month, default: (0, 0)].skipped += 1 }
                 }
             }
-            return counts.keys.sorted().map { Point(date: $0, value: Double(counts[$0]!.skipped) / Double(max(1, counts[$0]!.total)) * 100) }
+            return counts.keys.sorted().map { month in
+                var point = Point(date: month, value: Double(counts[month]!.skipped) / Double(max(1, counts[month]!.total)) * 100)
+                point.days = counts[month]!.total        // visits
+                point.houses = counts[month]!.skipped    // skips
+                return point
+            }
         }
     }
 
@@ -148,43 +153,40 @@ struct StatDetailView: View {
 
     @ViewBuilder
     private func chart(_ points: [Point]) -> some View {
-        let pounds = Decimal.FormatStyle.Currency(code: "GBP").precision(.fractionLength(0))
-        let poundsAxis = AxisMarks { AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)); AxisValueLabel(format: pounds) }
         switch metric {
         case .weeklyWork:
             Chart {
                 ForEach(points) { point in
-                    let met = point.second.map { point.value >= $0 } ?? true
-                    BarMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Work", point.value), width: .ratio(0.7))
-                        .cornerRadius(5)
-                        .foregroundStyle(LinearGradient(colors: met ? [.green.opacity(0.65), .green] : [.orange.opacity(0.65), .orange],
-                                                        startPoint: .bottom, endPoint: .top))
+                    BarMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Work", point.value), width: ChartStyle.barWidth)
+                        .cornerRadius(ChartStyle.cornerRadius)
+                        .foregroundStyle(ChartStyle.barFill(short: point.second.map { point.value < $0 } ?? false))
                 }
                 ForEach(points.filter { $0.second != nil }) { point in
-                    LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Target", point.second ?? 0))
-                        .interpolationMethod(.stepCenter)
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
-                        .foregroundStyle(Color.primary.opacity(0.6))
+                    ChartStyle.targetMark(week: point.date, target: point.second ?? 0)
                 }
             }
-            .chartYAxis { poundsAxis }
+            .chartAxes(.money)
         case .monthlyWork:
             Chart(points) { point in
-                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Work", point.value), width: .ratio(0.7))
-                    .cornerRadius(6)
-                    .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.6), Color.accentColor], startPoint: .bottom, endPoint: .top))
+                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Work", point.value), width: ChartStyle.barWidth)
+                    .cornerRadius(ChartStyle.cornerRadius)
+                    .foregroundStyle(ChartStyle.barFill())
             }
-            .chartYAxis { poundsAxis }
+            .chartAxes(.money, months: true)
         case .skipRate:
-            Chart(points) { point in
-                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Skip rate %", point.value), width: .ratio(0.7))
-                    .cornerRadius(6)
-                    .foregroundStyle(LinearGradient(colors: [.orange.opacity(0.6), .orange], startPoint: .bottom, endPoint: .top))
+            // Skips ÷ visits over the whole range (as the card), not an average of the months.
+            let average = Double(points.reduce(0) { $0 + $1.houses }) / Double(max(1, points.reduce(0) { $0 + $1.days })) * 100
+            Chart {
+                ForEach(points) { point in
+                    BarMark(x: .value("Month", point.date, unit: .month), y: .value("Skip rate", point.value), width: ChartStyle.barWidth)
+                        .cornerRadius(ChartStyle.cornerRadius)
+                        .foregroundStyle(ChartStyle.barFill())
+                }
+                RuleMark(y: .value("Average", average))
+                    .lineStyle(ChartStyle.referenceStroke)
+                    .foregroundStyle(ChartStyle.referenceColour)
             }
-            .chartYAxis { AxisMarks { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                AxisValueLabel { if let v = value.as(Double.self) { Text("\(Int(v))%") } }
-            } }
+            .chartAxes(.percent, months: true)
         case .perHouse, .housesPerDay:
             let values = points.map(\.value)
             let low = (values.min() ?? 0), high = (values.max() ?? 0)
@@ -193,25 +195,22 @@ struct StatDetailView: View {
             Chart {
                 ForEach(points) { point in
                     BarMark(x: .value("Week", point.date, unit: .weekOfYear),
-                            yStart: .value("Base", floor), yEnd: .value("Week", point.value), width: .ratio(0.7))
-                        .cornerRadius(5)
-                        .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.8)],
-                                                        startPoint: .bottom, endPoint: .top))
+                            yStart: .value("Base", floor), yEnd: .value("Week", point.value), width: ChartStyle.barWidth)
+                        .cornerRadius(ChartStyle.cornerRadius)
+                        .foregroundStyle(ChartStyle.barFill())
                 }
                 ForEach(points) { point in
                     LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("4-week trend", point.second ?? point.value))
                         .interpolationMethod(.catmullRom)
-                        .foregroundStyle(Color.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(ChartStyle.trendColour)
+                        .lineStyle(ChartStyle.trendStroke)
                 }
                 RuleMark(y: .value("Average", overall))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .foregroundStyle(Color.secondary)
+                    .lineStyle(ChartStyle.referenceStroke)
+                    .foregroundStyle(ChartStyle.referenceColour)
             }
             .chartYScale(domain: floor...(high + (high - low) * 0.15 + 0.5))
-            .chartYAxis {
-                if metric == .perHouse { poundsAxis } else { AxisMarks { AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)); AxisValueLabel() } }
-            }
+            .chartAxes(metric == .perHouse ? .money : .count)
         }
     }
 
@@ -246,17 +245,19 @@ struct StatDetailView: View {
             return [("Worked days", "\(days)"), ("Average", perDay.formatted(.number.precision(.fractionLength(1)))),
                     ("Latest 4 weeks", (points.last?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
         case .skipRate:
-            return [("Months", "\(points.count)"), ("Average month", (average / 100).formatted(.percent.precision(.fractionLength(1))))]
+            let visits = points.reduce(0) { $0 + $1.days }, skips = points.reduce(0) { $0 + $1.houses }
+            return [("Visits", "\(visits)"), ("Skipped", "\(skips)"),
+                    ("Skip rate", (Double(skips) / Double(max(1, visits))).formatted(.percent.precision(.fractionLength(1))))]
         }
     }
 
     private var explanation: String {
         switch metric {
-        case .weeklyWork: "Work charged each week. Line: the target."
+        case .weeklyWork: "Work charged each week; orange fell short. Dashed: the target."
         case .monthlyWork: "Work charged each month."
-        case .perHouse: "Bars: each week's £ per house. Orange: 4-week trend. Dashed: average for the range."
-        case .housesPerDay: "Bars: houses per worked day each week. Orange: 4-week trend. Dashed: average for the range."
-        case .skipRate: "Skips as a share of visits each month."
+        case .perHouse: "Each week's £ per house. Line: 4-week trend. Dashed: average for the range."
+        case .housesPerDay: "Houses per worked day each week. Line: 4-week trend. Dashed: average for the range."
+        case .skipRate: "Skips as a share of visits each month. Dashed: average for the range."
         }
     }
 }

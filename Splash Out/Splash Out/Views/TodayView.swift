@@ -255,27 +255,16 @@ private struct WeeksChart: View {
                 .foregroundStyle(.secondary)
             Chart {
                 ForEach(weeks, id: \.start) { week in
-                    let met = week.work >= week.target
                     BarMark(x: .value("Week", week.start, unit: .weekOfYear),
-                            y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue), width: .ratio(0.7))
-                        .cornerRadius(5)
-                        .foregroundStyle(LinearGradient(colors: met ? [.green.opacity(0.65), .green] : [.orange.opacity(0.65), .orange],
-                                                        startPoint: .bottom, endPoint: .top))
+                            y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue), width: ChartStyle.barWidth)
+                        .cornerRadius(ChartStyle.cornerRadius)
+                        .foregroundStyle(ChartStyle.barFill(short: week.target > 0 && week.work < week.target))
                 }
                 ForEach(weeks.filter { $0.target > 0 }, id: \.start) { week in
-                    LineMark(x: .value("Week", week.start, unit: .weekOfYear),
-                             y: .value("Target", NSDecimalNumber(decimal: week.target).doubleValue))
-                        .interpolationMethod(.stepCenter)
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
-                        .foregroundStyle(Color.primary.opacity(0.6))
+                    ChartStyle.targetMark(week: week.start, target: NSDecimalNumber(decimal: week.target).doubleValue)
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: height > 200 ? 6 : 4)) { _ in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                }
-            }
+            .chartAxes(.money, dateLabels: height > 200 ? 6 : 4)
             .frame(height: height)
         }
         .padding(14)

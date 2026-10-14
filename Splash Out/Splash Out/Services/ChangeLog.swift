@@ -27,7 +27,7 @@ enum ChangeLog {
             "Customer pages show a small map (tap for directions). Map positions are found from the addresses in the background.",
             "Change group... on a customer's page (or press and hold on the Round list): join the group before or after, move to a group further away (nearest first), take a house out on its own, or merge whole groups.",
             "Average per house and Houses per workday charts: weekly bars with a 4-week trend.",
-            "Smoother, clearer charts.",
+            "Charts all share one look: blue bars (orange for a week short of target), a dark trend line, dashed target or average.",
             "Faster logging: swipes and the log sheet finish their animation before the clean is saved, and the screens no longer re-read every customer's history after each save.",
         ]),
         Release(version: "1.1", date: "October 2026", changes: [
