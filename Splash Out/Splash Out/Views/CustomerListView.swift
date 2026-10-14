@@ -18,6 +18,8 @@ struct CustomerListView: View {
     @State private var pendingImport: PendingImport?
     @State private var importErrorMessage: String?
     @State private var skipAsk: Customer?
+    /// A "Paid" swipe for someone who already owes: asks about the older cleans.
+    @State private var paidRequest: PaidRequest?
 
     private struct PendingImport: Identifiable {
         let id = UUID()
@@ -67,6 +69,7 @@ struct CustomerListView: View {
             allowedContentTypes: [.commaSeparatedText, .plainText],
             onCompletion: handleFileImport
         )
+        .owedOnPaidPrompt($paidRequest)
         .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
             Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
             Button("Go back", role: .cancel) {}
@@ -199,6 +202,10 @@ struct CustomerListView: View {
     private func log(_ action: VisitLogger.Action, for customer: Customer) {
         if case .skipped = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
             skipAsk = customer
+            return
+        }
+        if case .cleanedPaid = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
+            paidRequest = PaidRequest(customer: customer)
             return
         }
         perform(action, for: customer)

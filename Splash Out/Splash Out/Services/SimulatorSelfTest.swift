@@ -225,12 +225,41 @@ enum SimulatorSelfTest {
             context.insert(v); v.customer = c
         }
 
+        // ---- Due when it's their turn (day two: Steve Caton and Sharon Hughes jumped ahead of their neighbours)
+        do {
+            let cal = RoundCalendar.london
+            func ago(_ d: Int) -> Date { cal.date(byAdding: .day, value: -d, to: today)! }
+            func cand(_ seq: Int, _ cleaned: Int) -> NextUp.Candidate {
+                NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: 20, everyOther: false,
+                                 lastCleaned: ago(cleaned), lastNotDue: nil, lastVisit: ago(cleaned), lastVisitBeforeToday: ago(cleaned))
+            }
+            // 1-5 done yesterday (where the round got to); 6-15 due; 16-25 cleaned 32 days ago (due in a few days)
+            // except 20, missed last time; 26-30 due.
+            var people = (1...5).map { cand($0, 1) } + (6...15).map { cand($0, 40) } + (16...25).map { cand($0, $0 == 20 ? 60 : 32) }
+            people += (26...30).map { cand($0, 40) }
+            let days = [0, 2, 4, 7, 9, 11].map { NextUp.Day(date: cal.date(byAdding: .day, value: $0, to: today)!, target: 100) }
+            let placed = NextUp.plan(people, days: days, today: today, overbook: 0, hideWeeks: 5, lapDays: 35, calendar: cal)
+            func dayOf(_ seq: Int) -> Int? { placed.first { $0.key == seq }?.dayIndex }
+            let day2 = placed.filter { $0.dayIndex == 2 }.map(\.key).sorted()
+            check("missed customer waits for their neighbours, not the front of the list", day2 == [16, 17, 18, 19, 20], "\(day2)")
+            check("neighbours due by the day the round reaches them are on the list", (16...25).allSatisfy { dayOf($0) != nil })
+            let day0 = placed.filter { $0.dayIndex == 0 }.map(\.key).sorted()
+            check("today carries on in round order from the start of the day", day0 == [6, 7, 8, 9, 10], "\(day0)")
+        }
+
         // ---- Day-one fixes (Phase B): payments in advance, second price, edit and delete
         let advance = synthetic("ST advance"); add(advance, .cleaned, daysAgo: 30)
         let ahead = VisitLogger.recordPayment(15, across: [], on: today, creditTo: advance.allVisits.first)
         check("payment with nothing owed becomes credit", ahead.leftover == 0 && advance.outstandingBalance == 15 && advance.suggestedNextPrice == 5, "\(advance.outstandingBalance)")
         ahead.undo()
         check("undo advance payment removes the credit", advance.outstandingBalance == 0)
+
+        let debtor2 = synthetic("ST owes"); add(debtor2, .cleaned, daysAgo: 70, paid: 0); add(debtor2, .cleaned, daysAgo: 35, paid: 0)
+        let payOff = VisitLogger.cleanAndPayOff(.cleanedPaid, for: debtor2, in: context)
+        check("cleaned & paid plus what they owed clears every clean", payOff.paidOff == 40 && VisitLogger.unpaidVisits(for: debtor2).isEmpty && debtor2.allVisits.count == 3)
+        payOff.undo()
+        check("one undo takes back the clean and the payment", debtor2.allVisits.count == 2 && RoundMetrics.moneyOwed([debtor2]).amount == 40)
+        context.delete(debtor2)
 
         let twoPrice = synthetic("ST two prices"); twoPrice.altPrice = 12; twoPrice.altPriceLabel = "Front only"
         add(twoPrice, .cleaned, daysAgo: 35)
@@ -300,13 +329,25 @@ enum SimulatorSelfTest {
 
         if let real = stats().workRate() {
             let s = stats()
-            let houses = s.houses(from: s.analysisStart, through: today)
-            let work = s.work(from: s.analysisStart, through: today)
+            let yesterday = RoundCalendar.london.date(byAdding: .day, value: -1, to: today)!
+            let houses = s.houses(from: s.analysisStart, through: yesterday)
+            let work = s.work(from: s.analysisStart, through: yesterday)
             check("work rate £ per house = total £ / total houses", houses > 0 && near(real.perHouse, NSDecimalNumber(decimal: work / Decimal(houses)).doubleValue))
             lines.append("WORKRATE \(s.analysisLabel): \(real.housesPerDay) a day, \(real.daysPerWeek) days a week, £\(real.perHouse) a house, skips \(real.skipRate)")
         }
         if let gap = stats().typicalGapWeeks() { lines.append("GAP typical \(gap.weeks) weeks over \(gap.gaps) gaps") }
 
+        // Averages only count finished days: a pricey first clean this morning mustn't move them.
+        do {
+            let before = (stats().averagePerHouseByDay(taxYear: stats().currentTaxYear)?.average, stats().workRate())
+            let early = synthetic("ST early bird", price: 95); add(early, .cleaned, daysAgo: 0, charged: 95, paid: 95, listPrice: 95)
+            let after = (stats().averagePerHouseByDay(taxYear: stats().currentTaxYear)?.average, stats().workRate())
+            func same(_ a: Decimal?, _ b: Decimal?) -> Bool { abs(NSDecimalNumber(decimal: (a ?? 0) - (b ?? 0)).doubleValue) < 0.000001 }
+            check("today's cleans don't move the averages until the day is over",
+                  same(before.0, after.0) && same(before.1?.perHouse, after.1?.perHouse) && same(before.1?.housesPerDay, after.1?.housesPerDay)
+                  && before.1?.workedDays == after.1?.workedDays, "\(String(describing: before.0)) vs \(String(describing: after.0))")
+            context.delete(early)
+        }
         if let perHouse = stats().averagePerHouseByDay(taxYear: stats().currentTaxYear) {
             lines.append("AVGPERHOUSE £\(perHouse.average) over \(perHouse.days) days")
         }

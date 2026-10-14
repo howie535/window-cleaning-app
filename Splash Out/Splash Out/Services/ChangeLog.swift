@@ -11,6 +11,13 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.2", date: "October 2026", changes: [
+            "Round: customers are due when the round reaches them, so someone missed last time waits with their neighbours instead of jumping to the front.",
+            "Round: today's done customers fold into one \"Done today\" row (tap to show them), so the next customer is always at the top.",
+            "Cleaned & paid for someone who already owes asks whether they paid the older cleans too.",
+            "Averages only count finished days, so the first cleans of the morning don't skew them.",
+            "Smoother, clearer charts.",
+        ]),
         Release(version: "1.1", date: "October 2026", changes: [
             "Round: the list carries on from where the day started, so cleaning someone out of order no longer moves anyone else.",
             "Round: customers done today stay in today's list, ticked and dimmed, and count towards the day. A skip frees their space.",

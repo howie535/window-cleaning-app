@@ -14,6 +14,8 @@ struct NextUpView: View {
 
     /// A skip waiting for "they still owe money" confirmation.
     @State private var skipAsk: Customer?
+    /// A "Paid" swipe for someone who already owes: asks about the older cleans.
+    @State private var paidRequest: PaidRequest?
 
     /// Compact width (iPhone): tapping a customer opens a sheet.
     @State private var selected: Customer?
@@ -21,6 +23,8 @@ struct NextUpView: View {
     @State private var selectedID: UUID?
     /// The day whose customers are being messaged.
     @State private var messageDay: RoundPlanner.DayPlan?
+    /// Today's done customers are folded into one row unless this is on.
+    @State private var showDone = false
 
     var body: some View {
         let today = clock.today
@@ -67,8 +71,15 @@ struct NextUpView: View {
                         LabeledContent("Carrying on from") { Text(pointer.name) }
                             .font(.subheadline)
                     }
-                    ForEach(day.rows) { dayRow in
-                        row(for: dayRow)
+                    let done = day.rows.filter(\.isDone)
+                    if day.date == today && !done.isEmpty {
+                        doneSummary(done, total: day.doneTotal)
+                        if showDone {
+                            ForEach(done) { dayRow in row(for: dayRow) }
+                        }
+                        ForEach(day.rows.filter { !$0.isDone }) { dayRow in row(for: dayRow) }
+                    } else {
+                        ForEach(day.rows) { dayRow in row(for: dayRow) }
                     }
                 } header: {
                     DayHeader(day: day, isToday: day.date == today, onMessage: { messageDay = day })
@@ -87,6 +98,7 @@ struct NextUpView: View {
         .listStyle(.plain)
         .contentMargins(.top, 0, for: .scrollContent)
         .sheet(item: $messageDay) { MessageDayView(day: $0) }
+        .owedOnPaidPrompt($paidRequest)
         .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
             Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
             Button("Go back", role: .cancel) {}
@@ -97,6 +109,28 @@ struct NextUpView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.bar, for: .navigationBar)
+    }
+
+    /// One row standing in for everyone done today, so the next customer is always at the top.
+    private func doneSummary(_ done: [RoundPlanner.DayRow], total: Decimal) -> some View {
+        let cleaned = done.filter { $0.state == .cleanedToday }.count
+        let other = done.count - cleaned
+        return Button { withAnimation { showDone.toggle() } } label: {
+            HStack {
+                Label {
+                    Text("Done today: \(cleaned) cleaned · \(total.pounds)" + (other > 0 ? " · \(other) skipped or not due" : ""))
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                }
+                .font(.subheadline.weight(.semibold))
+                Spacer()
+                Image(systemName: showDone ? "chevron.up" : "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -131,6 +165,10 @@ struct NextUpView: View {
     private func log(_ action: VisitLogger.Action, for customer: Customer) {
         if case .skipped = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
             skipAsk = customer
+            return
+        }
+        if case .cleanedPaid = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
+            paidRequest = PaidRequest(customer: customer)
             return
         }
         perform(action, for: customer)

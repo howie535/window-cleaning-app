@@ -99,10 +99,11 @@ struct StatDetailView: View {
             }
             return byMonth.keys.sorted().map { Point(date: $0, value: double(byMonth[$0]!)) }
         case .perHouse:
-            let days = stats.dayTotals.filter { $0.key <= today && $0.value.houses > 0 }.sorted { $0.key < $1.key }
+            // Finished days only: today's first few cleans would skew the line.
+            let days = stats.dayTotals.filter { $0.key < today && $0.value.houses > 0 }.sorted { $0.key < $1.key }
             return rolling(days.map { ($0.key, double($0.value.work) / Double($0.value.houses)) })
         case .housesPerDay:
-            let days = stats.dayTotals.filter { $0.key <= today && $0.value.houses >= minHouses }.sorted { $0.key < $1.key }
+            let days = stats.dayTotals.filter { $0.key < today && $0.value.houses >= minHouses }.sorted { $0.key < $1.key }
             return rolling(days.map { ($0.key, Double($0.value.houses)) })
         case .skipRate:
             var counts: [Date: (skipped: Int, total: Int)] = [:]
@@ -130,43 +131,69 @@ struct StatDetailView: View {
 
     @ViewBuilder
     private func chart(_ points: [Point]) -> some View {
+        let pounds = Decimal.FormatStyle.Currency(code: "GBP").precision(.fractionLength(0))
+        let poundsAxis = AxisMarks { AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)); AxisValueLabel(format: pounds) }
         switch metric {
         case .weeklyWork:
             Chart {
                 ForEach(points) { point in
-                    BarMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Work", point.value))
-                        .foregroundStyle(point.second.map { point.value >= $0 } ?? true ? Color.green : Color.orange)
-                    if let target = point.second {
-                        RuleMark(xStart: .value("Week", point.date, unit: .weekOfYear), xEnd: .value("Week", calendar.date(byAdding: .day, value: 6, to: point.date)!, unit: .day), y: .value("Target", target))
-                            .foregroundStyle(.primary)
-                    }
+                    let met = point.second.map { point.value >= $0 } ?? true
+                    BarMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Work", point.value), width: .ratio(0.7))
+                        .cornerRadius(5)
+                        .foregroundStyle(LinearGradient(colors: met ? [.green.opacity(0.65), .green] : [.orange.opacity(0.65), .orange],
+                                                        startPoint: .bottom, endPoint: .top))
+                }
+                ForEach(points.filter { $0.second != nil }) { point in
+                    LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Target", point.second ?? 0))
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
+                        .foregroundStyle(Color.primary.opacity(0.6))
                 }
             }
-            .chartYAxis { AxisMarks { AxisGridLine(); AxisValueLabel(format: Decimal.FormatStyle.Currency(code: "GBP").precision(.fractionLength(0))) } }
+            .chartYAxis { poundsAxis }
         case .monthlyWork:
             Chart(points) { point in
-                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Work", point.value))
-                    .foregroundStyle(Color.accentColor)
+                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Work", point.value), width: .ratio(0.7))
+                    .cornerRadius(6)
+                    .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.6), Color.accentColor], startPoint: .bottom, endPoint: .top))
             }
+            .chartYAxis { poundsAxis }
         case .skipRate:
             Chart(points) { point in
-                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Skip rate %", point.value))
-                    .foregroundStyle(Color.orange)
+                BarMark(x: .value("Month", point.date, unit: .month), y: .value("Skip rate %", point.value), width: .ratio(0.7))
+                    .cornerRadius(6)
+                    .foregroundStyle(LinearGradient(colors: [.orange.opacity(0.6), .orange], startPoint: .bottom, endPoint: .top))
             }
+            .chartYAxis { AxisMarks { value in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                AxisValueLabel { if let v = value.as(Double.self) { Text("\(Int(v))%") } }
+            } }
         case .perHouse, .housesPerDay:
+            let floor = (points.map(\.value).min() ?? 0) * 0.9
             Chart {
                 ForEach(points) { point in
+                    AreaMark(x: .value("Day", point.date, unit: .day),
+                             yStart: .value("Floor", floor), yEnd: .value("28-day average", point.second ?? point.value))
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.25), Color.accentColor.opacity(0.02)],
+                                                        startPoint: .top, endPoint: .bottom))
+                }
+                ForEach(points) { point in
                     PointMark(x: .value("Day", point.date, unit: .day), y: .value("Each day", point.value))
-                        .foregroundStyle(Color.secondary.opacity(0.5))
-                        .symbolSize(18)
+                        .foregroundStyle(Color.secondary.opacity(0.35))
+                        .symbolSize(12)
                 }
                 ForEach(points) { point in
                     LineMark(x: .value("Day", point.date, unit: .day), y: .value("28-day average", point.second ?? point.value))
+                        .interpolationMethod(.catmullRom)
                         .foregroundStyle(Color.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 3))
+                        .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                 }
             }
             .chartYScale(domain: .automatic(includesZero: false))
+            .chartYAxis {
+                if metric == .perHouse { poundsAxis } else { AxisMarks { AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)); AxisValueLabel() } }
+            }
         }
     }
 

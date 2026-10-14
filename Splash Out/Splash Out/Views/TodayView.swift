@@ -216,17 +216,19 @@ private struct WeeksChart: View {
                 .foregroundStyle(.secondary)
             Chart {
                 ForEach(weeks, id: \.start) { week in
+                    let met = week.work >= week.target
                     BarMark(x: .value("Week", week.start, unit: .weekOfYear),
-                            y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue))
-                        .foregroundStyle(week.work >= week.target ? Color.green : Color.orange)
-                    if week.target > 0 {
-                        let target = NSDecimalNumber(decimal: week.target).doubleValue
-                        RectangleMark(x: .value("Week", week.start, unit: .weekOfYear),
-                                      yStart: .value("Target", target - 14),
-                                      yEnd: .value("Target", target + 14),
-                                      width: .ratio(0.9))
-                            .foregroundStyle(.primary)
-                    }
+                            y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue), width: .ratio(0.7))
+                        .cornerRadius(5)
+                        .foregroundStyle(LinearGradient(colors: met ? [.green.opacity(0.65), .green] : [.orange.opacity(0.65), .orange],
+                                                        startPoint: .bottom, endPoint: .top))
+                }
+                ForEach(weeks.filter { $0.target > 0 }, id: \.start) { week in
+                    LineMark(x: .value("Week", week.start, unit: .weekOfYear),
+                             y: .value("Target", NSDecimalNumber(decimal: week.target).doubleValue))
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
+                        .foregroundStyle(Color.primary.opacity(0.6))
                 }
             }
             .chartXAxis {

@@ -167,7 +167,7 @@ struct RoundStats {
     func housesPerWorkedDay(taxYear: Int) -> (average: Decimal, days: Int)? {
         let range = TaxYear.range(startYear: taxYear)
         var houses = 0, days = 0
-        for (date, totals) in dayTotals where range.contains(date) && date <= today && totals.houses >= settings.minHousesForWorkingDay {
+        for (date, totals) in dayTotals where range.contains(date) && date < today && totals.houses >= settings.minHousesForWorkingDay {
             houses += totals.houses
             days += 1
         }
@@ -180,7 +180,7 @@ struct RoundStats {
     func averagePerHouseByDay(taxYear: Int) -> (average: Decimal, days: Int)? {
         let range = TaxYear.range(startYear: taxYear)
         var sum: Decimal = 0, days = 0
-        for (date, totals) in dayTotals where range.contains(date) && date <= today && totals.houses > 0 {
+        for (date, totals) in dayTotals where range.contains(date) && date < today && totals.houses > 0 {
             sum += totals.work / Decimal(totals.houses)
             days += 1
         }
@@ -191,9 +191,10 @@ struct RoundStats {
     // MARK: Work rate (last 12 months)
 
     /// The period the work-rate figures use: the last 12 months, or since the first clean while there's less history.
+    /// Averages stop at yesterday: a day only counts once it's finished, so the first few cleans of a morning can't skew them.
     var analysisStart: Date {
         let yearAgo = calendar.date(byAdding: .day, value: -364, to: today)!
-        let first = dayTotals.keys.filter { $0 <= today }.min() ?? today
+        let first = dayTotals.keys.filter { $0 < today }.min() ?? today
         return max(yearAgo, first)
     }
 
@@ -221,7 +222,7 @@ struct RoundStats {
         let start = analysisStart
         var houses = 0, workedDays = 0, allHouses = 0
         var work: Decimal = 0
-        for (date, totals) in dayTotals where date >= start && date <= today {
+        for (date, totals) in dayTotals where date >= start && date < today {
             allHouses += totals.houses
             work += totals.work
             if totals.houses >= settings.minHousesForWorkingDay {
@@ -230,11 +231,11 @@ struct RoundStats {
             }
         }
         guard workedDays > 0, allHouses > 0 else { return nil }
-        let days = (calendar.dateComponents([.day], from: start, to: today).day ?? 0) + 1
+        let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0   // up to yesterday
         let weeks = Decimal(max(days, 7)) / 7
         var skipped = 0, visits = 0
         for customer in customers where customer.status != .cancelled {
-            for visit in customer.allVisits where visit.kind != .notDue && visit.date >= start && visit.date <= today {
+            for visit in customer.allVisits where visit.kind != .notDue && visit.date >= start && visit.date < today {
                 visits += 1
                 if visit.kind == .skipped { skipped += 1 }
             }
@@ -251,7 +252,7 @@ struct RoundStats {
         var gaps: [Int] = []
         for customer in customers where (customer.status == .active || customer.status == .leaving) && !customer.everyOther {
             let dates = customer.allVisits.filter { $0.kind == .cleaned }.map(\.date).sorted()
-            for (a, b) in zip(dates, dates.dropFirst()) where b >= start && b <= today {
+            for (a, b) in zip(dates, dates.dropFirst()) where b >= start && b < today {
                 let gap = Int((b.timeIntervalSince(a) / 86_400).rounded())
                 if gap >= 14 { gaps.append(gap) }
             }

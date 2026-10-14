@@ -102,6 +102,15 @@ enum VisitLogger {
         }
     }
 
+    /// A paid clean that also settles everything they owed from earlier cleans. One undo reverses both.
+    static func cleanAndPayOff(_ action: Action, for customer: Customer, in context: ModelContext) -> (undo: () -> Void, paidOff: Decimal) {
+        let earlier = unpaidVisits(for: customer)
+        let amount = earlier.reduce(Decimal(0)) { $0 + $1.charged - $1.paid }
+        let undoClean = perform(action, for: customer, in: context)
+        let payment = recordPayment(amount, across: earlier)
+        return ({ payment.undo(); undoClean() }, amount)
+    }
+
     /// Deletes a visit and takes it off its customer straight away, so lists and totals update at once.
     static func remove(_ visit: Visit, in context: ModelContext) {
         visit.customer?.visits?.removeAll { $0 === visit }

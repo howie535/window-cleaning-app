@@ -37,14 +37,17 @@ struct VisitQuickActions: View {
     @State private var isConfirmingSkip = false
     /// Two-price customers: which button asked for the price (true = paid).
     @State private var choosingPriceFor: Bool?
+    /// "Cleaned & paid" for someone who already owes: asks about the older cleans.
+    @State private var paidRequest: PaidRequest?
 
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
     var body: some View {
         Group {
             row("Cleaned & paid", systemImage: "checkmark.circle.fill", tint: .green) {
-                if customer.secondPrice != nil { choosingPriceFor = true } else { run(.cleanedPaid) }
+                if customer.secondPrice != nil { choosingPriceFor = true } else { paid(.cleanedPaid) }
             }
+            .owedOnPaidPrompt($paidRequest, onLogged: onLogged)
             row("Cleaned, not paid", systemImage: "clock.badge.exclamationmark", tint: .orange) {
                 if customer.secondPrice != nil { choosingPriceFor = false } else { run(.cleanedNotPaid) }
             }
@@ -53,7 +56,10 @@ struct VisitQuickActions: View {
                     // The one not used last time comes first.
                     let options: [(String, Decimal)] = [("Usual", customer.price), (customer.secondPriceName, second)]
                     ForEach(customer.nextListPrice == second ? options.reversed() : options, id: \.0) { option in
-                        Button("\(option.0) \(option.1.pounds)") { run(.cleanedAt(price: option.1, paid: paid)) }
+                        Button("\(option.0) \(option.1.pounds)") {
+                            let action = VisitLogger.Action.cleanedAt(price: option.1, paid: paid)
+                            if paid { self.paid(action) } else { run(action) }
+                        }
                     }
                 }
                 Button("Cancel", role: .cancel) {}
@@ -99,6 +105,11 @@ struct VisitQuickActions: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// A paid clean: asks about older unpaid cleans first, if there are any.
+    private func paid(_ action: VisitLogger.Action) {
+        if owed.cleans > 0 { paidRequest = PaidRequest(customer: customer, action: action) } else { run(action) }
     }
 
     private func run(_ action: VisitLogger.Action) {
@@ -167,5 +178,56 @@ struct ExtraCleanSheet: View {
         undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         dismiss()
         onSaved()
+    }
+}
+
+/// A paid clean waiting for the "did they pay what they owe too?" answer.
+struct PaidRequest: Identifiable {
+    let customer: Customer
+    var action: VisitLogger.Action = .cleanedPaid
+    var id: UUID { customer.id }
+}
+
+extension View {
+    /// Asks whether a customer who owes for earlier cleans paid those too, then logs the clean (and the payment).
+    func owedOnPaidPrompt(_ request: Binding<PaidRequest?>, onLogged: @escaping () -> Void = {}) -> some View {
+        modifier(OwedOnPaidPrompt(request: request, onLogged: onLogged))
+    }
+}
+
+private struct OwedOnPaidPrompt: ViewModifier {
+    @Binding var request: PaidRequest?
+    var onLogged: () -> Void
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(UndoCenter.self) private var undoCenter
+    @State private var paying: Customer?
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("Did they pay what they owe too?",
+                                isPresented: Binding(get: { request != nil }, set: { if !$0 { request = nil } }),
+                                titleVisibility: .visible, presenting: request) { req in
+                let owed = RoundMetrics.moneyOwed([req.customer])
+                Button("Yes, all \(owed.amount.pounds) as well") { payAll(req) }
+                Button("Just today's clean") { logOnly(req); onLogged() }
+                Button("Some of it...") { logOnly(req); paying = req.customer }
+                Button("Cancel", role: .cancel) {}
+            } message: { req in
+                let owed = RoundMetrics.moneyOwed([req.customer])
+                Text("\(req.customer.name) owes \(owed.amount.pounds) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s").")
+            }
+            .sheet(item: $paying) { RecordPaymentView(customer: $0) }
+    }
+
+    private func logOnly(_ req: PaidRequest) {
+        let undo = VisitLogger.perform(req.action, for: req.customer, in: modelContext)
+        undoCenter.offer("\(req.customer.name): \(req.action.summary)", undo: undo)
+    }
+
+    private func payAll(_ req: PaidRequest) {
+        let result = VisitLogger.cleanAndPayOff(req.action, for: req.customer, in: modelContext)
+        undoCenter.offer("\(req.customer.name): cleaned and paid, plus \(result.paidOff.pounds) owed", undo: result.undo)
+        onLogged()
     }
 }

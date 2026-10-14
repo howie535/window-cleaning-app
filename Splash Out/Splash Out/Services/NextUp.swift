@@ -4,7 +4,8 @@ import Foundation
 /// Pure logic on plain values, no storage, so it can be tested on its own.
 ///
 /// How the list is built:
-/// - A customer is **done this lap** if they had any visit (clean, skip or not due) in the last `hideWeeks` weeks.
+/// - A customer is **done this lap** if they had any visit (clean, skip or not due) in the `hideWeeks` weeks before the day
+///   the round reaches them ("due when it's their turn").
 /// - The list carries on from where the round had got to **at the start of today** (the last customer visited before
 ///   today; on a tie, the one furthest along). Nothing done today changes the order, so cleaning someone further
 ///   down never pushes the customers above them to the end, and anyone passed over earlier stays near the top.
@@ -189,8 +190,11 @@ enum NextUp {
                 if day < days.count { result.append(Placement(key: c.key, dayIndex: day, state: .notStarted, order: order)) }
                 continue
             }
-            guard c.isListable, !isDoneThisLap(c, today: today, hideWeeks: hideWeeks, calendar: calendar) else { continue }
-            if isEveryOtherOff(c, today: today, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar) {
+            // Due "when it's their turn": measured from the day the round reaches them, not from today, so a customer
+            // missed last time waits for their neighbours instead of jumping to the front.
+            let turn = day < days.count ? days[day].date : (days.last.map { calendar.date(byAdding: .day, value: 1, to: $0.date)! } ?? today)
+            guard c.isListable, !isDoneThisLap(c, today: turn, hideWeeks: hideWeeks, calendar: calendar) else { continue }
+            if isEveryOtherOff(c, today: turn, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar) {
                 if day < days.count { result.append(Placement(key: c.key, dayIndex: day, state: .everyOtherOff, order: order)) }
                 continue
             }
