@@ -251,17 +251,14 @@ private struct WeeksChart: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Chart {
-                ForEach(weeks.filter { $0.work > 0 }, id: \.start) { week in
+                ForEach(weeks, id: \.start) { week in
                     BarMark(x: .value("Week", week.start, unit: .weekOfYear),
                             y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue), width: ChartStyle.barWidth)
                         .cornerRadius(ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill(short: week.target > 0 && week.work < week.target))
                 }
-                ForEach(weeks.filter { $0.target > 0 && $0.work > 0 }, id: \.start) { week in
+                ForEach(weeks.filter { $0.target > 0 }, id: \.start) { week in
                     ChartStyle.targetMark(week: week.start, target: NSDecimalNumber(decimal: week.target).doubleValue)
-                }
-                ForEach(weeks.filter { $0.work == 0 && ChartStyle.isFinished(week: $0.start) }, id: \.start) { week in
-                    ChartStyle.offMark(week: week.start, at: 0)
                 }
             }
             .chartAxes(.money, dateLabels: height > 200 ? 6 : 4)

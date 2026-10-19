@@ -48,8 +48,6 @@ struct StatDetailView: View {
         var sumOfDays = 0.0
         var houses = 0
         var work = 0.0
-        /// A week with no work in it (shown as "Off").
-        var isOff = false
         var id: Date { date }
     }
 
@@ -130,24 +128,13 @@ struct StatDetailView: View {
         }
     }
 
-    /// Days grouped into weeks: each week's average of its days, with the average of the last 4 worked weeks
-    /// alongside. Every week in between is included; one with no work is marked off rather than shown as zero.
+    /// Days grouped into weeks: each week's average of its days, with a rolling 12-week average alongside
+    /// (all the days in that week and the 11 before it, so weeks off simply add nothing).
     private func weekly(_ days: [(date: Date, value: Double, houses: Int, work: Double)]) -> [Point] {
         var byWeek: [Date: [(date: Date, value: Double, houses: Int, work: Double)]] = [:]
         for day in days { byWeek[WeekMetrics.monday(onOrBefore: day.date, calendar: calendar), default: []].append(day) }
-        guard let first = byWeek.keys.min(), let last = byWeek.keys.max() else { return [] }
-        var weeks: [Date] = []
-        var week = first
-        while week <= last {
-            weeks.append(week)
-            week = calendar.date(byAdding: .day, value: 7, to: week)!
-        }
-        var points = weeks.map { week -> Point in
-            guard let list = byWeek[week] else {
-                var off = Point(date: week, value: 0)
-                off.isOff = true
-                return off
-            }
+        var points = byWeek.keys.sorted().map { week -> Point in
+            let list = byWeek[week]!
             let sum = list.reduce(0) { $0 + $1.value }
             var point = Point(date: week, value: sum / Double(list.count))
             point.days = list.count
@@ -156,10 +143,9 @@ struct StatDetailView: View {
             point.work = list.reduce(0) { $0 + $1.work }
             return point
         }
-        var worked: [Point] = []
-        for index in points.indices where !points[index].isOff {
-            worked.append(points[index])
-            let window = worked.suffix(4)
+        for index in points.indices {
+            let from = calendar.date(byAdding: .day, value: -77, to: points[index].date)!
+            let window = points[...index].filter { $0.date >= from }
             points[index].second = window.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, window.reduce(0) { $0 + $1.days }))
         }
         return points
@@ -172,16 +158,13 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork:
             Chart {
-                ForEach(points.filter { $0.value > 0 }) { point in
+                ForEach(points) { point in
                     BarMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Work", point.value), width: ChartStyle.barWidth)
                         .cornerRadius(ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill(short: point.second.map { point.value < $0 } ?? false))
                 }
-                ForEach(points.filter { $0.second != nil && $0.value > 0 }) { point in
+                ForEach(points.filter { $0.second != nil }) { point in
                     ChartStyle.targetMark(week: point.date, target: point.second ?? 0)
-                }
-                ForEach(points.filter { $0.value == 0 && ChartStyle.isFinished(week: $0.date) }) { point in
-                    ChartStyle.offMark(week: point.date, at: 0)
                 }
             }
             .chartAxes(.money)
@@ -207,22 +190,19 @@ struct StatDetailView: View {
             }
             .chartAxes(.percent, months: true)
         case .perHouse, .housesPerDay:
-            let values = points.filter { !$0.isOff }.map(\.value)
+            let values = points.map(\.value)
             let low = (values.min() ?? 0), high = (values.max() ?? 0)
             let floor = max(0, low - (high - low) * 0.6 - 1)
             let overall = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, points.reduce(0) { $0 + $1.days }))
             Chart {
-                ForEach(points.filter { !$0.isOff }) { point in
+                ForEach(points) { point in
                     BarMark(x: .value("Week", point.date, unit: .weekOfYear),
                             yStart: .value("Base", floor), yEnd: .value("Week", point.value), width: ChartStyle.barWidth)
                         .cornerRadius(ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill())
                 }
-                ForEach(points.filter(\.isOff)) { point in
-                    ChartStyle.offMark(week: point.date, at: floor)
-                }
-                ForEach(points.filter { !$0.isOff }) { point in
-                    LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("4-week trend", point.second ?? point.value))
+                ForEach(points) { point in
+                    LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("12-week average", point.second ?? point.value))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(ChartStyle.trendColour)
                         .lineStyle(ChartStyle.trendStroke)
@@ -260,12 +240,12 @@ struct StatDetailView: View {
             let work = points.reduce(0.0) { $0 + $1.work }
             return [("Worked days", "\(days)"), ("Average of the days", money(points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days)))),
                     ("Per house overall", houses > 0 ? money(work / Double(houses)) : "–"),
-                    ("Latest 4 weeks", money(points.last { !$0.isOff }?.second ?? average))]
+                    ("Last 12 weeks", money(points.last?.second ?? average))]
         case .housesPerDay:
             let days = points.reduce(0) { $0 + $1.days }
             let perDay = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days))
             return [("Worked days", "\(days)"), ("Average", perDay.formatted(.number.precision(.fractionLength(1)))),
-                    ("Latest 4 weeks", (points.last { !$0.isOff }?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
+                    ("Last 12 weeks", (points.last?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
         case .skipRate:
             let visits = points.reduce(0) { $0 + $1.days }, skips = points.reduce(0) { $0 + $1.houses }
             return [("Visits", "\(visits)"), ("Skipped", "\(skips)"),
@@ -277,8 +257,8 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork: "Work charged each week; orange fell short. Dashed: the target."
         case .monthlyWork: "Work charged each month."
-        case .perHouse: "Each week's £ per house. Line: 4-week trend. Dashed: average for the range."
-        case .housesPerDay: "Houses per worked day each week. Line: 4-week trend. Dashed: average for the range."
+        case .perHouse: "Each week's £ per house. Line: 12-week average. Dashed: average for the range."
+        case .housesPerDay: "Houses per worked day each week. Line: 12-week average. Dashed: average for the range."
         case .skipRate: "Skips as a share of visits each month. Dashed: average for the range."
         }
     }

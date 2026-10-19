@@ -220,6 +220,8 @@ struct CustomerListView: View {
     private func perform(_ action: VisitLogger.Action, for customer: Customer) {
         withAnimation {
             let undo = VisitLogger.perform(action, for: customer, in: modelContext)
+            // Saved now, so the list updates in the same moment the row slides away (no flicker back).
+            try? modelContext.save()
             undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         }
     }

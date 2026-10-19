@@ -148,6 +148,10 @@ struct NextUpView: View {
     @ViewBuilder
     private func row(for dayRow: RoundPlanner.DayRow, on date: Date, today: Date) -> some View {
         let customer = dayRow.customer
+        // Like Mail: when logging takes the row off the list, the swipe carries it away and the rows below close up
+        // (the "destructive" role). When a question comes first (they owe money), the row springs back instead.
+        let owes = RoundMetrics.moneyOwed([customer]).cleans > 0
+        let leaves = !showDone || date != today
         Group {
             if sizeClass == .regular {
                 NextUpRow(customer: customer, state: dayRow.state).tag(customer.id)
@@ -170,15 +174,15 @@ struct NextUpView: View {
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !dayRow.isDone {
-                Button { log(.cleanedPaid, for: customer) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }
+                Button(role: leaves && !owes ? .destructive : nil) { log(.cleanedPaid, for: customer) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }
                     .tint(.green)
-                Button { log(.cleanedNotPaid, for: customer) } label: { Label("Not paid", systemImage: "clock.badge.exclamationmark") }
+                Button(role: leaves ? .destructive : nil) { log(.cleanedNotPaid, for: customer) } label: { Label("Not paid", systemImage: "clock.badge.exclamationmark") }
                     .tint(.orange)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !dayRow.isDone {
-                Button { log(.skipped, for: customer) } label: { Label("Skipped", systemImage: "forward.circle") }
+                Button(role: leaves && !owes ? .destructive : nil) { log(.skipped, for: customer) } label: { Label("Skipped", systemImage: "forward.circle") }
                     .tint(.red)
                 if date > today && !dayRow.isPending {
                     // Pull a later day's customer into today's work (books them for today).
@@ -214,6 +218,8 @@ struct NextUpView: View {
     private func perform(_ action: VisitLogger.Action, for customer: Customer) {
         withAnimation {
             let undo = VisitLogger.perform(action, for: customer, in: modelContext)
+            // Saved now, so the list updates in the same moment the row slides away (no flicker back).
+            try? modelContext.save()
             undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         }
     }
