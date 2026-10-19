@@ -7,6 +7,8 @@ enum RoundReview {
         let customer: Customer
         let score: Double
         let reasons: [String]
+        /// Front only: never counted as cheap (it's a smaller job).
+        let frontOnly: Bool
         var id: UUID { customer.id }
     }
 
@@ -17,13 +19,24 @@ enum RoundReview {
         return under < 0.1 ? 0 : min(4, (under * 10).rounded(.down))
     }
 
+    /// Marked front only, or their last three cleans were all logged as front only.
+    @MainActor
+    static func isFrontOnly(_ customer: Customer) -> Bool {
+        if customer.frontOnly { return true }
+        let recent = customer.allVisits.filter { $0.kind == .cleaned }.sorted { $0.date > $1.date }.prefix(3)
+        return recent.count == 3 && recent.allSatisfy { $0.note == VisitLogger.frontOnlyNote }
+    }
+
     /// Every customer on the round with their points and reasons, highest first.
     @MainActor
     static func rows(customers: [Customer], today: Date, threshold: Double = 3) -> (rows: [Row], average: Decimal) {
         let onRound = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
-        let weights = onRound.map { $0.everyOther ? Decimal(0.5) : Decimal(1) }
+        let frontOnly = Set(onRound.filter(isFrontOnly).map(\.id))
+        // The average is of full cleans only, so front-only prices don't drag it down.
+        let full = onRound.filter { !frontOnly.contains($0.id) }
+        let weights = full.map { $0.everyOther ? Decimal(0.5) : Decimal(1) }
         let totalWeight = weights.reduce(0, +)
-        let average = totalWeight > 0 ? zip(onRound, weights).reduce(Decimal(0)) { $0 + $1.0.price * $1.1 } / totalWeight : 0
+        let average = totalWeight > 0 ? zip(full, weights).reduce(Decimal(0)) { $0 + $1.0.price * $1.1 } / totalWeight : 0
 
         // Clusters over everyone still on the round, in round order (as the planner does).
         let ordered = customers.filter { $0.status != .cancelled && $0.status != .paused }.sorted { $0.sequence < $1.sequence }
@@ -38,7 +51,8 @@ enum RoundReview {
         for customer in onRound {
             var score = 0.0
             var reasons: [String] = []
-            let cheap = cheapPoints(price: customer.price, average: average)
+            let isFront = frontOnly.contains(customer.id)
+            let cheap = isFront ? 0 : cheapPoints(price: customer.price, average: average)
             if cheap > 0 {
                 score += cheap
                 let under = Int((NSDecimalNumber(decimal: (average - customer.price) / average).doubleValue * 100).rounded())
@@ -61,7 +75,7 @@ enum RoundReview {
                 score += 1
                 reasons.append(owed.count >= 2 ? "Owes for \(owed.count) cleans" : "Owed over 6 weeks")
             }
-            if score >= threshold { result.append(Row(customer: customer, score: score, reasons: reasons)) }
+            if score >= threshold { result.append(Row(customer: customer, score: score, reasons: reasons, frontOnly: isFront)) }
         }
         result.sort { $0.score != $1.score ? $0.score > $1.score : $0.customer.price < $1.customer.price }
         return (result, average)

@@ -21,6 +21,20 @@ enum ChartStyle {
 
     enum Values { case money, count, percent }
 
+    /// A week that's over (so an empty one really was a week off, not one that hasn't started yet).
+    static func isFinished(week start: Date) -> Bool {
+        (RoundCalendar.london.date(byAdding: .day, value: 7, to: start) ?? start) <= RoundCalendar.startOfDay()
+    }
+
+    /// A week with no work (a holiday, say): a small grey "Off" in its slot, so the gap doesn't read as a zero.
+    static func offMark(week: Date, at baseline: Double) -> some ChartContent {
+        PointMark(x: .value("Week", week, unit: .weekOfYear), y: .value("Off", baseline))
+            .symbolSize(0)
+            .annotation(position: .top, spacing: 2) {
+                Text("Off").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+    }
+
     /// A week's target: a short dashed line across that week's bar.
     static func targetMark(week: Date, target: Double) -> some ChartContent {
         RuleMark(xStart: .value("From", week), xEnd: .value("To", Calendar.current.date(byAdding: .day, value: 6, to: week) ?? week),

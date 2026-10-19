@@ -48,6 +48,8 @@ struct StatDetailView: View {
         var sumOfDays = 0.0
         var houses = 0
         var work = 0.0
+        /// A week with no work in it (shown as "Off").
+        var isOff = false
         var id: Date { date }
     }
 
@@ -128,12 +130,24 @@ struct StatDetailView: View {
         }
     }
 
-    /// Days grouped into weeks: each week's average of its days, with the average of the last 4 weeks alongside.
+    /// Days grouped into weeks: each week's average of its days, with the average of the last 4 worked weeks
+    /// alongside. Every week in between is included; one with no work is marked off rather than shown as zero.
     private func weekly(_ days: [(date: Date, value: Double, houses: Int, work: Double)]) -> [Point] {
         var byWeek: [Date: [(date: Date, value: Double, houses: Int, work: Double)]] = [:]
         for day in days { byWeek[WeekMetrics.monday(onOrBefore: day.date, calendar: calendar), default: []].append(day) }
-        var points = byWeek.keys.sorted().map { week -> Point in
-            let list = byWeek[week]!
+        guard let first = byWeek.keys.min(), let last = byWeek.keys.max() else { return [] }
+        var weeks: [Date] = []
+        var week = first
+        while week <= last {
+            weeks.append(week)
+            week = calendar.date(byAdding: .day, value: 7, to: week)!
+        }
+        var points = weeks.map { week -> Point in
+            guard let list = byWeek[week] else {
+                var off = Point(date: week, value: 0)
+                off.isOff = true
+                return off
+            }
             let sum = list.reduce(0) { $0 + $1.value }
             var point = Point(date: week, value: sum / Double(list.count))
             point.days = list.count
@@ -142,8 +156,10 @@ struct StatDetailView: View {
             point.work = list.reduce(0) { $0 + $1.work }
             return point
         }
-        for index in points.indices {
-            let window = points[max(0, index - 3)...index]
+        var worked: [Point] = []
+        for index in points.indices where !points[index].isOff {
+            worked.append(points[index])
+            let window = worked.suffix(4)
             points[index].second = window.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, window.reduce(0) { $0 + $1.days }))
         }
         return points
@@ -156,13 +172,16 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork:
             Chart {
-                ForEach(points) { point in
+                ForEach(points.filter { $0.value > 0 }) { point in
                     BarMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("Work", point.value), width: ChartStyle.barWidth)
                         .cornerRadius(ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill(short: point.second.map { point.value < $0 } ?? false))
                 }
-                ForEach(points.filter { $0.second != nil }) { point in
+                ForEach(points.filter { $0.second != nil && $0.value > 0 }) { point in
                     ChartStyle.targetMark(week: point.date, target: point.second ?? 0)
+                }
+                ForEach(points.filter { $0.value == 0 && ChartStyle.isFinished(week: $0.date) }) { point in
+                    ChartStyle.offMark(week: point.date, at: 0)
                 }
             }
             .chartAxes(.money)
@@ -188,18 +207,21 @@ struct StatDetailView: View {
             }
             .chartAxes(.percent, months: true)
         case .perHouse, .housesPerDay:
-            let values = points.map(\.value)
+            let values = points.filter { !$0.isOff }.map(\.value)
             let low = (values.min() ?? 0), high = (values.max() ?? 0)
             let floor = max(0, low - (high - low) * 0.6 - 1)
             let overall = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, points.reduce(0) { $0 + $1.days }))
             Chart {
-                ForEach(points) { point in
+                ForEach(points.filter { !$0.isOff }) { point in
                     BarMark(x: .value("Week", point.date, unit: .weekOfYear),
                             yStart: .value("Base", floor), yEnd: .value("Week", point.value), width: ChartStyle.barWidth)
                         .cornerRadius(ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill())
                 }
-                ForEach(points) { point in
+                ForEach(points.filter(\.isOff)) { point in
+                    ChartStyle.offMark(week: point.date, at: floor)
+                }
+                ForEach(points.filter { !$0.isOff }) { point in
                     LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("4-week trend", point.second ?? point.value))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(ChartStyle.trendColour)
@@ -238,12 +260,12 @@ struct StatDetailView: View {
             let work = points.reduce(0.0) { $0 + $1.work }
             return [("Worked days", "\(days)"), ("Average of the days", money(points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days)))),
                     ("Per house overall", houses > 0 ? money(work / Double(houses)) : "–"),
-                    ("Latest 4 weeks", money(points.last?.second ?? average))]
+                    ("Latest 4 weeks", money(points.last { !$0.isOff }?.second ?? average))]
         case .housesPerDay:
             let days = points.reduce(0) { $0 + $1.days }
             let perDay = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days))
             return [("Worked days", "\(days)"), ("Average", perDay.formatted(.number.precision(.fractionLength(1)))),
-                    ("Latest 4 weeks", (points.last?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
+                    ("Latest 4 weeks", (points.last { !$0.isOff }?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
         case .skipRate:
             let visits = points.reduce(0) { $0 + $1.days }, skips = points.reduce(0) { $0 + $1.houses }
             return [("Visits", "\(visits)"), ("Skipped", "\(skips)"),

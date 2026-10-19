@@ -210,11 +210,10 @@ struct NextUpView: View {
         perform(action, for: customer)
     }
 
+    /// Swipes save straight away, animated, so a full swipe slides the row off and the list closes up behind it.
     private func perform(_ action: VisitLogger.Action, for customer: Customer) {
-        let context = modelContext
-        let undoCenter = undoCenter
-        VisitLogger.afterAnimation {
-            let undo = VisitLogger.perform(action, for: customer, in: context)
+        withAnimation {
+            let undo = VisitLogger.perform(action, for: customer, in: modelContext)
             undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         }
     }

@@ -15,10 +15,10 @@ struct RoundReviewView: View {
 
         List {
             Section {
-                LabeledContent("Average price", value: review.average.formatted(.currency(code: "GBP").precision(.fractionLength(2))))
+                LabeledContent("Average price (full cleans)", value: review.average.formatted(.currency(code: "GBP").precision(.fractionLength(2))))
                 Toggle("Show every house with a reason", isOn: $showAll)
             } footer: {
-                Text("Cheap for the round and on its own count most; skipping a lot and slow paying count less. Tap a house to see it.")
+                Text("Cheap for the round and on its own count most; skipping a lot and slow paying count less. Front-only houses are never counted as cheap.")
             }
             Section("\(review.rows.count) houses") {
                 if review.rows.isEmpty {
@@ -35,6 +35,13 @@ struct RoundReviewView: View {
                             Text([row.customer.address, row.customer.area].filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             HStack(spacing: 6) {
+                                if row.frontOnly {
+                                    Text("Front only")
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Color.blue.opacity(0.12), in: Capsule())
+                                        .foregroundStyle(.blue)
+                                }
                                 ForEach(row.reasons, id: \.self) { reason in
                                     Text(reason)
                                         .font(.caption2.bold())

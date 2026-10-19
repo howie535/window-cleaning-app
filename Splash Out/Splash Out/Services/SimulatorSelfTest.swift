@@ -364,6 +364,11 @@ enum SimulatorSelfTest {
             let lonelyRow = review.rows.first { $0.customer === lonely }
             check("a cheap house on its own that skips is near the top of the round review", lonelyRow != nil && (lonelyRow?.reasons.contains("On its own") ?? false)
                   && (lonelyRow?.reasons.contains { $0.hasPrefix("Skipped") } ?? false), "\(String(describing: lonelyRow?.reasons))")
+            lonely.frontOnly = true
+            let reviewFront = RoundReview.rows(customers: (try? context.fetch(FetchDescriptor<Customer>())) ?? [], today: today, threshold: 1)
+            let frontRow = reviewFront.rows.first { $0.customer === lonely }
+            check("a front-only house is never counted as cheap", frontRow?.frontOnly == true && !(frontRow?.reasons.contains { $0.hasSuffix("under average") } ?? true),
+                  "\(String(describing: frontRow?.reasons))")
             for c in [front, lonely] { context.delete(c) }
         }
 
@@ -495,7 +500,7 @@ enum SimulatorSelfTest {
             check("work rate £ per house = total £ / total houses", houses > 0 && near(real.perHouse, NSDecimalNumber(decimal: work / Decimal(houses)).doubleValue))
             lines.append("WORKRATE \(s.analysisLabel): \(real.housesPerDay) a day, \(real.daysPerWeek) days a week, £\(real.perHouse) a house, skips \(real.skipRate)")
         }
-        if let gap = stats().typicalGapWeeks() { lines.append("GAP typical \(gap.weeks) weeks over \(gap.gaps) gaps") }
+        if let gap = stats().roundLengthWeeks() { lines.append("ROUNDLENGTH \(gap.weeks) weeks over \(gap.gaps) gaps") }
 
         // Averages only count finished days: a pricey first clean this morning mustn't move them.
         do {
@@ -538,14 +543,25 @@ enum SimulatorSelfTest {
         }
         check("skip rate counts every visit ever, without cancelled customers", abs(stats().skipRate - manualSkipRate(includingCancelled: false)) < 0.000001)
         check("a cancelled customer's skips would have changed it", abs(manualSkipRate(includingCancelled: true) - manualSkipRate(includingCancelled: false)) > 0.000001)
-        // pace: cleaned 5 weeks ago and not on the plan until next week is a 6-week gap
-        let paceA = synthetic("ST pace A"); add(paceA, .cleaned, daysAgo: 28)
-        let paceB = synthetic("ST pace B"); add(paceB, .cleaned, daysAgo: 42)
-        let paceEO = synthetic("ST pace EO", eo: true); add(paceEO, .cleaned, daysAgo: 100)
-        let paceDay = RoundPlanner.DayPlan(date: RoundCalendar.london.date(byAdding: .day, value: 7, to: today)!, target: 400, bookTo: 440, crewName: "", customers: [paceA, paceB, paceEO])
-        let pace = RoundPlanner.paceWeeks(of: RoundPlanner.Plan(days: [paceDay], later: [], pointer: nil, lapDays: 35))
-        check("pace: 5 weeks since the last clean, scheduled a week later, is 6 weeks", pace?.weeks == 6 && pace?.customers == 2, "\(String(describing: pace))")
-        context.delete(paceA); context.delete(paceB); context.delete(paceEO)
+        // Round length: average gap over the last 12 weeks, skips and old gaps left out. The test's "today" is
+        // 400 days ahead so real customers' gaps can't fall in its window; before(n) is n days before that.
+        do {
+            let lengthToday = RoundCalendar.london.date(byAdding: .day, value: 400, to: today)!
+            func before(_ n: Int) -> Int { n - 400 }
+            var testers: [Customer] = []
+            for n in 0..<10 {
+                let c = synthetic("ST length \(n)"); add(c, .cleaned, daysAgo: before(80)); add(c, .cleaned, daysAgo: before(38)); testers.append(c)   // 42 days
+            }
+            let skipper2 = synthetic("ST length skip"); add(skipper2, .cleaned, daysAgo: before(90)); add(skipper2, .skipped, daysAgo: before(50)); add(skipper2, .cleaned, daysAgo: before(10))
+            let old = synthetic("ST length old"); add(old, .cleaned, daysAgo: before(200)); add(old, .cleaned, daysAgo: before(100))
+            let group = testers + [skipper2, old]
+            let length = RoundStats(customers: group, settings: settings, crews: crews, workDays: workDays, today: lengthToday).roundLengthWeeks()
+            check("round length: average gap over 12 weeks, skips and older gaps left out", length?.gaps == 10 && length?.weeks == 6, "\(String(describing: length))")
+            let newer = synthetic("ST length new"); add(newer, .cleaned, daysAgo: before(28)); add(newer, .cleaned, daysAgo: before(0))   // 28 days, ending "today"
+            let withToday = RoundStats(customers: group + [newer], settings: settings, crews: crews, workDays: workDays, today: lengthToday).roundLengthWeeks()
+            check("a clean logged today moves the round length straight away", withToday?.gaps == 11 && (withToday?.weeks ?? 0) < 6, "\(String(describing: withToday))")
+            for c in group + [newer] { context.delete(c) }
+        }
 
         let longAgo = synthetic("ST year window"); add(longAgo, .cleaned, daysAgo: 500); add(longAgo, .skipped, daysAgo: 450); add(longAgo, .skipped, daysAgo: 400)
         for n in 0..<4 { add(longAgo, .cleaned, daysAgo: 300 - n * 50) }

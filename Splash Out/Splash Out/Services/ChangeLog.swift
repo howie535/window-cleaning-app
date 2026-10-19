@@ -28,6 +28,10 @@ enum ChangeLog {
             "Change group... on a customer's page (or press and hold on the Round list): join the group before or after, move to a group further away (nearest first), take a house out on its own, or merge whole groups.",
             "Average per house and Houses per workday charts: weekly bars with a 4-week trend.",
             "Charts all share one look: blue bars (orange for a week short of target), a dark trend line, dashed target or average.",
+            "Round length is the average gap between cleans over the last 12 weeks (skips left out), updating as you log.",
+            "Swiping Paid, Not paid or Skipped slides the row away and the list closes up straight away.",
+            "Round review never counts front-only houses as cheap, and its average leaves them out.",
+            "Charts mark weeks off (holidays) with \"Off\" instead of leaving a gap.",
             "Faster logging: swipes and the log sheet finish their animation before the clean is saved, and the screens no longer re-read every customer's history after each save.",
         ]),
         Release(version: "1.1", date: "October 2026", changes: [

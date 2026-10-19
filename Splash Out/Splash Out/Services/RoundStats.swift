@@ -237,23 +237,25 @@ struct RoundStats {
                         skipRate: visits == 0 ? 0 : Double(skipped) / Double(visits), weeks: weeks)
     }
 
-    /// The typical (median) gap between one clean and the next for regular customers on the round, over the
-    /// analysis period. Every-other customers are left out, and so are gaps under two weeks (re-cleans).
-    func typicalGapWeeks() -> (weeks: Decimal, gaps: Int)? {
-        let start = analysisStart
+    /// How long a round is taking now: the average gap between one clean and the next for regular customers on the
+    /// round, over cleans in the last 12 weeks (today's included, so it moves as cleans are logged). Left out:
+    /// every-other customers, re-cleans under two weeks, and gaps with a skip in between (those span two rounds).
+    func roundLengthWeeks(today now: Date? = nil) -> (weeks: Decimal, gaps: Int)? {
+        let today = now ?? self.today
+        let start = calendar.date(byAdding: .day, value: -84, to: today)!
         var gaps: [Int] = []
         for customer in customers where (customer.status == .active || customer.status == .leaving) && !customer.everyOther {
-            let dates = visitsOf(customer).filter { $0.kind == .cleaned }.map(\.date).sorted()
-            for (a, b) in zip(dates, dates.dropFirst()) where b >= start && b < today {
+            let visits = visitsOf(customer)
+            let cleans = visits.filter { $0.kind == .cleaned }.map(\.date).sorted()
+            let skips = visits.filter { $0.kind == .skipped }.map(\.date)
+            for (a, b) in zip(cleans, cleans.dropFirst()) where b > start && b <= today {
                 let gap = Int((b.timeIntervalSince(a) / 86_400).rounded())
-                if gap >= 14 { gaps.append(gap) }
+                guard gap >= 14, !skips.contains(where: { $0 > a && $0 < b }) else { continue }
+                gaps.append(gap)
             }
         }
         guard gaps.count >= 10 else { return nil }
-        gaps.sort()
-        let middle = gaps.count / 2
-        let median = gaps.count % 2 == 1 ? Decimal(gaps[middle]) : Decimal(gaps[middle - 1] + gaps[middle]) / 2
-        return (median / 7, gaps.count)
+        return (Decimal(gaps.reduce(0, +)) / Decimal(gaps.count) / 7, gaps.count)
     }
 
     // MARK: Crew averages (4.13)

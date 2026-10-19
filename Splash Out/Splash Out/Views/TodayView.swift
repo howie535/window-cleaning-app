@@ -46,8 +46,6 @@ struct TodayView: View {
         let oldestOwed = customers.flatMap { VisitLogger.unpaidVisits(for: $0) }.map(\.date).min()
         let taxYear = stats.currentTaxYear
         let yearTotals = RoundMetrics.totals(for: customers, in: TaxYear.range(startYear: taxYear))
-        let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
-        let pace = RoundPlanner.paceWeeks(of: plan)
         let perHouse = stats.averagePerHouseByDay()
         let priced = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
         let listAverage = priced.isEmpty ? Decimal(0) : priced.reduce(Decimal(0)) { $0 + $1.price } / Decimal(priced.count)
@@ -59,7 +57,7 @@ struct TodayView: View {
         let ideal = Ideal(weeklyTarget: usualTargets.reduce(0, +), usualDays: usualTargets.count,
                           weeks: settings.first?.targetRoundWeeks ?? 5, rate: rate, people: listed,
                           cleansPerRound: onRound, periodLabel: stats.analysisLabel)
-        let gap = stats.typicalGapWeeks()
+        let gap = stats.roundLengthWeeks()
         let onRoundList = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
         let riseMonths = settings.first?.priceRiseDueAfterMonths ?? 24
         let risesKnown = onRoundList.filter { $0.priceSince != nil && PriceRise.isDue(priceSince: $0.priceSince, today: today, dueAfterMonths: riseMonths, calendar: RoundCalendar.london) }.count
@@ -98,8 +96,7 @@ struct TodayView: View {
                          detail: rate.map { "over \($0.workedDays) days, \(stats.analysisLabel)" } ?? "no worked days yet"))
                     card(nil, Tile(title: "Round length",
                          value: gap.map { $0.weeks.formatted(.number.precision(.fractionLength(1))) + " weeks" } ?? "–",
-                         detail: (gap == nil ? "not enough history yet" : "typical gap, \(stats.analysisLabel)")
-                            + (pace.map { " · plan \($0.weeks.formatted(.number.precision(.fractionLength(1))))" } ?? ""),
+                         detail: gap == nil ? "not enough history yet" : "average gap, last 12 weeks",
                          ideal: "\(ideal.weeks) weeks", onIdeal: showIdeal))
                     card(nil, Tile(title: "Customers", value: "\(listed)",
                          detail: "\(everyOther) every-other · \(notStarted) not started · \(customers.filter { $0.status == .paused }.count) paused",
@@ -254,14 +251,17 @@ private struct WeeksChart: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Chart {
-                ForEach(weeks, id: \.start) { week in
+                ForEach(weeks.filter { $0.work > 0 }, id: \.start) { week in
                     BarMark(x: .value("Week", week.start, unit: .weekOfYear),
                             y: .value("Work", NSDecimalNumber(decimal: week.work).doubleValue), width: ChartStyle.barWidth)
                         .cornerRadius(ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill(short: week.target > 0 && week.work < week.target))
                 }
-                ForEach(weeks.filter { $0.target > 0 }, id: \.start) { week in
+                ForEach(weeks.filter { $0.target > 0 && $0.work > 0 }, id: \.start) { week in
                     ChartStyle.targetMark(week: week.start, target: NSDecimalNumber(decimal: week.target).doubleValue)
+                }
+                ForEach(weeks.filter { $0.work == 0 && ChartStyle.isFinished(week: $0.start) }, id: \.start) { week in
+                    ChartStyle.offMark(week: week.start, at: 0)
                 }
             }
             .chartAxes(.money, dateLabels: height > 200 ? 6 : 4)
