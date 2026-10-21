@@ -12,7 +12,8 @@ struct CustomerListView: View {
     @State private var selectedID: UUID?
 
     @State private var criteria = CustomerFilter.Criteria()
-    @State private var editMode: EditMode = .inactive
+    /// The customer whose group is being changed from the long-press menu.
+    @State private var grouping: Customer?
     @State private var isShowingAddCustomer = false
     @State private var isShowingFileImporter = false
     @State private var pendingImport: PendingImport?
@@ -60,6 +61,7 @@ struct CustomerListView: View {
                 }
             }
         }
+        .sheet(item: $grouping) { GroupPickerView(customer: $0) }
         .sheet(isPresented: $isShowingAddCustomer) {
             AddEditCustomerView(customer: nil)
         }
@@ -108,45 +110,100 @@ struct CustomerListView: View {
                     Text("Any status").tag(CustomerStatus?.none)
                     ForEach(CustomerStatus.allCases) { Text($0.label).tag(CustomerStatus?.some($0)) }
                 }
-                Toggle("Reorder round", isOn: Binding(
-                    get: { editMode == .active },
-                    set: { editMode = $0 ? .active : .inactive }
-                ))
-                .disabled(criteria.isActive)
             } footer: {
                 if criteria.isActive {
-                    Text("\(shown.count) of \(customers.count) customers. Clear the search and filters to reorder the round.")
+                    Text("\(shown.count) of \(customers.count) customers. Clear the search and filters to see the groups.")
                 } else {
-                    Text("Reorder round lets you drag customers into their place. The round order decides who's next.")
+                    Text("Groups are kept on the same day. Press and hold a customer to drag them into another group (drop on a customer to go after them, or on a heading to go first), or for more options.")
                 }
             }
             }
 
-            ForEach(shown) { customer in
-                customerRow(customer)
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button { log(.cleanedPaid, for: customer) } label: {
-                            Label("Paid", systemImage: "checkmark.circle.fill")
+            if criteria.isActive {
+                ForEach(shown) { customer in row(customer, draggable: false) }
+            } else {
+                let clusters = GroupEditing.clusters(customers)
+                ForEach(clusters) { cluster in
+                    Section {
+                        ForEach(cluster.members) { customer in row(customer, draggable: true) }
+                    } header: {
+                        HStack {
+                            Text(cluster.name)
+                            Spacer()
+                            Text("\(cluster.members.count) house\(cluster.members.count == 1 ? "" : "s")")
                         }
-                        .tint(.green)
-                        Button { log(.cleanedNotPaid, for: customer) } label: {
-                            Label("Not paid", systemImage: "clock.badge.exclamationmark")
+                        .contentShape(Rectangle())
+                        .dropDestination(for: String.self) { items, _ in
+                            guard let mover = dragged(items) else { return false }
+                            withAnimation { GroupEditing.move(mover, toStartOf: cluster, all: customers) }
+                            return true
                         }
-                        .tint(.orange)
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button { log(.skipped, for: customer) } label: {
-                            Label("Skipped", systemImage: "forward.circle")
-                        }
-                        .tint(.red)
+                }
+                let offRound = customers.filter { $0.status == .cancelled || $0.status == .paused }
+                if !offRound.isEmpty {
+                    Section("Not on the round") {
+                        ForEach(offRound) { customer in row(customer, draggable: false) }
                     }
-            }
-            .onMove { offsets, destination in
-                // Only meaningful for the whole round, so it's switched off while filtering.
-                guard !criteria.isActive else { return }
-                RoundOrder.move(customers, from: offsets, to: destination)
+                }
             }
         }
+    }
+
+    /// The customer being dragged, from the id carried by the drag.
+    private func dragged(_ items: [String]) -> Customer? {
+        guard let id = items.first.flatMap(UUID.init(uuidString:)) else { return nil }
+        return customers.first { $0.id == id && $0.status != .cancelled && $0.status != .paused }
+    }
+
+    @ViewBuilder
+    private func row(_ customer: Customer, draggable: Bool) -> some View {
+        let base = customerRow(customer)
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                Button { log(.cleanedPaid, for: customer) } label: {
+                    Label("Paid", systemImage: "checkmark.circle.fill")
+                }
+                .tint(.green)
+                Button { log(.cleanedNotPaid, for: customer) } label: {
+                    Label("Not paid", systemImage: "clock.badge.exclamationmark")
+                }
+                .tint(.orange)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button { log(.skipped, for: customer) } label: {
+                    Label("Skipped", systemImage: "forward.circle")
+                }
+                .tint(.red)
+            }
+        if draggable {
+            base
+                .draggable(customer.id.uuidString) { CustomerRow(customer: customer).padding().background(.background).frame(width: 320) }
+                .dropDestination(for: String.self) { items, _ in
+                    guard let mover = dragged(items), mover !== customer else { return false }
+                    withAnimation { GroupEditing.move(mover, after: customer, all: customers) }
+                    return true
+                }
+                .contextMenu {
+                    Button { withAnimation { GroupEditing.newGroup(after: customer, all: customers) } } label: {
+                        Label("Start a new group after \(customer.name)", systemImage: "rectangle.split.1x2")
+                    }
+                    if isFirstInGroup(customer) {
+                        Button { withAnimation { GroupEditing.joinGroupAbove(customer, all: customers) } } label: {
+                            Label("Join the group above", systemImage: "arrow.up.square")
+                        }
+                    }
+                    Button { grouping = customer } label: { Label("Move to another group...", systemImage: "square.stack.3d.up") }
+                }
+        } else {
+            base
+        }
+    }
+
+    /// First of their group, with a group above to join.
+    private func isFirstInGroup(_ customer: Customer) -> Bool {
+        let clusters = GroupEditing.clusters(customers)
+        guard let index = clusters.firstIndex(where: { $0.members.first === customer }) else { return false }
+        return index > 0
     }
 
     @ViewBuilder
@@ -164,9 +221,7 @@ struct CustomerListView: View {
     private func configured<Content: View>(_ list: Content) -> some View {
         list
             .roomyRows()
-            .environment(\.editMode, $editMode)
             .searchable(text: $criteria.search, prompt: "Name, address, area or note")
-            .onChange(of: criteria.isActive) { _, active in if active { editMode = .inactive } }
             .navigationTitle("Customers")
             .overlay {
                 if customers.isEmpty {

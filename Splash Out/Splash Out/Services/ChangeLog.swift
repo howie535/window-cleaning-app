@@ -12,9 +12,10 @@ enum ChangeLog {
 
     static let releases: [Release] = [
         Release(version: "1.2", date: "October 2026", changes: [
+            "Price Rise is now a simple list: every customer's last price rise date (or No date logged), oldest first. Change a price on the customer's page; a higher price is logged as a rise.",
+            "Customers page shows the groups under headings. Press and drag a customer into another group; press and hold for Start a new group after, Join the group above or Move to another group. Reorder round has gone.",
             "Average price per house: every customer's list price (two-price customers at the middle) ÷ customers, no extras. Its target is labelled Target.",
             "Customers includes those not started yet.",
-            "Price Rise: To target average raises the cheapest prices first until the round's average reaches the target.",
             "Round: Move the rest to the next day ends today, moves today's bookings and offers to message them.",
             "Monthly Direct Debit: enter the monthly amount and the price per clean is worked out (a clean every 5 weeks).",
             "Change group: move a group next to one further away and keep it separate.",
@@ -25,7 +26,6 @@ enum ChangeLog {
             "Cleaned & paid for someone who already owes asks whether they paid the older cleans too.",
             "Averages only count finished days, so the first cleans of the morning don't skew them.",
             "Round: neighbours on the same street are kept on the same day (shown with a bar down the side). A cluster that won't fit starts the next day, and a later one that fits fills the gap. Change it per customer under Edit > Same day as the customer before.",
-            "Price rise: tick who gets a rise (or change their new price), set them, then tell each customer by WhatsApp. New prices start by themselves on their date and show on each customer's page.",
             "Front only... when logging: asks the amount each time, starting from last time's.",
             "Skipping someone who owes offers to send them a reminder by WhatsApp (wording in Settings).",
             "Round: swipe left on a later day's customer for Do today, to bring them into today's work.",

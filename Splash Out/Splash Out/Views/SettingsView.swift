@@ -67,7 +67,6 @@ struct SettingsView: View {
 
                 OwedReminderSection()
 
-                PriceRiseMessageSection()
 
                 Section {
                     LabeledContent("Saved on this phone") {
@@ -262,30 +261,6 @@ private struct OwedReminderSection: View {
             Text("Reminder for money owed")
         } footer: {
             Text("Offered when you skip someone who owes. {name} becomes their name, {amount} what they owe (like £32) and {cleans} \"clean\" or \"2 cleans\".")
-        }
-    }
-}
-
-private struct PriceRiseMessageSection: View {
-    @AppStorage(PriceRise.messageKey) private var template = PriceRise.defaultMessage
-
-    var body: some View {
-        Section {
-            TextField("Message", text: $template, axis: .vertical)
-                .lineLimit(3...6)
-            if template != PriceRise.defaultMessage {
-                Button("Reset to the standard message") { template = PriceRise.defaultMessage }
-            }
-            LabeledContent("Looks like") {
-                Text(PriceRise.message(template: template, name: "Anne", old: 15, new: 16,
-                                       from: PriceRise.previewDate(after: .now, calendar: RoundCalendar.london)))
-                    .font(.footnote)
-                    .multilineTextAlignment(.trailing)
-            }
-        } header: {
-            Text("Price rise message")
-        } footer: {
-            Text("Sent from More > Price Rise > Tell customers. {name}, {old}, {new} and {date} are filled in for each customer.")
         }
     }
 }
@@ -488,23 +463,11 @@ private struct RoundSettingsSections: View {
         }
 
         Section {
-            Toggle("Rise date set", isOn: Binding(
-                get: { settings.priceRiseDate != nil },
-                set: { settings.priceRiseDate = $0 ? (settings.priceRiseDate ?? PriceRise.previewDate(after: .now, calendar: RoundCalendar.london)) : nil }
-            ))
-            if settings.priceRiseDate != nil {
-                DatePicker("Rise date", selection: Binding(
-                    get: { settings.priceRiseDate ?? .now },
-                    set: { settings.priceRiseDate = RoundCalendar.startOfDay($0) }
-                ), displayedComponents: .date)
-            }
-            Stepper("Rise: \(percentBinding(\.priceRisePercent).wrappedValue)%", value: percentBinding(\.priceRisePercent), in: 1...30)
-            Stepper("Delay if risen within: \(settings.priceRiseDelayMonths) months", value: $settings.priceRiseDelayMonths, in: 0...36)
             Stepper("Rise due after: \(settings.priceRiseDueAfterMonths) months", value: $settings.priceRiseDueAfterMonths, in: 6...60, step: 6)
         } header: {
             Text("Price rise")
         } footer: {
-            Text("Leave the rise date off until it's decided: Price Rise then shows a preview for the next 6 April.")
+            Text("Customers whose price hasn't gone up for this long show as due on Stats and Price Rise.")
         }
     }
 }

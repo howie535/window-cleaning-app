@@ -55,8 +55,6 @@ struct TodayView: View {
         let riseMonths = settings.first?.priceRiseDueAfterMonths ?? 24
         let risesKnown = onRoundList.filter { $0.priceSince != nil && PriceRise.isDue(priceSince: $0.priceSince, today: today, dueAfterMonths: riseMonths, calendar: RoundCalendar.london) }.count
         let noPriceDate = onRoundList.filter { $0.priceSince == nil }.count
-        let risesSet = customers.filter { $0.pendingPrice != nil }
-        let risesNotTold = risesSet.filter { $0.pendingPriceToldAt == nil }.count
         let notStarted = customers.filter { $0.status == .notStarted }.count
         let everyOther = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.everyOther }.count
         let _ = PerfProbe.end("Stats", perfStart)
@@ -97,9 +95,7 @@ struct TodayView: View {
                     card(nil, Tile(title: "New vs lost", value: newVsLost,
                          detail: "this tax year"))
                     card(.priceRise, Tile(title: "Price rises due", value: "\(risesDueCount)",
-                         detail: !risesSet.isEmpty
-                            ? "\(risesSet.count) set" + (risesNotTold > 0 ? " · \(risesNotTold) not told" : " · all told")
-                            : (noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years")))
+                         detail: noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years"))
                     card(.skipRate, Tile(title: "Skip rate", value: (rate?.skipRate ?? stats.skipRate).formatted(.percent.precision(.fractionLength(1))),
                              detail: rate == nil ? "all time" : stats.analysisLabel))
                 }
@@ -112,13 +108,6 @@ struct TodayView: View {
                     BackupReminder()
                         .padding(.horizontal)
                         .padding(.bottom, 4)
-                    if let started = startedToday(today) {
-                        Label("\(started) new price\(started == 1 ? "" : "s") started today", systemImage: "arrow.up.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.purple)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal)
-                    }
                     if sideBySide {
                         HStack(alignment: .top, spacing: 12) {
                             tiles
@@ -150,14 +139,6 @@ struct TodayView: View {
                 }
             }
         }
-    }
-
-    /// How many price rises switched over today, if any (saved by `PriceRise.applyDue`).
-    private func startedToday(_ today: Date) -> Int? {
-        guard let saved = UserDefaults.standard.string(forKey: PriceRise.lastAppliedKey) else { return nil }
-        let parts = saved.split(separator: ":")
-        guard parts.count == 2, String(parts[0]) == RoundCalendar.dayString(today) else { return nil }
-        return Int(parts[1])
     }
 
     /// Where tapping a card (or an Ideal line) goes.

@@ -5,41 +5,6 @@ import SwiftData
 extension RoundStats {
     // MARK: Price rise
 
-    struct RiseRow: Identifiable {
-        var customer: Customer
-        var newPrice: Decimal
-        /// nil when the rise doesn't apply to them (their price started on or after the rise date).
-        var effective: Date?
-        var id: UUID { customer.id }
-        var extraPerCycle: Decimal {
-            guard effective != nil else { return 0 }
-            return (newPrice - customer.price) * (customer.everyOther ? Decimal(string: "0.5")! : 1)
-        }
-    }
-
-    /// The rise date in use: the one set in Settings, otherwise the next 6 April as a preview.
-    var riseDateInUse: (date: Date, isPreview: Bool) {
-        if let date = settings.priceRiseDate { return (date, false) }
-        return (PriceRise.previewDate(after: today, calendar: RoundCalendar.london), true)
-    }
-
-    /// Every active or leaving customer with a price, in round order.
-    func risePreview() -> [RiseRow] {
-        let riseDate = riseDateInUse.date
-        let percent = Money.decimal(settings.priceRisePercent * 100) / 100
-        return customers
-            .filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
-            .sorted { $0.sequence < $1.sequence }
-            .map { customer in
-                RiseRow(
-                    customer: customer,
-                    newPrice: PriceRise.newPrice(customer.price, percent: percent),
-                    effective: PriceRise.effectiveDate(priceSince: customer.priceSince, riseDate: riseDate,
-                                                      delayMonths: settings.priceRiseDelayMonths, calendar: RoundCalendar.london)
-                )
-            }
-    }
-
     /// Active or leaving customers whose price hasn't changed for the "due after" period.
     func risesDue() -> [Customer] {
         customers.filter {

@@ -81,6 +81,7 @@ struct CustomerDetailView: View {
                 LabeledContent("Address", value: customer.address)
                 LabeledContent("Phone", value: customer.phone)
                 LabeledContent("Price", value: customer.price, format: .currency(code: "GBP"))
+                LabeledContent("Last price rise", value: customer.priceSince.map { RoundCalendar.shortWithYear($0) } ?? "No date logged")
                 if customer.payMethod == .directDebit, let monthly = customer.monthlyAmount {
                     LabeledContent("Direct Debit", value: "\(monthly.formatted(.currency(code: "GBP"))) a month")
                 }
@@ -144,25 +145,6 @@ struct CustomerDetailView: View {
                             .font(.title3)
                             .padding(.vertical, 6)
                     }
-                }
-            }
-
-            if let rise = customer.pendingPrice, let from = customer.pendingPriceFrom {
-                Section {
-                    LabeledContent("Rising to") {
-                        Text("\(rise.pounds) from \(RoundCalendar.shortWithYear(from))").foregroundStyle(.purple)
-                    }
-                    LabeledContent("Told", value: customer.pendingPriceToldAt.map { RoundCalendar.shortWithYear($0) } ?? "Not yet")
-                    Button("Start the new price now") { PriceRise.applyIfDue(customer, now: true, in: modelContext) }
-                    Button("Change the new price...") {
-                        riseText = NSDecimalNumber(decimal: rise).stringValue
-                        isChangingRise = true
-                    }
-                    Button("Cancel this rise", role: .destructive) { PriceRise.cancel(customer) }
-                } header: {
-                    Text("Price rise")
-                } footer: {
-                    Text("Starts by itself on \(RoundCalendar.shortWithYear(from)). Set from More > Price Rise.")
                 }
             }
 
@@ -244,17 +226,6 @@ struct CustomerDetailView: View {
             } else {
                 Text("They'll come off the round. Their history is kept.")
             }
-        }
-        .alert("New price for \(customer.name)", isPresented: $isChangingRise) {
-            TextField("Price", text: $riseText).keyboardType(.decimalPad)
-            Button("Save") {
-                if let value = Decimal(string: riseText), value > 0, let from = customer.pendingPriceFrom {
-                    let told = customer.pendingPriceToldAt
-                    PriceRise.set(customer, to: value, from: from)
-                    customer.pendingPriceToldAt = told
-                }
-            }
-            Button("Cancel", role: .cancel) {}
         }
         .alert("Delete \(customer.name) completely?", isPresented: $isConfirmingDelete) {
             Button("Delete for good", role: .destructive, action: deleteCustomer)

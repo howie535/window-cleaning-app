@@ -120,4 +120,78 @@ enum GroupEditing {
             if cluster?.members.contains(where: { $0 === next }) == true { next.groupWithPrevious = false }
         }
     }
+
+    // MARK: Dragging on the Customers page
+
+    /// Moves `mover` to just after `target` in the round and into `target`'s group. Everyone else keeps their group.
+    static func move(_ mover: Customer, after target: Customer, all customers: [Customer]) {
+        guard mover !== target else { return }
+        var groups = groupNumbers(customers)
+        groups[ObjectIdentifier(mover)] = groups[ObjectIdentifier(target)]
+        var everyone = customers.sorted { $0.sequence < $1.sequence }
+        everyone.removeAll { $0 === mover }
+        everyone.insert(mover, at: (everyone.firstIndex { $0 === target } ?? (everyone.count - 1)) + 1)
+        renumber(everyone)
+        if mover.round != target.round { mover.round = target.round }
+        settle(groups, all: customers)
+    }
+
+    /// Moves `mover` to the front of `cluster` (dropped on the group's heading).
+    static func move(_ mover: Customer, toStartOf cluster: Cluster, all customers: [Customer]) {
+        guard cluster.first !== mover else { return }
+        var groups = groupNumbers(customers)
+        groups[ObjectIdentifier(mover)] = groups[ObjectIdentifier(cluster.first)]
+        var everyone = customers.sorted { $0.sequence < $1.sequence }
+        everyone.removeAll { $0 === mover }
+        everyone.insert(mover, at: everyone.firstIndex { $0 === cluster.first } ?? 0)
+        renumber(everyone)
+        if mover.round != cluster.first.round { mover.round = cluster.first.round }
+        settle(groups, all: customers)
+    }
+
+    /// Ends the group after `customer`: whoever follows them starts a new group.
+    static func newGroup(after customer: Customer, all customers: [Customer]) {
+        let ordered = onRound(customers)
+        guard let index = ordered.firstIndex(where: { $0 === customer }), index + 1 < ordered.count else { return }
+        var groups = groupNumbers(customers)
+        let next = 1_000_000
+        for c in ordered[(index + 1)...] where groups[ObjectIdentifier(c)] == groups[ObjectIdentifier(customer)] {
+            groups[ObjectIdentifier(c)] = next
+        }
+        settle(groups, all: customers)
+    }
+
+    /// Joins `customer` (the first of their group) and the rest of their group on to the group above.
+    static func joinGroupAbove(_ customer: Customer, all customers: [Customer]) {
+        let ordered = onRound(customers)
+        guard let index = ordered.firstIndex(where: { $0 === customer }), index > 0 else { return }
+        var groups = groupNumbers(customers)
+        let mine = groups[ObjectIdentifier(customer)], above = groups[ObjectIdentifier(ordered[index - 1])]
+        for c in ordered where groups[ObjectIdentifier(c)] == mine { groups[ObjectIdentifier(c)] = above }
+        settle(groups, all: customers)
+    }
+
+    /// Each on-round customer's group number as things stand.
+    private static func groupNumbers(_ customers: [Customer]) -> [ObjectIdentifier: Int] {
+        var result: [ObjectIdentifier: Int] = [:]
+        for cluster in clusters(customers) { for c in cluster.members { result[ObjectIdentifier(c)] = cluster.id } }
+        return result
+    }
+
+    private static func renumber(_ ordered: [Customer]) {
+        for (index, customer) in ordered.enumerated() where customer.sequence != index + 1 { customer.sequence = index + 1 }
+    }
+
+    /// Sets "same day as the customer before" wherever it's needed so the groups come out as `groups` says, leaving
+    /// the automatic (same street) setting alone where it already gives the right answer.
+    private static func settle(_ groups: [ObjectIdentifier: Int], all customers: [Customer]) {
+        let ordered = onRound(customers)
+        for (index, c) in ordered.enumerated() where index > 0 {
+            let previous = ordered[index - 1]
+            let want = groups[ObjectIdentifier(c)] != nil && groups[ObjectIdentifier(c)] == groups[ObjectIdentifier(previous)]
+            let automatic = RoundGrouping.sameStreet(previous.address, c.address)
+            let now = c.groupWithPrevious ?? automatic
+            if now != want { c.groupWithPrevious = want == automatic ? nil : want }
+        }
+    }
 }

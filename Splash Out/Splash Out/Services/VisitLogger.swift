@@ -34,8 +34,6 @@ enum VisitLogger {
     @discardableResult
     static func perform(_ action: Action, for customer: Customer, on date: Date = Date(), in context: ModelContext) -> () -> Void {
         let day = RoundCalendar.startOfDay(date)
-        // A price rise that has started is used from its first day, even if the app hasn't switched it over yet.
-        PriceRise.applyIfDue(customer, today: day, in: context)
         let previousStatus = customer.status
         let previousBooking = customer.bookedFor
 
@@ -84,7 +82,6 @@ enum VisitLogger {
         in context: ModelContext
     ) -> () -> Void {
         let day = RoundCalendar.startOfDay(date)
-        PriceRise.applyIfDue(customer, today: day, in: context)
         let previousStatus = customer.status
         let previousBooking = customer.bookedFor
         let suggested = customer.suggestedNextPrice

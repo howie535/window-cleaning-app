@@ -258,11 +258,6 @@ enum SimulatorSelfTest {
             check("Direct Debit per clean = monthly × 12 ÷ (52 ÷ 5), to the penny", DirectDebit.perClean(monthly: 15) == Decimal(string: "17.31")
                   && DirectDebit.perClean(monthly: 13) == 15)
 
-            let ids = (0..<4).map { _ in UUID() }
-            let plan = PriceRise.towardsTarget(17, prices: [(ids[0], 10, 10, true), (ids[1], 12, 12, true), (ids[2], 20, 20, true), (ids[3], 25, 25, false)])
-            check("price rise to target: cheapest raised to the lowest floor that reaches the average", plan?.floor == 15.5 || (plan.map { $0.reachesTarget && $0.newPrices[ids[2]] == nil && $0.newPrices[ids[3]] == nil } ?? false),
-                  "\(String(describing: plan))")
-            check("price rise to target: the average after reaches the target", plan.map { $0.average >= 17 } ?? false)
 
             let cal = RoundCalendar.london
             let old = cal.date(byAdding: .day, value: -40, to: today)!
@@ -344,31 +339,6 @@ enum SimulatorSelfTest {
         check("one undo takes back the clean and the payment", debtor2.allVisits.count == 2 && RoundMetrics.moneyOwed([debtor2]).amount == 40)
         context.delete(debtor2)
 
-        // Price rise: set, then switched over on its date with a history entry; a clean on that day uses the new price.
-        do {
-            let cal = RoundCalendar.london
-            let nextWeek = cal.date(byAdding: .day, value: 7, to: today)!
-            let riser2 = synthetic("ST rise"); add(riser2, .cleaned, daysAgo: 30)
-            let bystander = synthetic("ST no rise")
-            PriceRise.set(riser2, to: 22, from: nextWeek)
-            check("a set rise waits for its date", !PriceRise.applyIfDue(riser2, today: today, in: context) && riser2.price == 20 && riser2.pendingPrice == 22)
-            let defaults = UserDefaults(suiteName: "selftest.rise")!
-            let switched = PriceRise.applyDue(in: context, today: nextWeek, defaults: defaults)
-            let history = (riser2.priceChanges ?? []).filter { $0.reason == .rise && $0.oldPrice == 20 && $0.newPrice == 22 }
-            check("on its date the new price starts, with a history entry", switched >= 1 && riser2.price == 22 && riser2.priceSince == nextWeek
-                  && riser2.pendingPrice == nil && history.count == 1)
-            check("customers without a rise are left alone", bystander.price == 20 && bystander.priceChanges?.isEmpty != false)
-            let sameDay = synthetic("ST rise today"); add(sameDay, .cleaned, daysAgo: 30)
-            PriceRise.set(sameDay, to: 25, from: today)
-            let undoRise = VisitLogger.perform(.cleanedPaid, for: sameDay, in: context)
-            check("a clean on the rise's first day uses the new price", sameDay.allVisits.first { $0.date == today }?.charged == 25 && sameDay.price == 25)
-            undoRise()
-            let text = PriceRise.message(template: PriceRise.defaultMessage, name: "Anne", old: 15, new: 16, from: nextWeek)
-            check("price rise message fills in name, old and new price and date", text.contains("Anne") && text.contains("£15") && text.contains("£16")
-                  && text.contains(DayMessage.fullDate(nextWeek)) && !text.contains("{"))
-            defaults.removePersistentDomain(forName: "selftest.rise")
-            for c in [riser2, bystander, sameDay] { context.delete(c) }
-        }
 
         // Day three: front only, the owed reminder and the round review.
         do {
@@ -429,6 +399,16 @@ enum SimulatorSelfTest {
             GroupEditing.join([g6], into: cluster(of: g1), all: everyone(), joining: false)
             check("moving next to a group further away can keep it separate", cluster(of: g6).members.first === g6 && !cluster(of: g1).members.contains { $0 === g6 }
                   && g6.sequence == cluster(of: g1).last.sequence + 1, "\(names())")
+            // Customers page: drag, new group after, join the group above.
+            GroupEditing.move(g6, after: g1, all: everyone())
+            check("dragging onto a customer puts them after it, in its group", cluster(of: g1).members.contains { $0 === g6 }
+                  && g6.sequence == g1.sequence + 1, "\(names())")
+            GroupEditing.newGroup(after: g1, all: everyone())
+            check("start a new group after a customer splits the group there", cluster(of: g1).last === g1 && cluster(of: g6).first === g6, "\(names())")
+            GroupEditing.joinGroupAbove(g6, all: everyone())
+            check("join the group above merges them back", cluster(of: g1).members.contains { $0 === g6 }, "\(names())")
+            GroupEditing.move(g6, toStartOf: cluster(of: g3), all: everyone())
+            check("dropping on a group's heading puts them first in it", cluster(of: g3).first === g6, "\(names())")
             check("street names read as written", RoundGrouping.streetName("27 Bron Wern") == "Bron Wern" && RoundGrouping.streetName("Coddington, High St") == "High St")
             for c in made { context.delete(c) }
             try context.save()
@@ -626,29 +606,14 @@ enum SimulatorSelfTest {
         check("a visit dated in the future is flagged", issues.contains { $0.customer === future })
         check("normal customers aren't flagged", !issues.contains { $0.customer === skipper })
 
-        // price rise end to end
+        // price rise: due when no rise for the set time, or no date logged
         let riser = synthetic("ST riser", price: 15)
         let recent = synthetic("ST recent", price: 20); recent.priceSince = RoundCalendar.london.date(byAdding: .month, value: -6, to: today)
-        let brandNew = synthetic("ST brand new", price: 20); brandNew.priceSince = today
-        let savedRiseDate = settings?.priceRiseDate
-        settings?.priceRiseDate = today
-        let rows = stats().risePreview()
-        func row(_ c: Customer) -> RoundStats.RiseRow? { rows.first { $0.customer === c } }
-        check("15 rises to 16", row(riser)?.newPrice == 16 && row(riser)?.effective == today)
-        check("a price changed 6 months ago waits", row(recent)?.effective == RoundCalendar.london.date(byAdding: .month, value: 6, to: today))
-        check("a price that starts today gets no rise", row(brandNew)?.effective == nil && row(brandNew)?.extraPerCycle == 0)
-        // Set every rise that applies, then start the ones whose date has come (as the app does on opening).
-        for r in rows where r.effective != nil && (r.customer === riser || r.customer === recent || r.customer === brandNew) {
-            PriceRise.set(r.customer, to: r.newPrice, from: r.effective!)
-        }
-        let riseDefaults = UserDefaults(suiteName: "selftest.rise2")!
-        let applied = PriceRise.applyDue(in: context, today: today, defaults: riseDefaults)
-        check("only rises whose date has come start", applied >= 1 && riser.price == 16 && recent.price == 20 && recent.pendingPrice != nil && brandNew.price == 20, "\(applied) \(riser.price)")
-        check("starting a rise records the price history and price since", riser.priceSince == today && (riser.priceChanges ?? []).contains { $0.oldPrice == 15 && $0.newPrice == 16 && $0.reason == .rise })
-        check("starting again does nothing more", !PriceRise.applyIfDue(riser, today: today, in: context) && riser.price == 16)
-        PriceRise.cancel(recent)
-        riseDefaults.removePersistentDomain(forName: "selftest.rise2")
-        settings?.priceRiseDate = savedRiseDate
+        let brandNew = synthetic("ST brand new", price: 20); brandNew.priceSince = RoundCalendar.london.date(byAdding: .month, value: -30, to: today)
+        let dueNow = stats().risesDue()
+        check("a customer with no price date is due a rise", dueNow.contains { $0 === riser })
+        check("a price changed 6 months ago isn't due", !dueNow.contains { $0 === recent })
+        check("a price unchanged for 30 months is due", dueNow.contains { $0 === brandNew })
 
         // ---- Customers screen: filters and reordering
         let everyone = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
