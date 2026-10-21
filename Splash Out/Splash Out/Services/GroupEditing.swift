@@ -68,7 +68,8 @@ enum GroupEditing {
 
     /// Moves `movers` (in their current order) or the whole of `source` into `target`. Next to each other in the
     /// round, nobody moves; further away, the movers go after the target's last house.
-    static func join(_ movers: [Customer], into target: Cluster, all customers: [Customer]) {
+    /// With `joining` false (only for a group further away), the movers sit straight after the target but stay their own group.
+    static func join(_ movers: [Customer], into target: Cluster, all customers: [Customer], joining: Bool = true) {
         let ordered = onRound(customers)
         guard let firstMover = movers.first, let lastMover = movers.last else { return }
         let firstIndex = ordered.firstIndex { $0 === firstMover } ?? 0
@@ -98,7 +99,7 @@ enum GroupEditing {
             let insertAt = (everyone.firstIndex { $0 === target.last } ?? (everyone.count - 1)) + 1
             everyone.insert(contentsOf: movers, at: insertAt)
             for (index, customer) in everyone.enumerated() where customer.sequence != index + 1 { customer.sequence = index + 1 }
-            firstMover.groupWithPrevious = true
+            firstMover.groupWithPrevious = joining
             for m in movers.dropFirst() { m.groupWithPrevious = true }
             for m in movers where m.round != target.last.round { m.round = target.last.round }
             if let after, !afterWasInTarget, !movers.contains(where: { $0 === after }) { after.groupWithPrevious = false }

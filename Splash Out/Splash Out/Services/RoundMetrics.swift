@@ -28,6 +28,25 @@ enum RoundMetrics {
             .reduce(0) { $0 + ($1.everyOther ? $1.price / 2 : $1.price) }
     }
 
+    /// Customers on the round: active, leaving and not started (they'll all be cleaned).
+    static func onRound(_ customers: [Customer]) -> [Customer] {
+        customers.filter { [.active, .leaving, .notStarted].contains($0.status) }
+    }
+
+    /// One clean's list price: the price, or for someone who alternates between two prices, the middle of the two.
+    /// Extras aren't included: they can't be counted on.
+    static func perCleanPrice(_ customer: Customer) -> Decimal {
+        guard let second = customer.secondPrice else { return customer.price }
+        return (customer.price + second) / 2
+    }
+
+    /// Average price per house: every priced customer on the round's per-clean price, totalled, ÷ the number of them.
+    static func averagePrice(_ customers: [Customer]) -> (average: Decimal, customers: Int) {
+        let priced = onRound(customers).filter { $0.price > 0 }
+        guard !priced.isEmpty else { return (0, 0) }
+        return (priced.reduce(Decimal(0)) { $0 + perCleanPrice($1) } / Decimal(priced.count), priced.count)
+    }
+
     /// 4.8: every cleaned visit not yet fully paid.
     static func moneyOwed(_ customers: [Customer]) -> (amount: Decimal, cleans: Int) {
         var amount: Decimal = 0

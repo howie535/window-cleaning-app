@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Holds the most recent undoable action for ten seconds (Docs/SPEC.md section 3).
+/// Holds the most recent undoable action for five seconds (Docs/SPEC.md section 3).
 @Observable
 @MainActor
 final class UndoCenter {
@@ -18,7 +18,7 @@ final class UndoCenter {
         self.entry = entry
         expiry?.cancel()
         expiry = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled, self?.entry?.id == entry.id else { return }
             self?.entry = nil
         }

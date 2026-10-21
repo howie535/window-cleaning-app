@@ -12,6 +12,14 @@ enum ChangeLog {
 
     static let releases: [Release] = [
         Release(version: "1.2", date: "October 2026", changes: [
+            "Average price per house: every customer's list price (two-price customers at the middle) ÷ customers, no extras. Its target is labelled Target.",
+            "Customers includes those not started yet.",
+            "Price Rise: To target average raises the cheapest prices first until the round's average reaches the target.",
+            "Round: Move the rest to the next day ends today, moves today's bookings and offers to message them.",
+            "Monthly Direct Debit: enter the monthly amount and the price per clean is worked out (a clean every 5 weeks).",
+            "Change group: move a group next to one further away and keep it separate.",
+            "Round review: skips only count against a house that's part of a group.",
+            "The Undo bar shows for 5 seconds.",
             "Round: customers are due when the round reaches them, so someone missed last time waits with their neighbours instead of jumping to the front.",
             "Round: today's done customers fold into one \"Done today\" row (tap to show them), so the next customer is always at the top.",
             "Cleaned & paid for someone who already owes asks whether they paid the older cleans too.",

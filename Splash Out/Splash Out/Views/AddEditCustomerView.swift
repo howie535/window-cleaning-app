@@ -17,6 +17,7 @@ struct AddEditCustomerView: View {
     @State private var phone: String = ""
     @State private var priceText: String = ""
     @State private var altPriceText: String = ""
+    @State private var monthlyText: String = ""
     @State private var altPriceLabel: String = ""
     @State private var round: String = ""
     @State private var area: String = ""
@@ -40,8 +41,11 @@ struct AddEditCustomerView: View {
 
     private var isEditing: Bool { customer != nil }
 
+    private var monthlyAmount: Decimal? { Decimal(string: monthlyText).flatMap { $0 > 0 ? $0 : nil } }
+
     private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && Decimal(string: priceText) != nil
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
+            && (payMethod == .directDebit ? monthlyAmount != nil : Decimal(string: priceText) != nil)
             && (altPriceText.trimmingCharacters(in: .whitespaces).isEmpty || Decimal(string: altPriceText) != nil)
     }
 
@@ -95,10 +99,24 @@ struct AddEditCustomerView: View {
                         Toggle("Also save to Contacts", isOn: $saveToContacts)
                     }
                 }
-                Section("Cleaning") {
-                    LabeledField(label: "Price per Clean") {
-                        TextField("0.00", text: $priceText)
-                            .keyboardType(.decimalPad)
+                Section {
+                    if payMethod == .directDebit {
+                        LabeledField(label: "Monthly Direct Debit (£)") {
+                            TextField("0.00", text: $monthlyText)
+                                .keyboardType(.decimalPad)
+                        }
+                        LabeledContent("Price per clean", value: monthlyAmount.map { DirectDebit.perClean(monthly: $0).formatted(.currency(code: "GBP")) } ?? "–")
+                    } else {
+                        LabeledField(label: "Price per Clean") {
+                            TextField("0.00", text: $priceText)
+                                .keyboardType(.decimalPad)
+                        }
+                    }
+                } header: {
+                    Text("Cleaning")
+                } footer: {
+                    if payMethod == .directDebit {
+                        Text("Monthly × 12 ÷ a clean every 5 weeks. Change Pays by to set a price directly.")
                     }
                 }
                 Section {
@@ -229,6 +247,7 @@ struct AddEditCustomerView: View {
         frontOnly = customer.frontOnly
         contact = customer.contact
         payMethod = customer.payMethod
+        if let monthly = customer.monthlyAmount { monthlyText = NSDecimalNumber(decimal: monthly).stringValue }
         groupWithPrevious = customer.groupWithPrevious
     }
 
@@ -238,7 +257,8 @@ struct AddEditCustomerView: View {
             isConfirmingOwedCancel = true
             return
         }
-        let price = Decimal(string: priceText) ?? 0
+        let price = payMethod == .directDebit ? DirectDebit.perClean(monthly: monthlyAmount ?? 0) : (Decimal(string: priceText) ?? 0)
+        let monthly: Decimal? = payMethod == .directDebit ? monthlyAmount : nil
         let altText = altPriceText.trimmingCharacters(in: .whitespaces)
         let altPrice: Decimal? = altText.isEmpty ? nil : Decimal(string: altText)
         let altLabel = altPriceLabel.trimmingCharacters(in: .whitespaces)
@@ -262,6 +282,7 @@ struct AddEditCustomerView: View {
             customer.frontOnly = frontOnly
             customer.contact = contact
             customer.payMethod = payMethod
+            customer.monthlyAmount = monthly
             customer.groupWithPrevious = groupWithPrevious
             customer.altPrice = altPrice
             customer.altPriceLabel = altLabel.isEmpty ? nil : altLabel
@@ -281,6 +302,7 @@ struct AddEditCustomerView: View {
             newCustomer.frontOnly = frontOnly
             newCustomer.contact = contact
             newCustomer.payMethod = payMethod
+            newCustomer.monthlyAmount = monthly
             newCustomer.groupWithPrevious = groupWithPrevious
             newCustomer.altPrice = altPrice
             newCustomer.altPriceLabel = altLabel.isEmpty ? nil : altLabel

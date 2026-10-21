@@ -7,7 +7,7 @@ struct StatDetailView: View {
     enum Metric: String {
         case weeklyWork = "Work per week"
         case monthlyWork = "Work per month"
-        case perHouse = "Average per house"
+        case perHouse = "Charged per house"
         case housesPerDay = "Houses per workday"
         case skipRate = "Skip rate"
     }
@@ -257,7 +257,7 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork: "Work charged each week; orange fell short. Dashed: the target."
         case .monthlyWork: "Work charged each month."
-        case .perHouse: "Each week's £ per house. Line: 12-week average. Dashed: average for the range."
+        case .perHouse: "What was actually charged per house each week, extras included. Line: 12-week average. Dashed: average for the range."
         case .housesPerDay: "Houses per worked day each week. Line: 12-week average. Dashed: average for the range."
         case .skipRate: "Skips as a share of visits each month. Dashed: average for the range."
         }

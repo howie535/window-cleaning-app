@@ -46,17 +46,10 @@ struct TodayView: View {
         let oldestOwed = customers.flatMap { VisitLogger.unpaidVisits(for: $0) }.map(\.date).min()
         let taxYear = stats.currentTaxYear
         let yearTotals = RoundMetrics.totals(for: customers, in: TaxYear.range(startYear: taxYear))
-        let perHouse = stats.averagePerHouseByDay()
-        let priced = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
-        let listAverage = priced.isEmpty ? Decimal(0) : priced.reduce(Decimal(0)) { $0 + $1.price } / Decimal(priced.count)
-        let listed = customers.filter { $0.status == .active || $0.status == .leaving }.count
-        let onRound = customers.filter { $0.status == .active || $0.status == .leaving }
-            .reduce(Decimal(0)) { $0 + ($1.everyOther ? Decimal(0.5) : 1) }
+        let average = RoundMetrics.averagePrice(customers)
+        let listed = RoundMetrics.onRound(customers).count
         let rate = stats.workRate()
-        let usualTargets = stats.config.usualTargets.filter { $0 > 0 }
-        let ideal = Ideal(weeklyTarget: usualTargets.reduce(0, +), usualDays: usualTargets.count,
-                          weeks: settings.first?.targetRoundWeeks ?? 5, rate: rate, people: listed,
-                          cleansPerRound: onRound, periodLabel: stats.analysisLabel)
+        let ideal = Ideal.current(stats: stats, customers: customers, weeks: settings.first?.targetRoundWeeks ?? 5)
         let gap = stats.roundLengthWeeks()
         let onRoundList = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
         let riseMonths = settings.first?.priceRiseDueAfterMonths ?? 24
@@ -87,9 +80,9 @@ struct TodayView: View {
                     card(nil, Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
                          detail: notStarted > 0 ? "per round · incl. \(notStarted) not started" : "per round",
                          ideal: ideal.roundValue.map { pounds($0) }, onIdeal: showIdeal))
-                    card(.perHouse, Tile(title: "Average per house",
-                         value: perHouse.map { pounds2($0.average) } ?? pounds2(listAverage),
-                         detail: perHouse.map { "over \($0.days) days, \(stats.analysisLabel)" } ?? "list prices",
+                    card(.perHouse, Tile(title: "Average price per house",
+                         value: pounds2(average.average),
+                         detail: "list prices of \(average.customers) customers, no extras",
                          ideal: ideal.planned.map { pounds2($0.perHouse) }, onIdeal: showIdeal))
                     card(.housesPerDay, Tile(title: "Houses per workday",
                          value: rate.map { $0.housesPerDay.formatted(.number.precision(.fractionLength(1))) } ?? "–",
@@ -99,7 +92,7 @@ struct TodayView: View {
                          detail: gap == nil ? "not enough history yet" : "average gap, last 12 weeks",
                          ideal: "\(ideal.weeks) weeks", onIdeal: showIdeal))
                     card(nil, Tile(title: "Customers", value: "\(listed)",
-                         detail: "\(everyOther) every-other · \(notStarted) not started · \(customers.filter { $0.status == .paused }.count) paused",
+                         detail: "incl. \(notStarted) not started · \(everyOther) every-other · \(customers.filter { $0.status == .paused }.count) paused",
                          ideal: ideal.planned.map { "\($0.peopleNeeded)" }, onIdeal: showIdeal))
                     card(nil, Tile(title: "New vs lost", value: newVsLost,
                          detail: "this tax year"))
@@ -222,7 +215,7 @@ struct Tile: View {
             if let ideal {
                 Button { onIdeal?() } label: {
                     HStack(spacing: 4) {
-                        Label("Ideal \(ideal)", systemImage: "scope")
+                        Label("Target \(ideal)", systemImage: "scope")
                         Image(systemName: "info.circle")
                     }
                     .font(.caption.weight(.semibold))

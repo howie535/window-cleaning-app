@@ -17,7 +17,7 @@ struct IdealWorkingView: View {
                 Section {
                     row("Weekly target", ideal.weeklyTarget.pounds)
                     row("Houses per workday", n(rate.housesPerDay))
-                    row("Average per house", money(rate.perHouse), "total £ ÷ houses")
+                    row("Average price", money(ideal.averagePrice), "list prices ÷ customers, no extras")
                     row("Not skipped", keepText)
                     row("Customers", "\(ideal.people)", "\(n(ideal.cleansPerRound)) cleans a round, every-other at half")
                     row("Round length", "\(ideal.weeks) weeks", "Settings")
@@ -34,11 +34,11 @@ struct IdealWorkingView: View {
             }
             if let value = ideal.roundValue {
                 Section("Round value") {
-                    step("Ideal round value", "\(ideal.weeklyTarget.pounds) × \(ideal.weeks) ÷ \(keepText)", money(value))
+                    step("Target round value", "\(ideal.weeklyTarget.pounds) × \(ideal.weeks) ÷ \(keepText)", money(value))
                 }
             }
         }
-        .navigationTitle("Ideal figures")
+        .navigationTitle("Targets")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -47,11 +47,11 @@ struct IdealWorkingView: View {
         let rate = ideal.rate
         Section {
             step("Houses a week", "\(n(rate?.housesPerDay ?? 0)) × \(n(s.daysPerWeek)) days", n(s.capacity))
-            step("Income now", "\(n(s.housesPerWeek)) × \(money(rate?.perHouse ?? 0))", s.incomeNow.pounds)
-            step("Ideal per house", "\(ideal.weeklyTarget.pounds) ÷ \(n(s.housesPerWeek))", money(s.perHouse)).bold()
+            step("Income now", "\(n(s.housesPerWeek)) × \(money(ideal.averagePrice))", s.incomeNow.pounds)
+            step("Target price per house", "\(ideal.weeklyTarget.pounds) ÷ \(n(s.housesPerWeek))", money(s.perHouse)).bold()
             step("Round takes now", "\(n(ideal.cleansPerRound)) × \(keepText) ÷ \(n(s.capacity))", "\(n(s.roundWeeksNow)) weeks")
-            step("Ideal cleans a round", "\(n(s.capacity)) × \(ideal.weeks) ÷ \(keepText)", n(s.cleansNeeded))
-            step("Ideal customers", "same mix of every-other", "\(s.peopleNeeded)").bold()
+            step("Target cleans a round", "\(n(s.capacity)) × \(ideal.weeks) ÷ \(keepText)", n(s.cleansNeeded))
+            step("Target customers", "same mix of every-other", "\(s.peopleNeeded)").bold()
         } header: {
             Text(title)
         } footer: {

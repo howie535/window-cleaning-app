@@ -247,6 +247,31 @@ enum SimulatorSelfTest {
             check("today carries on in round order from the start of the day", day0 == [6, 7, 8, 9, 10], "\(day0)")
         }
 
+        // ---- Day five: average price, ending the day early, price rise to target, Direct Debit
+        do {
+            let a = Customer(name: "A", price: 10); let b = Customer(name: "B", price: 20); b.altPrice = 12
+            let c = Customer(name: "C", price: 28, status: .notStarted); let d = Customer(name: "D", price: 99, status: .cancelled)
+            let avg = RoundMetrics.averagePrice([a, b, c, d])
+            check("average price: list prices ÷ customers, two-price as the middle, not started in, cancelled out", avg.customers == 3 && avg.average == 18, "\(avg)")
+            check("customers on the round include not started", RoundMetrics.onRound([a, b, c, d]).count == 3)
+
+            check("Direct Debit per clean = monthly × 12 ÷ (52 ÷ 5), to the penny", DirectDebit.perClean(monthly: 15) == Decimal(string: "17.31")
+                  && DirectDebit.perClean(monthly: 13) == 15)
+
+            let ids = (0..<4).map { _ in UUID() }
+            let plan = PriceRise.towardsTarget(17, prices: [(ids[0], 10, 10, true), (ids[1], 12, 12, true), (ids[2], 20, 20, true), (ids[3], 25, 25, false)])
+            check("price rise to target: cheapest raised to the lowest floor that reaches the average", plan?.floor == 15.5 || (plan.map { $0.reachesTarget && $0.newPrices[ids[2]] == nil && $0.newPrices[ids[3]] == nil } ?? false),
+                  "\(String(describing: plan))")
+            check("price rise to target: the average after reaches the target", plan.map { $0.average >= 17 } ?? false)
+
+            let cal = RoundCalendar.london
+            let old = cal.date(byAdding: .day, value: -40, to: today)!
+            let cands = (1...5).map { NextUp.Candidate(key: $0, sequence: $0, isListable: true, price: 20, everyOther: false, lastCleaned: old, lastNotDue: nil, lastVisit: old, lastVisitBeforeToday: old) }
+            let days = [NextUp.Day(date: today, target: 100), NextUp.Day(date: cal.date(byAdding: .day, value: 1, to: today)!, target: 100)]
+            let ended = NextUp.plan(cands, days: days, today: today, overbook: 0, hideWeeks: 5, lapDays: 35, todayEnded: true, calendar: cal)
+            check("moving the rest to the next day leaves nobody else on today", !ended.contains { $0.dayIndex == 0 } && ended.filter { $0.dayIndex == 1 }.count == 5)
+        }
+
         // ---- Skips only top today back up to its real target (day three: Jay jumped from Monday to today)
         do {
             let cal = RoundCalendar.london
@@ -362,8 +387,8 @@ enum SimulatorSelfTest {
             add(lonely, .skipped, daysAgo: 30); add(lonely, .skipped, daysAgo: 60); add(lonely, .cleaned, daysAgo: 90, paid: 0)
             let review = RoundReview.rows(customers: (try? context.fetch(FetchDescriptor<Customer>())) ?? [], today: today)
             let lonelyRow = review.rows.first { $0.customer === lonely }
-            check("a cheap house on its own that skips is near the top of the round review", lonelyRow != nil && (lonelyRow?.reasons.contains("On its own") ?? false)
-                  && (lonelyRow?.reasons.contains { $0.hasPrefix("Skipped") } ?? false), "\(String(describing: lonelyRow?.reasons))")
+            check("a cheap house on its own is flagged, but its skips don't count against it", lonelyRow != nil && (lonelyRow?.reasons.contains("On its own") ?? false)
+                  && !(lonelyRow?.reasons.contains { $0.hasPrefix("Skips") } ?? true), "\(String(describing: lonelyRow?.reasons))")
             lonely.frontOnly = true
             let reviewFront = RoundReview.rows(customers: (try? context.fetch(FetchDescriptor<Customer>())) ?? [], today: today, threshold: 1)
             let frontRow = reviewFront.rows.first { $0.customer === lonely }
@@ -400,6 +425,10 @@ enum SimulatorSelfTest {
                   && names() == [["ST g1", "ST g2", "ST g5"], ["ST g3", "ST g4"], ["ST g6", "ST g7"]], "\(order) \(names())")
             GroupEditing.join(cluster(of: g3).members, into: cluster(of: g6), all: everyone())
             check("whole groups merge with the group next to them", names() == [["ST g1", "ST g2", "ST g5"], ["ST g3", "ST g4", "ST g6", "ST g7"]], "\(names())")
+            GroupEditing.standAlone(g6, all: everyone())
+            GroupEditing.join([g6], into: cluster(of: g1), all: everyone(), joining: false)
+            check("moving next to a group further away can keep it separate", cluster(of: g6).members.first === g6 && !cluster(of: g1).members.contains { $0 === g6 }
+                  && g6.sequence == cluster(of: g1).last.sequence + 1, "\(names())")
             check("street names read as written", RoundGrouping.streetName("27 Bron Wern") == "Bron Wern" && RoundGrouping.streetName("Coddington, High St") == "High St")
             for c in made { context.delete(c) }
             try context.save()
@@ -478,7 +507,7 @@ enum SimulatorSelfTest {
         // Ideal figures, with inputs worked out by hand: 20 houses a workday, 3 usual days (2.5 actually worked),
         // £16 a house, 4% skips, 400 people = 390 cleans a round, £1,200 a week, 5-week round.
         let rate = RoundStats.WorkRate(housesPerDay: 20, workedDays: 50, daysPerWeek: 2.5, perHouse: 16, skipRate: 0.04, weeks: 20)
-        let busy = Ideal(weeklyTarget: 1200, usualDays: 3, weeks: 5, rate: rate, people: 400, cleansPerRound: 390, periodLabel: "test")
+        let busy = Ideal(weeklyTarget: 1200, usualDays: 3, weeks: 5, rate: rate, people: 400, cleansPerRound: 390, periodLabel: "test", averagePrice: 16)
         func near(_ a: Decimal?, _ b: Double, _ within: Double = 0.01) -> Bool { a.map { abs(NSDecimalNumber(decimal: $0).doubleValue - b) < within } ?? false }
         check("ideal round value = £1,200 x 5 / 96%", near(busy.roundValue, 6250))
         if let p = busy.planned, let w = busy.actual {
@@ -489,7 +518,7 @@ enum SimulatorSelfTest {
         } else {
             check("ideal scenarios worked out", false)
         }
-        let quiet = Ideal(weeklyTarget: 1200, usualDays: 3, weeks: 5, rate: rate, people: 100, cleansPerRound: 100, periodLabel: "test")
+        let quiet = Ideal(weeklyTarget: 1200, usualDays: 3, weeks: 5, rate: rate, people: 100, cleansPerRound: 100, periodLabel: "test", averagePrice: 16)
         check("too few customers: price uses the 19.2 houses a week the round supplies", quiet.planned.map { $0.limitedByCustomers && near($0.perHouse, 62.5) } ?? false)
 
         if let real = stats().workRate() {

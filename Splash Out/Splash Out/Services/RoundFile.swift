@@ -64,6 +64,7 @@ struct RoundFile: Codable {
         var pendingPrice: Double? = nil
         var pendingPriceFrom: String? = nil
         var pendingPriceToldAt: String? = nil
+        var monthlyAmount: Double? = nil
     }
 
     struct VisitRecord: Codable {

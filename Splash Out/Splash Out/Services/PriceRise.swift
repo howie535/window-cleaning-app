@@ -100,4 +100,48 @@ enum PriceRise {
         }
         return changed
     }
+
+    // MARK: Rising towards the target average price
+
+    struct TargetPlan {
+        /// Everyone whose per-clean price is under this goes up to it (whole pounds).
+        var floor: Decimal
+        /// New main price for each customer who goes up.
+        var newPrices: [UUID: Decimal]
+        /// The round's average per-clean price once they have.
+        var average: Decimal
+        var reachesTarget: Bool
+    }
+
+    /// Cheapest first: the lowest whole-pound floor that brings the round's average per-clean price up to `target`,
+    /// raising only the `eligible` customers who are under it. Two-price customers go up by the gap between their
+    /// per-clean price and the floor, on their main price.
+    static func towardsTarget(_ target: Decimal, prices: [(id: UUID, main: Decimal, perClean: Decimal, eligible: Bool)]) -> TargetPlan? {
+        guard !prices.isEmpty, target > 0 else { return nil }
+        func plan(_ floor: Decimal) -> TargetPlan {
+            var total: Decimal = 0
+            var raised: [UUID: Decimal] = [:]
+            for p in prices {
+                if p.eligible && p.perClean < floor {
+                    var exact = p.main + (floor - p.perClean)
+                    var whole = Decimal()
+                    NSDecimalRound(&whole, &exact, 0, .up)
+                    raised[p.id] = whole
+                    total += p.perClean + (whole - p.main)
+                } else {
+                    total += p.perClean
+                }
+            }
+            let average = total / Decimal(prices.count)
+            return TargetPlan(floor: floor, newPrices: raised, average: average, reachesTarget: average >= target)
+        }
+        let low = Int(NSDecimalNumber(decimal: prices.map(\.perClean).min() ?? 0).doubleValue.rounded(.down))
+        let high = Int(NSDecimalNumber(decimal: target * 3).doubleValue.rounded(.up))
+        guard low < high else { return plan(Decimal(low)) }
+        for floor in low...high {
+            let p = plan(Decimal(floor))
+            if p.reachesTarget { return p }
+        }
+        return plan(Decimal(high))
+    }
 }

@@ -14,6 +14,8 @@ struct PriceRiseView: View {
 
     enum Filter: String, CaseIterable { case due = "Rise due", all = "Everyone" }
     @State private var filter: Filter = .due
+    enum Mode: String, CaseIterable { case percent = "Same %", target = "To target average" }
+    @State private var mode: Mode = .percent
     /// Ticks changed by hand (otherwise customers due a rise are ticked).
     @State private var ticked: [UUID: Bool] = [:]
     /// New prices typed by hand.
@@ -30,9 +32,17 @@ struct PriceRiseView: View {
         let rise = stats.riseDateInUse
         let rows = stats.risePreview()
         let dueIDs = Set(stats.risesDue().map(\.id))
-        let shown = filter == .due ? rows.filter { dueIDs.contains($0.id) || $0.customer.pendingPrice != nil } : rows
-        let chosen = rows.filter { isTicked($0, due: dueIDs) }
-        let extra = chosen.reduce(Decimal(0)) { $0 + (price(for: $1) - $1.customer.price) * ($1.customer.everyOther ? Decimal(0.5) : 1) }
+        let targetAverage = Ideal.current(stats: stats, customers: customers, weeks: settings.first?.targetRoundWeeks ?? 5).planned?.perHouse
+        let rowByID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        let towards = targetAverage.flatMap { target in
+            PriceRise.towardsTarget(target, prices: RoundMetrics.onRound(customers).filter { $0.price > 0 }.map { c in
+                (c.id, c.price, RoundMetrics.perCleanPrice(c), rowByID[c.id]?.effective != nil && c.pendingPrice == nil)
+            })
+        }
+        let targets = mode == .target ? towards?.newPrices : nil
+        let shown = filter == .due ? rows.filter { (targets?[$0.id] != nil) || (targets == nil && dueIDs.contains($0.id)) || $0.customer.pendingPrice != nil } : rows
+        let chosen = rows.filter { isTicked($0, due: dueIDs, targets) }
+        let extra = chosen.reduce(Decimal(0)) { $0 + (price(for: $1, targets) - $1.customer.price) * ($1.customer.everyOther ? Decimal(0.5) : 1) }
         let pending = customers.filter { $0.pendingPrice != nil }
         let notTold = pending.filter { $0.pendingPriceToldAt == nil }
 
@@ -59,6 +69,23 @@ struct PriceRiseView: View {
             }
 
             Section {
+                Picker("Rise", selection: $mode) {
+                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { ticked = [:]; custom = [:] }
+                if mode == .target {
+                    if let towards, let targetAverage {
+                        LabeledContent("Target average", value: targetAverage.formatted(.currency(code: "GBP").precision(.fractionLength(2))))
+                        LabeledContent("Everyone under", value: towards.floor.pounds + " goes up to it")
+                        LabeledContent("Average after", value: towards.average.formatted(.currency(code: "GBP").precision(.fractionLength(2))))
+                        if !towards.reachesTarget {
+                            Text("Can't reach the target with the customers a rise applies to.").font(.caption).foregroundStyle(.orange)
+                        }
+                    } else {
+                        Text("No target yet: set the usual week's targets in Settings.").foregroundStyle(.secondary)
+                    }
+                }
                 Picker("Show", selection: $filter) {
                     ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
@@ -76,18 +103,20 @@ struct PriceRiseView: View {
                 }
                 .disabled(chosen.isEmpty)
             } footer: {
-                Text("Tick who gets a rise. Tap a price to change it. Customers due a rise (no change for \((settings.first?.priceRiseDueAfterMonths ?? 24) / 12) years, or no date recorded) start ticked.")
+                Text(mode == .target
+                     ? "Cheapest first: everyone under the floor goes up to it, so the round's average price reaches the target. Tap a price to change it."
+                     : "Tick who gets a rise. Tap a price to change it. Customers due a rise (no change for \((settings.first?.priceRiseDueAfterMonths ?? 24) / 12) years, or no date recorded) start ticked.")
             }
 
             Section("\(shown.count) customers") {
                 ForEach(shown) { row in
-                    rowView(row, due: dueIDs.contains(row.id))
+                    rowView(row, due: dueIDs.contains(row.id), targets: targets)
                 }
             }
         }
         .navigationTitle("Price Rise")
         .alert("Set \(chosen.count) price rises?", isPresented: $isConfirming) {
-            Button("Set rises") { setRises(chosen) }
+            Button("Set rises") { setRises(chosen, targets: targets) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Each one starts on its date. A backup is saved first. Nothing is sent to customers until you tell them.")
@@ -109,19 +138,22 @@ struct PriceRiseView: View {
         .sheet(isPresented: $isTelling) { PriceRiseMessageView() }
     }
 
-    private func price(for row: RoundStats.RiseRow) -> Decimal { custom[row.id] ?? row.newPrice }
+    private func price(for row: RoundStats.RiseRow, _ targets: [UUID: Decimal]?) -> Decimal {
+        custom[row.id] ?? targets?[row.id] ?? row.newPrice
+    }
 
     /// Ticked by hand, or by default when due a rise, it applies to them, and none is set yet.
-    private func isTicked(_ row: RoundStats.RiseRow, due: Set<UUID>) -> Bool {
+    private func isTicked(_ row: RoundStats.RiseRow, due: Set<UUID>, _ targets: [UUID: Decimal]?) -> Bool {
         guard row.effective != nil else { return false }
         if let choice = ticked[row.id] { return choice }
+        if let targets { return targets[row.id] != nil }
         return due.contains(row.id) && row.customer.pendingPrice == nil
     }
 
     @ViewBuilder
-    private func rowView(_ row: RoundStats.RiseRow, due isDue: Bool) -> some View {
+    private func rowView(_ row: RoundStats.RiseRow, due isDue: Bool, targets: [UUID: Decimal]?) -> some View {
         let customer = row.customer
-        let on = isTicked(row, due: isDue ? [row.id] : [])
+        let on = isTicked(row, due: isDue ? [row.id] : [], targets)
         HStack(alignment: .top, spacing: 12) {
             Button {
                 ticked[row.id] = !on
@@ -138,10 +170,10 @@ struct PriceRiseView: View {
                     if customer.everyOther { Text("EO").font(.caption2.bold()).foregroundStyle(.blue) }
                     Spacer()
                     Button {
-                        editText = NSDecimalNumber(decimal: price(for: row)).stringValue
+                        editText = NSDecimalNumber(decimal: price(for: row, targets)).stringValue
                         editing = row
                     } label: {
-                        Text("\(customer.price.pounds) → \(price(for: row).pounds)")
+                        Text("\(customer.price.pounds) → \(price(for: row, targets).pounds)")
                             .font(.headline)
                             .foregroundStyle(custom[row.id] != nil ? Color.orange : Color.primary)
                     }
@@ -165,12 +197,12 @@ struct PriceRiseView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func setRises(_ rows: [RoundStats.RiseRow]) {
+    private func setRises(_ rows: [RoundStats.RiseRow], targets setTargets: [UUID: Decimal]?) {
         _ = try? ExportService.writeBackup(from: modelContext, to: ExportService.backupDirectory)
         var count = 0
         for row in rows {
             guard let effective = row.effective else { continue }
-            PriceRise.set(row.customer, to: price(for: row), from: effective)
+            PriceRise.set(row.customer, to: price(for: row, setTargets), from: effective)
             count += 1
         }
         try? modelContext.save()

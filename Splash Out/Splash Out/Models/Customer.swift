@@ -22,6 +22,8 @@ final class Customer {
     var pendingPriceFrom: Date?
     /// When they were sent the price rise message (nil = not told yet).
     var pendingPriceToldAt: Date?
+    /// Monthly Direct Debit amount (pay method Direct Debit); the price per clean is worked out from it.
+    var monthlyAmount: Decimal?
     /// A second price for customers who alternate (e.g. front only one time, full the next).
     var altPrice: Decimal?
     /// What the second price is for, e.g. "Front only".

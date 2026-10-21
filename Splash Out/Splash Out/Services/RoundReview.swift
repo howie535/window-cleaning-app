@@ -1,7 +1,7 @@
 import Foundation
 
-/// Houses that may be harming the round: cheap for the round and on their own count most; skipping a lot and being
-/// slow to pay count less. Each reason adds points; houses on 3 or more are listed (Docs: day-three notes).
+/// Houses that may be harming the round: cheap for the round and on their own count most; skipping a lot (only when
+/// part of a group) and being slow to pay count less. Each reason adds points; houses on 3 or more are listed (Docs: day-three notes).
 enum RoundReview {
     struct Row: Identifiable {
         let customer: Customer
@@ -30,7 +30,7 @@ enum RoundReview {
     /// Every customer on the round with their points and reasons, highest first.
     @MainActor
     static func rows(customers: [Customer], today: Date, threshold: Double = 3) -> (rows: [Row], average: Decimal) {
-        let onRound = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
+        let onRound = RoundMetrics.onRound(customers).filter { $0.price > 0 }
         let frontOnly = Set(onRound.filter(isFrontOnly).map(\.id))
         // The average is of full cleans only, so front-only prices don't drag it down.
         let full = onRound.filter { !frontOnly.contains($0.id) }
@@ -64,9 +64,11 @@ enum RoundReview {
             }
             let recent = customer.allVisits.filter { $0.kind != .notDue && $0.date >= yearAgo && $0.date < today }
             let skips = recent.filter { $0.kind == .skipped }.count
-            if skips >= 2 && Double(skips) / Double(max(1, recent.count)) >= 0.25 {
+            // A skip only hurts when the house is part of a group (the crew is there anyway and has to go back);
+            // a house on its own that skips just isn't visited.
+            if !alone.contains(customer.id) && skips >= 2 && Double(skips) / Double(max(1, recent.count)) >= 0.25 {
                 score += 1
-                reasons.append("Skipped \(skips) of \(recent.count)")
+                reasons.append("Skips in a group: \(skips) of \(recent.count)")
             }
             let owed = customer.allVisits.filter(\.isUnpaid)
             let oldest = owed.map(\.date).min()

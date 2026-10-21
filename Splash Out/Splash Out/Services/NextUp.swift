@@ -154,6 +154,7 @@ enum NextUp {
         hideWeeks: Int,
         lapDays: Int,
         everyOtherFactor: Double = 1.5,
+        todayEnded: Bool = false,
         calendar: Calendar
     ) -> [Placement] {
         let lap = lapOrder(all, today: today, hideWeeks: hideWeeks, calendar: calendar)
@@ -233,7 +234,9 @@ enum NextUp {
         /// A day is full at its target plus overbook. Once someone has been skipped today, today only tops back up to its
         /// real target: a skip shouldn't pull tomorrow's customers in when the day's already past target.
         func full(_ d: Int) -> Bool {
-            load[d] >= capacity[d] || (d == todayIndex && someoneSkippedToday && load[d] >= days[d].target)
+            // Finished for the day ("move the rest to the next day"): nobody else goes on today.
+            if d == todayIndex && todayEnded { return true }
+            return load[d] >= capacity[d] || (d == todayIndex && someoneSkippedToday && load[d] >= days[d].target)
         }
         func skipFullDays() { while day < days.count && full(day) { day += 1 } }
         skipFullDays()

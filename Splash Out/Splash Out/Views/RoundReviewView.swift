@@ -18,7 +18,7 @@ struct RoundReviewView: View {
                 LabeledContent("Average price (full cleans)", value: review.average.formatted(.currency(code: "GBP").precision(.fractionLength(2))))
                 Toggle("Show every house with a reason", isOn: $showAll)
             } footer: {
-                Text("Cheap for the round and on its own count most; skipping a lot and slow paying count less. Front-only houses are never counted as cheap.")
+                Text("Cheap for the round and on its own count most; skipping a lot (only when part of a group) and slow paying count less. Front-only houses are never counted as cheap.")
             }
             Section("\(review.rows.count) houses") {
                 if review.rows.isEmpty {

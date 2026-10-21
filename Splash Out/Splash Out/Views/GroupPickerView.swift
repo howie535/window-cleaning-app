@@ -39,7 +39,7 @@ struct GroupPickerView: View {
                         Text("Houses in a group are kept on the same day.")
                     }
 
-                    Section("Join a group, nearest first") {
+                    Section("Join or move next to a group, nearest first") {
                         ForEach(GroupEditing.candidates(for: mine, in: clusters).prefix(25)) { target in
                             Button {
                                 if abs(target.id - mine.id) == 1 { join(target, from: mine) } else { confirmMove = target }
@@ -63,11 +63,13 @@ struct GroupPickerView: View {
             .navigationTitle(customer.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-            .alert("Move in the round?", isPresented: Binding(get: { confirmMove != nil }, set: { if !$0 { confirmMove = nil } }), presenting: confirmMove) { target in
-                Button("Move") { if let mine { join(target, from: mine) } }
+            .confirmationDialog("Move in the round?", isPresented: Binding(get: { confirmMove != nil }, set: { if !$0 { confirmMove = nil } }),
+                                titleVisibility: .visible, presenting: confirmMove) { target in
+                Button("Move and join \(target.name)") { if let mine { join(target, from: mine) } }
+                Button("Move after it, keep as its own group") { if let mine { join(target, from: mine, joining: false) } }
                 Button("Cancel", role: .cancel) {}
             } message: { target in
-                Text("\(wholeGroup ? "The whole group moves" : "\(customer.name) moves") in the round to just after \(target.last.name), and joins \(target.name).")
+                Text("\(wholeGroup ? "The whole group moves" : "\(customer.name) moves") in the round to just after \(target.last.name).")
             }
         }
     }
@@ -83,8 +85,8 @@ struct GroupPickerView: View {
         return "\(abs(target.id - mine.id)) groups away"
     }
 
-    private func join(_ target: GroupEditing.Cluster, from mine: GroupEditing.Cluster) {
-        GroupEditing.join(wholeGroup ? mine.members : [customer], into: target, all: customers)
+    private func join(_ target: GroupEditing.Cluster, from mine: GroupEditing.Cluster, joining: Bool = true) {
+        GroupEditing.join(wholeGroup ? mine.members : [customer], into: target, all: customers, joining: joining)
         save()
     }
 

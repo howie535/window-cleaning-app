@@ -81,6 +81,9 @@ struct CustomerDetailView: View {
                 LabeledContent("Address", value: customer.address)
                 LabeledContent("Phone", value: customer.phone)
                 LabeledContent("Price", value: customer.price, format: .currency(code: "GBP"))
+                if customer.payMethod == .directDebit, let monthly = customer.monthlyAmount {
+                    LabeledContent("Direct Debit", value: "\(monthly.formatted(.currency(code: "GBP"))) a month")
+                }
                 if customer.outstandingBalance != 0 {
                     LabeledContent("Balance") {
                         Text(balanceDescription)

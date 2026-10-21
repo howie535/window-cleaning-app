@@ -40,6 +40,7 @@ enum PayMethod: String, CaseIterable, Identifiable {
     case cash
     case bacs
     case standingOrder = "standing_order"
+    case directDebit = "direct_debit"
 
     var id: String { rawValue }
 
@@ -48,6 +49,7 @@ enum PayMethod: String, CaseIterable, Identifiable {
         case .cash: "Cash"
         case .bacs: "BACS"
         case .standingOrder: "Standing order"
+        case .directDebit: "Monthly Direct Debit"
         }
     }
 
@@ -55,6 +57,7 @@ enum PayMethod: String, CaseIterable, Identifiable {
     static func fromImport(_ raw: String?) -> PayMethod? {
         guard let raw = raw?.trimmingCharacters(in: .whitespaces).lowercased(), !raw.isEmpty else { return nil }
         if raw == "so" { return .standingOrder }
+        if raw == "dd" { return .directDebit }
         return PayMethod(rawValue: raw)
     }
 }
@@ -63,4 +66,17 @@ enum PriceChangeReason: String {
     case rise
     case correction
     case newQuote = "new_quote"
+}
+
+/// Monthly Direct Debit customers pay the same every month. Their price per clean is the year's payments spread over a
+/// clean every 5 weeks: monthly × 12 ÷ (52 ÷ 5), to the penny.
+enum DirectDebit {
+    static let weeksBetweenCleans: Decimal = 5
+
+    static func perClean(monthly: Decimal) -> Decimal {
+        var exact = monthly * 12 * weeksBetweenCleans / 52
+        var pence = Decimal()
+        NSDecimalRound(&pence, &exact, 2, .plain)
+        return pence
+    }
 }

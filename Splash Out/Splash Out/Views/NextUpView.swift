@@ -26,6 +26,10 @@ struct NextUpView: View {
     @State private var messageDay: RoundPlanner.DayPlan?
     /// The customer whose group is being changed (from the row's menu).
     @State private var grouping: Customer?
+    /// Set when the crew finishes early: today takes nobody else.
+    @AppStorage(RoundPlanner.endedDayKey) private var endedDay = ""
+    /// After finishing early: the next working day, to offer messages for.
+    @State private var movedTo: Date?
     /// Today's done customers are folded into one row unless this is on.
     @State private var showDone = false
 
@@ -33,7 +37,8 @@ struct NextUpView: View {
         let perfStart = PerfProbe.now()
         let today = clock.today
         let _ = VisitLookup.begin(visits)
-        let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
+        let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today,
+                                     todayEnded: endedDay == RoundCalendar.dayString(today))
         let _ = VisitLookup.end()
         let _ = PerfProbe.end("Round", perfStart)
 
@@ -89,6 +94,9 @@ struct NextUpView: View {
                     } else {
                         ForEach(day.rows) { dayRow in row(for: dayRow, on: day.date, today: today) }
                     }
+                    if day.date == today {
+                        finishRow(plan: plan, today: today)
+                    }
                 } header: {
                     DayHeader(day: day, isToday: day.date == today, onMessage: { messageDay = day })
                 }
@@ -106,6 +114,19 @@ struct NextUpView: View {
         .listStyle(.plain)
         .contentMargins(.top, 0, for: .scrollContent)
         .sheet(item: $messageDay) { MessageDayView(day: $0) }
+        .alert("Moved to \(movedTo.map { RoundCalendar.weekdayShort($0) } ?? "")", isPresented: Binding(get: { movedTo != nil }, set: { if !$0 { movedTo = nil } })) {
+            Button("Message them") {
+                if let date = movedTo {
+                    let fresh = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays,
+                                                  today: today, todayEnded: true)
+                    messageDay = fresh.days.first { $0.date == date }
+                }
+                movedTo = nil
+            }
+            Button("Not now", role: .cancel) { movedTo = nil }
+        } message: {
+            Text("Today's remaining customers now start that day. Message them with the new day?")
+        }
         .sheet(item: $grouping) { GroupPickerView(customer: $0) }
         .owedOnPaidPrompt($paidRequest)
         .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
@@ -121,6 +142,37 @@ struct NextUpView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.bar, for: .navigationBar)
+    }
+
+    /// "Move the rest to the next day": today stops where it is, today's bookings move to the next working day, and
+    /// messages are offered. Once ended, the row offers to carry on instead.
+    @ViewBuilder
+    private func finishRow(plan: RoundPlanner.Plan, today: Date) -> some View {
+        if endedDay == RoundCalendar.dayString(today) {
+            Button { withAnimation { endedDay = "" } } label: {
+                Label("Finished for today. Carry on after all?", systemImage: "arrow.uturn.backward.circle")
+            }
+        } else if plan.days.contains(where: { $0.date > today }) {
+            Button { finishToday(plan: plan, today: today) } label: {
+                Label("Move the rest to the next day", systemImage: "arrow.right.circle")
+            }
+        }
+    }
+
+    private func finishToday(plan: RoundPlanner.Plan, today: Date) {
+        guard let next = plan.days.first(where: { $0.date > today })?.date else { return }
+        let moved = customers.filter { $0.bookedFor.map { RoundCalendar.startOfDay($0) } == today }
+            .filter { c in !c.allVisits.contains { $0.date == today } }
+        let previous = moved.map { ($0, $0.bookedFor) }
+        withAnimation {
+            for c in moved { c.bookedFor = next }
+            endedDay = RoundCalendar.dayString(today)
+        }
+        undoCenter.offer("Rest of today moved to \(RoundCalendar.weekdayShort(next))") {
+            for (c, booked) in previous { c.bookedFor = booked }
+            endedDay = ""
+        }
+        movedTo = next
     }
 
     /// One row standing in for everyone done today, so the next customer is always at the top.

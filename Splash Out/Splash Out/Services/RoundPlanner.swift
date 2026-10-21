@@ -3,6 +3,9 @@ import Foundation
 /// Connects the Next Up engine to real customers, crews, diary days and settings.
 @MainActor
 enum RoundPlanner {
+    /// The day the crew finished early ("move the rest to the next day"), as yyyy-MM-dd.
+    static let endedDayKey = "round.endedDay"
+
     /// One line of a day: a customer and how they stand (planned, booked, done today, greyed...).
     struct DayRow: Identifiable {
         var customer: Customer
@@ -49,7 +52,8 @@ enum RoundPlanner {
         settings: AppSettings?,
         crews: [Crew],
         workDays: [WorkDay],
-        today: Date = RoundCalendar.startOfDay()
+        today: Date = RoundCalendar.startOfDay(),
+        todayEnded: Bool = false
     ) -> Plan {
         let settings = settings ?? AppSettings()
         let calendar = RoundCalendar.london
@@ -119,7 +123,7 @@ enum RoundPlanner {
         let overbook = Money.decimal(settings.overbook * 100) / 100
         let lapDays = NextUp.lapDays(cleanDates: regularCleans, today: today, fallback: 7 * settings.nextUpHideWeeks, calendar: calendar)
         let placements = NextUp.plan(candidates, days: days, today: today, overbook: overbook,
-                                     hideWeeks: settings.nextUpHideWeeks, lapDays: lapDays, calendar: calendar)
+                                     hideWeeks: settings.nextUpHideWeeks, lapDays: lapDays, todayEnded: todayEnded, calendar: calendar)
 
         var dayPlans = days.map {
             DayPlan(date: $0.date, target: $0.target, bookTo: $0.target * (1 + overbook),

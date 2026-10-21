@@ -22,7 +22,7 @@ struct Ideal {
         var peopleNeeded: Int
         /// How long the current round takes at this rate.
         var roundWeeksNow: Decimal
-        /// Weekly income at today's average price.
+        /// Weekly income at today's average list price.
         var incomeNow: Decimal
     }
 
@@ -33,6 +33,8 @@ struct Ideal {
     let people: Int
     let cleansPerRound: Decimal
     let periodLabel: String
+    /// Today's average list price per house (extras left out).
+    let averagePrice: Decimal
     /// Round value needed (list prices): weekly target x weeks, grossed up for skips.
     let roundValue: Decimal?
     let planned: Scenario?
@@ -42,7 +44,8 @@ struct Ideal {
     ///   - people: customers on the round (active or leaving).
     ///   - cleansPerRound: the same customers with every-other ones counted as half.
     init(weeklyTarget: Decimal, usualDays: Int, weeks: Int, rate: RoundStats.WorkRate?, people: Int,
-         cleansPerRound: Decimal, periodLabel: String) {
+         cleansPerRound: Decimal, periodLabel: String, averagePrice: Decimal) {
+        self.averagePrice = averagePrice
         self.weeks = weeks
         self.weeklyTarget = weeklyTarget
         self.usualDays = usualDays
@@ -70,11 +73,23 @@ struct Ideal {
                 cleansNeeded: cleans,
                 peopleNeeded: Int(NSDecimalNumber(decimal: cleans * ratio).doubleValue.rounded()),
                 roundWeeksNow: cleansPerRound * keep / capacity,
-                incomeNow: used * rate.perHouse)
+                incomeNow: used * averagePrice)
         }
         planned = scenario(days: Decimal(usualDays))
         actual = scenario(days: rate.daysPerWeek)
     }
 
     var keep: Decimal { Decimal(max(0.5, 1 - (rate?.skipRate ?? 0))) }
+
+    /// The target figures for the round as it is now: weekly target from the usual week, work rate and skips over the
+    /// analysis period, customers on the round (not started included), today's average list price.
+    @MainActor
+    static func current(stats: RoundStats, customers: [Customer], weeks: Int) -> Ideal {
+        let onRound = RoundMetrics.onRound(customers)
+        let usualTargets = stats.config.usualTargets.filter { $0 > 0 }
+        return Ideal(weeklyTarget: usualTargets.reduce(0, +), usualDays: usualTargets.count, weeks: weeks,
+                     rate: stats.workRate(), people: onRound.count,
+                     cleansPerRound: onRound.reduce(Decimal(0)) { $0 + ($1.everyOther ? Decimal(0.5) : 1) },
+                     periodLabel: stats.analysisLabel, averagePrice: RoundMetrics.averagePrice(customers).average)
+    }
 }
