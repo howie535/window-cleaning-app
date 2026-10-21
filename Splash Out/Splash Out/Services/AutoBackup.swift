@@ -7,16 +7,16 @@ import SwiftData
 /// so an empty or freshly wiped app can't replace a good copy.
 @MainActor
 enum AutoBackup {
-    static let lastKey = "autobackup.last"
-    static let exportedKey = "export.last"
-    static let keepDays = 14
+    nonisolated static let lastKey = "autobackup.last"
+    nonisolated static let exportedKey = "export.last"
+    nonisolated static let keepDays = 14
 
     // A folder the user chose in Files (iCloud Drive, OneDrive...). Each day's backup is copied there too.
-    static let bookmarkKey = "autobackup.folderBookmark"
-    static let folderNameKey = "autobackup.folderName"
-    static let folderLastKey = "autobackup.folderLast"
-    static let folderErrorKey = "autobackup.folderError"
-    static let keepInFolder = 30
+    nonisolated static let bookmarkKey = "autobackup.folderBookmark"
+    nonisolated static let folderNameKey = "autobackup.folderName"
+    nonisolated static let folderLastKey = "autobackup.folderLast"
+    nonisolated static let folderErrorKey = "autobackup.folderError"
+    nonisolated static let keepInFolder = 30
 
     nonisolated static var directory: URL {
         ExportService.backupDirectory.appendingPathComponent("Daily", isDirectory: true)
@@ -38,13 +38,33 @@ enum AutoBackup {
         }
     }
 
+    /// The daily copy without holding up the screen: the data is gathered on the main thread (quick), then encoded,
+    /// written and copied to the chosen folder (which can be slow, e.g. OneDrive waking up) in the background.
+    static func runInBackground(context: ModelContext, directory: URL = AutoBackup.directory, now: Date = Date()) {
+        guard ((try? context.fetchCount(FetchDescriptor<Customer>())) ?? 0) > 0,
+              let file = try? ExportService.makeFile(from: context) else { return }
+        let url = directory.appendingPathComponent("splash-out-daily-\(RoundCalendar.dayString(now)).json")
+        let stamp = now.timeIntervalSince1970
+        Task.detached(priority: .utility) {
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try file.encoded().write(to: url, options: .atomic)
+                UserDefaults.standard.set(stamp, forKey: lastKey)
+                prune(directory: directory)
+                copyToChosenFolder(url)
+            } catch {
+                // A failed backup must never get in the way of using the app.
+            }
+        }
+    }
+
     /// At most about every 6 hours unless forced (used when the app opens; it also runs when the app goes to the background).
     static func runIfDue(context: ModelContext, defaults: UserDefaults = .standard) {
         let last = defaults.double(forKey: lastKey)
-        if Date().timeIntervalSince1970 - last > 6 * 3600 { run(context: context) }
+        if Date().timeIntervalSince1970 - last > 6 * 3600 { runInBackground(context: context) }
     }
 
-    private static func prune(directory: URL) {
+    nonisolated private static func prune(directory: URL) {
         let files = ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.lastPathComponent.hasPrefix("splash-out-daily-") && $0.pathExtension == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
@@ -73,7 +93,7 @@ enum AutoBackup {
 
     /// Copies a finished daily backup into the chosen folder, and trims old copies there. A problem is noted for Settings
     /// to show; it never stops the app.
-    static func copyToChosenFolder(_ file: URL, defaults: UserDefaults = .standard) {
+    nonisolated static func copyToChosenFolder(_ file: URL, defaults: UserDefaults = .standard) {
         guard let bookmark = defaults.data(forKey: bookmarkKey) else { return }
         do {
             var stale = false

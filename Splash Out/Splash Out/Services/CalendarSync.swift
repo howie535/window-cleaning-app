@@ -57,6 +57,16 @@ enum CalendarSync {
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
     /// Updates the calendar if the user has switched it on. Quiet: used after changes and when the app opens.
+    static let lastSyncKey = "calendar.lastSync"
+
+    /// On opening the app: at most every 6 hours (diary changes sync straight away anyway).
+    static func syncIfDue(context: ModelContext) async {
+        let last = UserDefaults.standard.double(forKey: lastSyncKey)
+        guard Date().timeIntervalSince1970 - last > 6 * 3600 else { return }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastSyncKey)
+        await syncIfEnabled(context: context)
+    }
+
     static func syncIfEnabled(context: ModelContext) async {
         guard isEnabled else { return }
         _ = await sync(context: context)

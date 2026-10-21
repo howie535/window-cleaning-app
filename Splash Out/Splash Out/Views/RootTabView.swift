@@ -53,10 +53,16 @@ struct RootTabView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 clock.refresh()
-                ChangeLog.backupIfNewVersion(context: modelContext)
-                MapPositions.fillMissing(in: modelContext)
-                AutoBackup.runIfDue(context: modelContext)
-                Task { await CalendarSync.syncIfEnabled(context: modelContext) }
+                // Housekeeping waits a few seconds after opening, so it never holds up the first taps.
+                let context = modelContext
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(4))
+                    ChangeLog.backupIfNewVersion(context: context)
+                    AutoBackup.runIfDue(context: context)
+                    MapPositions.fillMissing(in: context)
+                    try? await Task.sleep(for: .seconds(4))
+                    await CalendarSync.syncIfDue(context: context)
+                }
             }
             if phase == .background {
                 MapPositions.stop()

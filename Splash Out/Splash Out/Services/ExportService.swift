@@ -6,6 +6,11 @@ enum ExportService {
     private static let weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
     static func makeFile(from context: ModelContext) throws -> RoundFile {
+        // One fetch of every visit instead of reading each customer's history in turn (much quicker).
+        try VisitLookup.with(context) { try buildFile(from: context) }
+    }
+
+    private static func buildFile(from context: ModelContext) throws -> RoundFile {
         let settings = try context.fetch(FetchDescriptor<AppSettings>()).first ?? AppSettings()
         let crews = try context.fetch(FetchDescriptor<Crew>(sortBy: [SortDescriptor(\.name)]))
         let customers = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))

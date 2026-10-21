@@ -116,6 +116,7 @@ extension View {
 /// headings to the top.
 struct RoundSheetView: View {
     @Query(sort: \Customer.sequence) private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var selectedRound: String?
@@ -174,6 +175,9 @@ struct RoundSheetView: View {
     private var rows: [Row] {
         guard let round = currentRound else { return [] }
         let shown = customers.filter { roundName($0) == round && (showCancelled || $0.status != .cancelled) }
+        let previous = VisitLookup.current
+        VisitLookup.current = VisitIndex(visits)
+        defer { VisitLookup.current = previous }
         let layout = RoundSheet.layout(for: shown)
         let columns = max(8, layout.columns + 1)
         return shown.enumerated().map { Row(customer: $1, index: $0, cells: RoundSheet.cells(for: $1, layout: layout, columns: columns)) }

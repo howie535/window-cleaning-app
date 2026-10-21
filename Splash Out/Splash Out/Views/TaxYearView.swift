@@ -5,6 +5,7 @@ import SwiftData
 struct TaxYearView: View {
     @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
@@ -18,7 +19,7 @@ struct TaxYearView: View {
 
     var body: some View {
         let today = clock.today
-        let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
+        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let years = Array(Set(RoundMetrics.taxYearsWithWork(customers) + [stats.currentTaxYear])).sorted()
         let year = chosenYear ?? stats.currentTaxYear
         let months = stats.months(taxYear: year)

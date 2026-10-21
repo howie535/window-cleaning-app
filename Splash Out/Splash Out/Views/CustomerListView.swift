@@ -123,9 +123,11 @@ struct CustomerListView: View {
                 ForEach(shown) { customer in row(customer, draggable: false) }
             } else {
                 let clusters = GroupEditing.clusters(customers)
+                // Worked out once here, not per row (that made the page take seconds).
+                let firsts = Set(clusters.dropFirst().map { ObjectIdentifier($0.first) })
                 ForEach(clusters) { cluster in
                     Section {
-                        ForEach(cluster.members) { customer in row(customer, draggable: true) }
+                        ForEach(cluster.members) { customer in row(customer, draggable: true, firstInGroup: firsts.contains(ObjectIdentifier(customer))) }
                     } header: {
                         HStack {
                             Text(cluster.name)
@@ -157,7 +159,7 @@ struct CustomerListView: View {
     }
 
     @ViewBuilder
-    private func row(_ customer: Customer, draggable: Bool) -> some View {
+    private func row(_ customer: Customer, draggable: Bool, firstInGroup: Bool = false) -> some View {
         let base = customerRow(customer)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button { log(.cleanedPaid, for: customer) } label: {
@@ -187,7 +189,7 @@ struct CustomerListView: View {
                     Button { withAnimation { GroupEditing.newGroup(after: customer, all: customers) } } label: {
                         Label("Start a new group after \(customer.name)", systemImage: "rectangle.split.1x2")
                     }
-                    if isFirstInGroup(customer) {
+                    if firstInGroup {
                         Button { withAnimation { GroupEditing.joinGroupAbove(customer, all: customers) } } label: {
                             Label("Join the group above", systemImage: "arrow.up.square")
                         }
@@ -197,13 +199,6 @@ struct CustomerListView: View {
         } else {
             base
         }
-    }
-
-    /// First of their group, with a group above to join.
-    private func isFirstInGroup(_ customer: Customer) -> Bool {
-        let clusters = GroupEditing.clusters(customers)
-        guard let index = clusters.firstIndex(where: { $0.members.first === customer }) else { return false }
-        return index > 0
     }
 
     @ViewBuilder

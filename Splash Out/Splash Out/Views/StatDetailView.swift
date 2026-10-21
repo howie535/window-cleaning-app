@@ -32,6 +32,7 @@ struct StatDetailView: View {
 
     @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
@@ -55,10 +56,12 @@ struct StatDetailView: View {
 
     var body: some View {
         let today = clock.today
-        let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
+        let perfStart = PerfProbe.now()
+        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let all = points(stats: stats, today: today)
         let from = span.days.flatMap { calendar.date(byAdding: .day, value: -$0, to: today) } ?? .distantPast
         let shown = all.filter { $0.date >= from }
+        let _ = PerfProbe.end("StatDetail", perfStart)
 
         List {
             Section {
@@ -113,7 +116,7 @@ struct StatDetailView: View {
         case .skipRate:
             var counts: [Date: (skipped: Int, total: Int)] = [:]
             for customer in customers where customer.status != .cancelled {
-                for visit in customer.allVisits where visit.kind != .notDue && visit.date < today {
+                for visit in stats.visitsOf(customer) where visit.kind != .notDue && visit.date < today {
                     let month = calendar.date(from: calendar.dateComponents([.year, .month], from: visit.date))!
                     counts[month, default: (0, 0)].total += 1
                     if visit.kind == .skipped { counts[month, default: (0, 0)].skipped += 1 }

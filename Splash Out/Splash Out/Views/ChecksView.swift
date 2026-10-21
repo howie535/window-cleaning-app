@@ -4,12 +4,13 @@ import SwiftData
 /// Things worth a look. Nothing here changes any figures (Docs/SPEC.md 4.11).
 struct ChecksView: View {
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
 
     var body: some View {
-        let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays)
+        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays)
         let under = stats.payingUnderPrice()
         let issues = stats.dataIssues()
 

@@ -4,12 +4,13 @@ import SwiftData
 /// Customers who skipped 2 or more times in the last 12 months.
 struct FrequentSkipsView: View {
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
 
     var body: some View {
-        let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays)
+        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays)
         let rows = stats.frequentSkippers()
 
         List {

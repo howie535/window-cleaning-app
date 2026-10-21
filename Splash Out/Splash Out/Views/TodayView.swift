@@ -78,7 +78,7 @@ struct TodayView: View {
                     card(nil, Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
                          detail: notStarted > 0 ? "per round · incl. \(notStarted) not started" : "per round",
                          ideal: ideal.roundValue.map { pounds($0) }, onIdeal: showIdeal))
-                    card(.perHouse, Tile(title: "Average price per house",
+                    card(.perHouse, Tile(title: "Average price",
                          value: pounds2(average.average),
                          detail: "list prices of \(average.customers) customers, no extras",
                          ideal: ideal.planned.map { pounds2($0.perHouse) }, onIdeal: showIdeal))
@@ -155,6 +155,9 @@ struct TodayView: View {
 }
 
 struct Tile: View {
+    /// Inside height of every card (padding aside).
+    static let height: CGFloat = 112
+
     let title: String
     let value: String
     let detail: String
@@ -172,6 +175,8 @@ struct Tile: View {
                 Text(title.uppercased())
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 Spacer(minLength: 0)
                 if opens {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
@@ -191,8 +196,9 @@ struct Tile: View {
                 Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2, reservesSpace: true)
             }
+            Spacer(minLength: 0)
             if let ideal {
                 Button { onIdeal?() } label: {
                     HStack(spacing: 4) {
@@ -207,7 +213,8 @@ struct Tile: View {
                 .buttonStyle(.plain)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Every card the same size: the target line (when there is one) sits along the bottom.
+        .frame(maxWidth: .infinity, minHeight: Tile.height, maxHeight: Tile.height, alignment: .topLeading)
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         .contentShape(RoundedRectangle(cornerRadius: 16))

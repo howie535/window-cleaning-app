@@ -19,6 +19,15 @@ struct RoundStats {
     let dayTotals: [Date: WeekMetrics.DayTotals]
     let config: WeekMetrics.Config
 
+    /// The same, reading every visit from `visits` (one fetch) instead of each customer's history in turn: much quicker
+    /// the first time a screen opens.
+    init(visits: [Visit], customers: [Customer], settings: AppSettings?, crews: [Crew], workDays: [WorkDay], today: Date = RoundCalendar.startOfDay()) {
+        let previous = VisitLookup.current
+        VisitLookup.current = VisitIndex(visits)
+        defer { VisitLookup.current = previous }
+        self.init(customers: customers, settings: settings, crews: crews, workDays: workDays, today: today)
+    }
+
     init(customers: [Customer], settings: AppSettings?, crews: [Crew], workDays: [WorkDay], today: Date = RoundCalendar.startOfDay()) {
         let settings = settings ?? AppSettings()
         self.customers = customers

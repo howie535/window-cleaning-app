@@ -12,6 +12,8 @@ enum ChangeLog {
 
     static let releases: [Release] = [
         Release(version: "1.2", date: "October 2026", changes: [
+            "Faster: the daily backup and calendar update now run in the background a few seconds after opening, and screens read the visit history in one go.",
+            "Stats cards are all the same size.",
             "Price Rise is now a simple list: every customer's last price rise date (or No date logged), oldest first. Change a price on the customer's page; a higher price is logged as a rise.",
             "Customers page shows the groups under headings. Press and drag a customer into another group; press and hold for Start a new group after, Join the group above or Move to another group. Reorder round has gone.",
             "Average price per house: every customer's list price (two-price customers at the middle) ÷ customers, no extras. Its target is labelled Target.",
@@ -77,7 +79,7 @@ enum ChangeLog {
     static func backupIfNewVersion(context: ModelContext, defaults: UserDefaults = .standard) {
         let current = currentVersion
         guard defaults.string(forKey: seenVersionKey) != current else { return }
-        AutoBackup.run(context: context)
+        AutoBackup.runInBackground(context: context)
         defaults.set(current, forKey: seenVersionKey)
     }
 }

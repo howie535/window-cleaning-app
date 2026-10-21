@@ -5,6 +5,7 @@ import SwiftData
 struct WeeklyView: View {
     @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
+    @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
@@ -32,7 +33,7 @@ struct WeeklyView: View {
 
     var body: some View {
         let today = clock.today
-        let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
+        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
 
         List {
             Section {

@@ -482,6 +482,25 @@ enum SimulatorSelfTest {
             }
             lines.append("PERF after save: customers fetched with visits \(ms(tPrefetch))ms; all \(visitCount) visits in one fetch \(ms(tAllVisits))ms")
             lines.append("PERF warm \(ms(tWarm))ms, after save \(ms(tAfterSave))ms, after save and refetch \(ms(tRefetch))ms")
+            let tExport = try clock.measure { _ = try ExportService.data(from: context) }
+            let tClusters = clock.measure { _ = GroupEditing.clusters(everyone) }
+            try context.save()
+            let cold = ModelContext(context.container)
+            let coldCustomers = try cold.fetch(FetchDescriptor<Customer>())
+            let tColdStats = clock.measure {
+                let s = RoundStats(customers: coldCustomers, settings: settings, crews: crews, workDays: workDays, today: today)
+                _ = s.weeks; _ = s.workRate()
+            }
+            let cold2 = ModelContext(context.container)
+            let coldCustomers2 = try cold2.fetch(FetchDescriptor<Customer>())
+            let coldVisits2 = try cold2.fetch(FetchDescriptor<Visit>())
+            let tIndexedStats = clock.measure {
+                VisitLookup.begin(coldVisits2)
+                let s = RoundStats(customers: coldCustomers2, settings: settings, crews: crews, workDays: workDays, today: today)
+                _ = s.weeks; _ = s.workRate()
+                VisitLookup.end()
+            }
+            lines.append("PERF export \(ms(tExport))ms, clusters \(ms(tClusters))ms (x\(everyone.count) rows = \(ms(tClusters) * everyone.count)ms), cold stats \(ms(tColdStats))ms vs indexed \(ms(tIndexedStats))ms")
             lines.append("PERF plan first \(ms(tCold))ms then \(ms(tPlan))ms, stats \(ms(tStats))ms, owed \(ms(tOwed))ms (\(everyone.count) customers)")
         }
         // Ideal figures, with inputs worked out by hand: 20 houses a workday, 3 usual days (2.5 actually worked),

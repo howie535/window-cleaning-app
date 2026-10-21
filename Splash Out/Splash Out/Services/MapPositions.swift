@@ -54,11 +54,12 @@ enum MapPositions {
                 } else {
                     failed[item.key] = Date().timeIntervalSince1970
                 }
-                defaults.set(failed, forKey: failedKey)
-                if found.count >= 100 { saveFound() }
+                // Saved with the positions, not every lookup: each settings write made the Round screen refresh.
+                if found.count >= 100 { saveFound(); defaults.set(failed, forKey: failedKey) }
                 try? await Task.sleep(for: .seconds(2))
             }
             saveFound()
+            defaults.set(failed, forKey: failedKey)
         }
     }
 

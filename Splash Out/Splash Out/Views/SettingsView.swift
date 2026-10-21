@@ -47,7 +47,7 @@ struct SettingsView: View {
             List {
                 Section("Your data") {
                     LabeledContent("Customers", value: "\(customers.count)")
-                    LabeledContent("Visits", value: "\(customers.reduce(0) { $0 + $1.allVisits.count })")
+                    LabeledContent("Visits", value: "\((try? modelContext.fetchCount(FetchDescriptor<Visit>())) ?? 0)")
                 }
 
                 Section("About") {

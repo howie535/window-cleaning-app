@@ -34,4 +34,13 @@ enum VisitLookup {
         current = nil
         return true
     }
+
+    /// Runs `work` with an index of every visit in `context` (one fetch), then puts back whatever index was in use.
+    @MainActor
+    static func with<T>(_ context: ModelContext, _ work: () throws -> T) rethrows -> T {
+        let previous = current
+        current = VisitIndex((try? context.fetch(FetchDescriptor<Visit>())) ?? [])
+        defer { current = previous }
+        return try work()
+    }
 }

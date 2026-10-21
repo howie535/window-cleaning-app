@@ -2,7 +2,7 @@ import Foundation
 
 /// The import/export file (Docs/SPEC.md section 6). Used for both directions so they round-trip.
 /// Keys are snake_case in the file; money is a plain number, converted to Decimal on the way in.
-struct RoundFile: Codable {
+nonisolated struct RoundFile: Codable, Sendable {
     var schema: Int
     var generatedAt: String
     var source: String?
