@@ -205,7 +205,12 @@ enum SimulatorSelfTest {
                 dueNow.bookedFor = nil
             }
         } else {
-            check("found a customer on today's round", false)
+            // Only possible on a working day: on a day off (e.g. a Thursday) there's no round list for today.
+            if let first = planBefore.days.first, first.date == today, first.target > 0 {
+                check("found a customer on today's round", false)
+            } else {
+                lines.append("NOTE today isn't a working day, so the today's-round checks were skipped")
+            }
         }
         if let eo = all.first(where: { $0.everyOther && $0.status == .active && listed($0) }) {
             let off = VisitLogger.perform(.notDue, for: eo, in: context)

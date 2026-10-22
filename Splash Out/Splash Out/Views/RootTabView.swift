@@ -48,7 +48,8 @@ struct RootTabView: View {
         .environment(undoCenter)
         .environment(clock)
         .environment(tabState)
-        .onAppear { if !onboardingSeen { showTour = true } }
+        .onAppear { if !onboardingSeen && !LagTour.enabled { showTour = true } }
+        .task { await LagTour.run(tabs: tabState, context: modelContext) }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
