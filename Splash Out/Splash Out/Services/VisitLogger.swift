@@ -36,6 +36,7 @@ enum VisitLogger {
         let day = RoundCalendar.startOfDay(date)
         let previousStatus = customer.status
         let previousBooking = customer.bookedFor
+        let previousNextNote = customer.nextVisitNote
 
         let visit: Visit
         switch action {
@@ -58,6 +59,7 @@ enum VisitLogger {
         context.insert(visit)
         visit.customer = customer
         customer.bookedFor = nil
+        if visit.kind == .cleaned { customer.nextVisitNote = nil }
 
         // "not_started until their first clean"
         if visit.kind == .cleaned && customer.status == .notStarted {
@@ -67,6 +69,7 @@ enum VisitLogger {
         return { [weak customer] in
             if let customer, customer.status != previousStatus { customer.status = previousStatus }
             customer?.bookedFor = previousBooking
+            customer?.nextVisitNote = previousNextNote
             remove(visit, in: context)
         }
     }
@@ -84,6 +87,7 @@ enum VisitLogger {
         let day = RoundCalendar.startOfDay(date)
         let previousStatus = customer.status
         let previousBooking = customer.bookedFor
+        let previousNextNote = customer.nextVisitNote
         let suggested = customer.suggestedNextPrice
         let visit = Visit(
             date: day,
@@ -99,10 +103,12 @@ enum VisitLogger {
         context.insert(visit)
         visit.customer = customer
         customer.bookedFor = nil
+        customer.nextVisitNote = nil
         if customer.status == .notStarted { customer.status = .active }
         return { [weak customer] in
             if let customer, customer.status != previousStatus { customer.status = previousStatus }
             customer?.bookedFor = previousBooking
+            customer?.nextVisitNote = previousNextNote
             remove(visit, in: context)
         }
     }

@@ -35,6 +35,8 @@ final class Customer {
     var notes: [String] = []
     /// The day they've been booked in for (messaged). Cleared when they're next visited.
     var bookedFor: Date?
+    /// An extra job or reminder for next time (e.g. "Do the conservatory roof"). Shown on the round; cleared by the next clean.
+    var nextVisitNote: String?
     /// Whether they're in the same cluster as the customer before them in round order (kept on the same day):
     /// nil = automatic (same street), true = always, false = never.
     var groupWithPrevious: Bool?

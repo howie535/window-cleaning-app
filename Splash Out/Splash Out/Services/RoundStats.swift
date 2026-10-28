@@ -252,19 +252,25 @@ struct RoundStats {
     func roundLengthWeeks(today now: Date? = nil) -> (weeks: Decimal, gaps: Int)? {
         let today = now ?? self.today
         let start = calendar.date(byAdding: .day, value: -84, to: today)!
-        var gaps: [Int] = []
+        let gaps = roundGaps(through: today).filter { $0.date > start }.map(\.days)
+        guard gaps.count >= 10 else { return nil }
+        return (Decimal(gaps.reduce(0, +)) / Decimal(gaps.count) / 7, gaps.count)
+    }
+
+    /// Every gap between one clean and the next (dated by the later clean), on the same rules as `roundLengthWeeks`.
+    func roundGaps(through today: Date) -> [(date: Date, days: Int)] {
+        var gaps: [(date: Date, days: Int)] = []
         for customer in customers where (customer.status == .active || customer.status == .leaving) && !customer.everyOther {
             let visits = visitsOf(customer)
             let cleans = visits.filter { $0.kind == .cleaned }.map(\.date).sorted()
             let skips = visits.filter { $0.kind == .skipped }.map(\.date)
-            for (a, b) in zip(cleans, cleans.dropFirst()) where b > start && b <= today {
+            for (a, b) in zip(cleans, cleans.dropFirst()) where b <= today {
                 let gap = Int((b.timeIntervalSince(a) / 86_400).rounded())
                 guard gap >= 14, !skips.contains(where: { $0 > a && $0 < b }) else { continue }
-                gaps.append(gap)
+                gaps.append((b, gap))
             }
         }
-        guard gaps.count >= 10 else { return nil }
-        return (Decimal(gaps.reduce(0, +)) / Decimal(gaps.count) / 7, gaps.count)
+        return gaps
     }
 
     // MARK: Crew averages (4.13)

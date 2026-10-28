@@ -74,6 +74,17 @@ enum SimulatorSelfTest {
         undo()
         check("undo skipped restores everything", Snapshot(all) == base)
 
+        // Next-visit reminder: a skip keeps it, a clean clears it, undo puts it back
+        subject.nextVisitNote = "Self-test reminder"
+        undo = VisitLogger.perform(.skipped, for: subject, in: context)
+        check("a skip keeps the next-visit reminder", subject.nextVisitNote == "Self-test reminder")
+        undo()
+        undo = VisitLogger.perform(.cleanedPaid, for: subject, in: context)
+        check("a clean clears the next-visit reminder", subject.nextVisitNote == nil)
+        undo()
+        check("undo puts the next-visit reminder back", subject.nextVisitNote == "Self-test reminder")
+        subject.nextVisitNote = nil
+
         // Not started -> active on first clean, and back on undo
         if let fresh = all.first(where: { $0.status == .notStarted }) {
             undo = VisitLogger.perform(.cleanedPaid, for: fresh, in: context)
@@ -220,6 +231,16 @@ enum SimulatorSelfTest {
 
         // ---- Stage 6: price rise, frequent skips, checks (synthetic customers, removed afterwards)
         func stats() -> RoundStats { RoundStats(customers: (try? context.fetch(FetchDescriptor<Customer>())) ?? [], settings: settings, crews: crews, workDays: workDays, today: today) }
+        do {
+            // The round-speed graph uses the same gaps as the Round length card.
+            let s = stats()
+            let start = RoundCalendar.london.date(byAdding: .day, value: -84, to: today)!
+            let recent = s.roundGaps(through: today).filter { $0.date > start }
+            if let card = s.roundLengthWeeks() {
+                check("round speed graph matches the Round length card", recent.count == card.gaps
+                      && Decimal(recent.reduce(0) { $0 + $1.days }) / Decimal(recent.count) / 7 == card.weeks)
+            }
+        }
         func synthetic(_ name: String, price: Decimal = 20, status: CustomerStatus = .active, eo: Bool = false, frontOnly: Bool = false) -> Customer {
             let c = Customer(name: name, price: price, status: status)
             c.everyOther = eo; c.frontOnly = frontOnly

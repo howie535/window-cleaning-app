@@ -377,6 +377,12 @@ private struct NextUpRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if let next = customer.nextVisitNote {
+                    Label(next, systemImage: "pin.fill")
+                        .font(.caption.bold())
+                        .foregroundStyle(.purple)
+                        .lineLimit(2)
+                }
                 if let note = customer.notes.first {
                     Text(note)
                         .font(.caption)
@@ -449,6 +455,16 @@ struct CustomerLogPanel: View {
                     Button("Remove booking", role: .destructive) { customer.bookedFor = nil }
                 } footer: {
                     Text("They were messaged for this day, so the round keeps them on it. Logging a clean or skip clears it.")
+                }
+            }
+
+            if let next = customer.nextVisitNote {
+                Section {
+                    Label(next, systemImage: "pin.fill").foregroundStyle(.purple)
+                } header: {
+                    Text("This time")
+                } footer: {
+                    Text("Cleared when the clean is logged.")
                 }
             }
 

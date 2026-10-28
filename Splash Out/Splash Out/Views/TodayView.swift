@@ -85,7 +85,7 @@ struct TodayView: View {
                     card(.housesPerDay, Tile(title: "Houses per workday",
                          value: rate.map { $0.housesPerDay.formatted(.number.precision(.fractionLength(1))) } ?? "–",
                          detail: rate.map { "over \($0.workedDays) days, \(stats.analysisLabel)" } ?? "no worked days yet"))
-                    card(nil, Tile(title: "Round length",
+                    card(.roundLength, Tile(title: "Round length",
                          value: gap.map { $0.weeks.formatted(.number.precision(.fractionLength(1))) + " weeks" } ?? "–",
                          detail: gap == nil ? "not enough history yet" : "average gap, last 12 weeks",
                          ideal: "\(ideal.weeks) weeks", onIdeal: showIdeal))
@@ -133,6 +133,7 @@ struct TodayView: View {
                 case .perHouse: StatDetailView(metric: .perHouse)
                 case .housesPerDay: StatDetailView(metric: .housesPerDay)
                 case .skipRate: StatDetailView(metric: .skipRate)
+                case .roundLength: StatDetailView(metric: .roundLength)
                 case .taxYear: TaxYearView()
                 case .priceRise: PriceRiseView()
                 case .ideal: IdealWorkingView(ideal: ideal)
@@ -143,7 +144,7 @@ struct TodayView: View {
 
     /// Where tapping a card (or an Ideal line) goes.
     enum Destination: Hashable {
-        case weeklyWork, monthlyWork, perHouse, housesPerDay, skipRate, taxYear, priceRise, ideal
+        case weeklyWork, monthlyWork, perHouse, housesPerDay, skipRate, roundLength, taxYear, priceRise, ideal
     }
 
     /// A card that opens `opens` when tapped (nil: not tappable). Its Ideal line has its own tap.

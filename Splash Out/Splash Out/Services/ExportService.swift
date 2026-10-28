@@ -79,7 +79,8 @@ enum ExportService {
                 pendingPrice: customer.pendingPrice.map(Money.double),
                 pendingPriceFrom: customer.pendingPriceFrom.map(RoundCalendar.dayString),
                 pendingPriceToldAt: customer.pendingPriceToldAt.map(RoundCalendar.dayString),
-                monthlyAmount: customer.monthlyAmount.map(Money.double)
+                monthlyAmount: customer.monthlyAmount.map(Money.double),
+                nextVisitNote: customer.nextVisitNote
             )
         }
 

@@ -19,6 +19,23 @@ struct CustomerDetailView: View {
     /// Set while deleting, so nothing reads the customer once it's gone.
     @State private var isDeleted = false
     @Environment(\.dismiss) private var dismiss
+    /// Typed straight into the page; saved when the box loses focus or the page closes.
+    @State private var notesDraft = ""
+    @State private var nextVisitDraft = ""
+    @FocusState private var focused: Field?
+    private enum Field { case notes, nextVisit }
+
+    private func saveDrafts() {
+        guard !isDeleted else { return }
+        if notesDraft != customer.notesText { customer.notesText = notesDraft }
+        let next = nextVisitDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (next.isEmpty ? nil : next) != customer.nextVisitNote { customer.nextVisitNote = next.isEmpty ? nil : next }
+    }
+
+    private func loadDrafts() {
+        notesDraft = customer.notesText
+        nextVisitDraft = customer.nextVisitNote ?? ""
+    }
 
     private var sortedLogs: [Visit] {
         customer.allVisits.sorted { $0.date > $1.date }
@@ -121,14 +138,18 @@ struct CustomerDetailView: View {
                 }
             }
 
+            Section {
+                TextField("Extra job or reminder", text: $nextVisitDraft, axis: .vertical)
+                    .focused($focused, equals: .nextVisit)
+            } header: {
+                Text("Next visit")
+            } footer: {
+                Text("Shows on the round; cleared when the next clean is logged.")
+            }
+
             Section("Notes") {
-                if customer.notes.isEmpty {
-                    Text("No notes yet. Add them with Edit.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(customer.notes, id: \.self) { note in
-                    Text(note)
-                }
+                TextField("Add a note", text: $notesDraft, axis: .vertical)
+                    .focused($focused, equals: .notes)
             }
 
             if owed.cleans > 0 {
@@ -210,9 +231,17 @@ struct CustomerDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Edit") { isShowingEdit = true }
+                if focused != nil {
+                    Button("Done") { focused = nil }.bold()
+                } else {
+                    Button("Edit") { saveDrafts(); isShowingEdit = true }
+                }
             }
         }
+        .onAppear(perform: loadDrafts)
+        .onDisappear(perform: saveDrafts)
+        .onChange(of: focused) { _, _ in saveDrafts() }
+        .onChange(of: isShowingEdit) { _, showing in if !showing { loadDrafts() } }
         .visitLogSheets(customer: customer, selection: $logSheet)
         .sheet(isPresented: $isShowingNewOccupant) {
             AddEditCustomerView(customer: nil, replacing: customer)

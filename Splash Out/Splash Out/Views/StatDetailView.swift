@@ -10,6 +10,7 @@ struct StatDetailView: View {
         case perHouse = "Charged per house"
         case housesPerDay = "Houses per workday"
         case skipRate = "Skip rate"
+        case roundLength = "Round length"
     }
 
     enum Span: String, CaseIterable, Identifiable {
@@ -113,6 +114,9 @@ struct StatDetailView: View {
         case .housesPerDay:
             let days = stats.dayTotals.filter { $0.key < today && $0.value.houses >= minHouses }
             return weekly(days.map { ($0.key, Double($0.value.houses), $0.value.houses, double($0.value.work)) })
+        case .roundLength:
+            // Each gap counts once, so the 12-week line is the true average gap, not an average of weeks.
+            return weekly(stats.roundGaps(through: today).map { ($0.date, Double($0.days) / 7, 1, 0) })
         case .skipRate:
             var counts: [Date: (skipped: Int, total: Int)] = [:]
             for customer in customers where customer.status != .cancelled {
@@ -192,7 +196,7 @@ struct StatDetailView: View {
                     .foregroundStyle(ChartStyle.referenceColour)
             }
             .chartAxes(.percent, months: true)
-        case .perHouse, .housesPerDay:
+        case .perHouse, .housesPerDay, .roundLength:
             let values = points.map(\.value)
             let low = (values.min() ?? 0), high = (values.max() ?? 0)
             let floor = max(0, low - (high - low) * 0.6 - 1)
@@ -249,6 +253,11 @@ struct StatDetailView: View {
             let perDay = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, days))
             return [("Worked days", "\(days)"), ("Average", perDay.formatted(.number.precision(.fractionLength(1)))),
                     ("Last 12 weeks", (points.last?.second ?? average).formatted(.number.precision(.fractionLength(1))))]
+        case .roundLength:
+            let gaps = points.reduce(0) { $0 + $1.days }
+            let weeks = { (value: Double) in value.formatted(.number.precision(.fractionLength(1))) + " weeks" }
+            return [("Gaps measured", "\(gaps)"), ("Average", weeks(points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, gaps)))),
+                    ("Last 12 weeks", weeks(points.last?.second ?? average))]
         case .skipRate:
             let visits = points.reduce(0) { $0 + $1.days }, skips = points.reduce(0) { $0 + $1.houses }
             return [("Visits", "\(visits)"), ("Skipped", "\(skips)"),
@@ -263,6 +272,7 @@ struct StatDetailView: View {
         case .perHouse: "What was actually charged per house each week, extras included. Line: 12-week average. Dashed: average for the range."
         case .housesPerDay: "Houses per worked day each week. Line: 12-week average. Dashed: average for the range."
         case .skipRate: "Skips as a share of visits each month. Dashed: average for the range."
+        case .roundLength: "Average weeks between cleans, by the week of the later clean. Rising means the round is slowing down. Line: 12-week average. Dashed: average for the range. Every-other customers and gaps with a skip are left out."
         }
     }
 }
