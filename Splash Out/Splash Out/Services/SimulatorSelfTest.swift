@@ -562,12 +562,14 @@ enum SimulatorSelfTest {
         check("every-other off-cycle visits don't count (1 real skip)", !listed(skippers, eoCust))
         check("cancelled customers are left out", !listed(skippers, cancelled))
         check("skips before the first clean don't count", !listed(skippers, beforeFirst))
-        // overall skip rate: every visit ever, cancelled customers left out
-        func manualSkipRate(includingCancelled: Bool) -> Double {
+        // overall skip rate: every visit ever, cancelled customers and skips before a first clean left out
+        func manualSkipRate(includingCancelled: Bool, includingBeforeFirstClean: Bool = false) -> Double {
             var skipped = 0, total = 0
             let everyone = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
             for person in everyone where includingCancelled || person.status != .cancelled {
+                let firstClean = person.allVisits.filter { $0.kind == .cleaned }.map(\.date).min()
                 for visit in person.allVisits where visit.kind != .notDue {
+                    if !includingBeforeFirstClean { guard let firstClean, visit.date >= firstClean else { continue } }
                     total += 1
                     if visit.kind == .skipped { skipped += 1 }
                 }
@@ -576,6 +578,13 @@ enum SimulatorSelfTest {
         }
         check("skip rate counts every visit ever, without cancelled customers", abs(stats().skipRate - manualSkipRate(includingCancelled: false)) < 0.000001)
         check("a cancelled customer's skips would have changed it", abs(manualSkipRate(includingCancelled: true) - manualSkipRate(includingCancelled: false)) > 0.000001)
+        check("skips before a first clean would have changed it", abs(manualSkipRate(includingCancelled: false, includingBeforeFirstClean: true) - manualSkipRate(includingCancelled: false)) > 0.000001)
+        do {
+            let before = stats().skipRate
+            let pending = synthetic("ST not started skips", status: .notStarted); add(pending, .skipped, daysAgo: 20); add(pending, .skipped, daysAgo: 10)
+            check("skipping a not-started customer doesn't change the skip rate", abs(stats().skipRate - before) < 0.000001)
+            context.delete(pending)
+        }
         // Round length: average gap over the last 12 weeks, skips and old gaps left out. The test's "today" is
         // 400 days ahead so real customers' gaps can't fall in its window; before(n) is n days before that.
         do {

@@ -12,6 +12,8 @@ enum ChangeLog {
 
     static let releases: [Release] = [
         Release(version: "1.2", date: "October 2026", changes: [
+            "Customer page history: swipe an unpaid clean right to mark it paid in full. Editing a clean has a Paid in full button; type a different amount if they paid something else.",
+            "Skip rate, Frequent Skips and Round Review leave out skips before a customer's first clean (while they were not started).",
             "Faster: the daily backup and calendar update now run in the background a few seconds after opening, and screens read the visit history in one go.",
             "Stats cards are all the same size.",
             "Price Rise is now a simple list: every customer's last price rise date (or No date logged), oldest first. Change a price on the customer's page; a higher price is logged as a rise.",

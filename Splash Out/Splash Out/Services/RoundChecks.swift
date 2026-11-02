@@ -28,10 +28,8 @@ extension RoundStats {
     func frequentSkippers() -> [SkipRow] {
         var rows: [SkipRow] = []
         for customer in customers where customer.status == .active || customer.status == .leaving {
-            let visits = visitsOf(customer).filter { $0.kind != .notDue }.sorted { $0.date < $1.date }
-            guard let first = visits.firstIndex(where: { $0.kind == .cleaned }) else { continue }
             let yearAgo = RoundCalendar.london.date(byAdding: .month, value: -12, to: today) ?? today
-            let recent = visits[first...].filter { $0.date >= yearAgo }
+            let recent = RoundStats.skipCountable(visitsOf(customer)).filter { $0.date >= yearAgo }
             let skips = recent.filter { $0.kind == .skipped }.count
             if skips >= 2 { rows.append(SkipRow(customer: customer, skips: skips, ofLast: recent.count)) }
         }

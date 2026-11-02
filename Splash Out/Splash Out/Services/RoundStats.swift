@@ -15,6 +15,14 @@ struct RoundStats {
 
     func visitsOf(_ customer: Customer) -> [Visit] { index?.visits(for: customer) ?? customer.allVisits }
 
+    /// The visits that count towards a skip rate: cleans and skips from the customer's first clean on, oldest first.
+    /// Skips before then were while they were not started, so they don't count; "not due" visits never do.
+    static func skipCountable(_ visits: [Visit]) -> ArraySlice<Visit> {
+        let ordered = visits.filter { $0.kind != .notDue }.sorted { $0.date < $1.date }
+        guard let first = ordered.firstIndex(where: { $0.kind == .cleaned }) else { return [] }
+        return ordered[first...]
+    }
+
     /// Cleaned visits per date.
     let dayTotals: [Date: WeekMetrics.DayTotals]
     let config: WeekMetrics.Config
@@ -164,11 +172,11 @@ struct RoundStats {
     }
 
     /// Skipped / (skipped + cleaned) across every visit ever recorded, for everyone except cancelled customers.
-    /// "Not due" visits (an every-other customer's off round) don't count either way.
+    /// "Not due" visits (an every-other customer's off round) and skips before a customer's first clean don't count.
     var skipRate: Double {
         var skipped = 0, total = 0
         for customer in customers where customer.status != .cancelled {
-            for visit in visitsOf(customer) where visit.kind != .notDue {
+            for visit in Self.skipCountable(visitsOf(customer)) {
                 total += 1
                 if visit.kind == .skipped { skipped += 1 }
             }
@@ -214,7 +222,7 @@ struct RoundStats {
         var daysPerWeek: Decimal
         /// Total £ ÷ total houses (each house counts once, unlike the spreadsheet's average of days).
         var perHouse: Decimal
-        /// Skipped share of visits (not-due visits and cancelled customers left out).
+        /// Skipped share of visits (not-due visits, skips before a first clean and cancelled customers left out).
         var skipRate: Double
         var weeks: Decimal
     }
@@ -236,7 +244,7 @@ struct RoundStats {
         let weeks = Decimal(max(days, 7)) / 7
         var skipped = 0, visits = 0
         for customer in customers where customer.status != .cancelled {
-            for visit in visitsOf(customer) where visit.kind != .notDue && visit.date >= start && visit.date < today {
+            for visit in Self.skipCountable(visitsOf(customer)) where visit.date >= start && visit.date < today {
                 visits += 1
                 if visit.kind == .skipped { skipped += 1 }
             }
