@@ -119,8 +119,8 @@ struct StatDetailView: View {
             return weekly(stats.roundGaps(through: today).map { ($0.date, Double($0.days) / 7, 1, 0) })
         case .skipRate:
             var counts: [Date: (skipped: Int, total: Int)] = [:]
-            for customer in customers where customer.status != .cancelled {
-                for visit in stats.visitsOf(customer) where visit.kind != .notDue && visit.date < today {
+            for customer in customers {
+                for visit in stats.skipRateVisits(customer) where visit.date < today {
                     let month = calendar.date(from: calendar.dateComponents([.year, .month], from: visit.date))!
                     counts[month, default: (0, 0)].total += 1
                     if visit.kind == .skipped { counts[month, default: (0, 0)].skipped += 1 }

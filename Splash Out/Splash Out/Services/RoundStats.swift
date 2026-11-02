@@ -163,12 +163,20 @@ struct RoundStats {
         return customers.filter { $0.status == .cancelled && ($0.lastCleanDate.map(range.contains) ?? false) }.count
     }
 
-    /// Skipped / (skipped + cleaned) across every visit ever recorded, for everyone except cancelled customers.
-    /// "Not due" visits (an every-other customer's off round) don't count either way.
+    /// The visits a customer adds to the skip rate: from their first clean on (skips while not started don't count),
+    /// "not due" visits left out, nothing for cancelled customers.
+    func skipRateVisits(_ customer: Customer) -> [Visit] {
+        guard customer.status != .cancelled else { return [] }
+        let visits = visitsOf(customer).filter { $0.kind != .notDue }
+        guard let first = visits.filter({ $0.kind == .cleaned }).map(\.date).min() else { return [] }
+        return visits.filter { $0.date >= first }
+    }
+
+    /// Skipped / (skipped + cleaned) across every visit ever recorded, on the rules of `skipRateVisits`.
     var skipRate: Double {
         var skipped = 0, total = 0
-        for customer in customers where customer.status != .cancelled {
-            for visit in visitsOf(customer) where visit.kind != .notDue {
+        for customer in customers {
+            for visit in skipRateVisits(customer) {
                 total += 1
                 if visit.kind == .skipped { skipped += 1 }
             }
@@ -235,8 +243,8 @@ struct RoundStats {
         let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0   // up to yesterday
         let weeks = Decimal(max(days, 7)) / 7
         var skipped = 0, visits = 0
-        for customer in customers where customer.status != .cancelled {
-            for visit in visitsOf(customer) where visit.kind != .notDue && visit.date >= start && visit.date < today {
+        for customer in customers {
+            for visit in skipRateVisits(customer) where visit.date >= start && visit.date < today {
                 visits += 1
                 if visit.kind == .skipped { skipped += 1 }
             }

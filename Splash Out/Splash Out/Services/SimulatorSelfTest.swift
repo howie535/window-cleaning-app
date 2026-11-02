@@ -583,12 +583,14 @@ enum SimulatorSelfTest {
         check("every-other off-cycle visits don't count (1 real skip)", !listed(skippers, eoCust))
         check("cancelled customers are left out", !listed(skippers, cancelled))
         check("skips before the first clean don't count", !listed(skippers, beforeFirst))
-        // overall skip rate: every visit ever, cancelled customers left out
-        func manualSkipRate(includingCancelled: Bool) -> Double {
+        // overall skip rate: every visit ever from each customer's first clean, cancelled customers left out
+        func manualSkipRate(includingCancelled: Bool, beforeFirstClean: Bool = false) -> Double {
             var skipped = 0, total = 0
             let everyone = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
             for person in everyone where includingCancelled || person.status != .cancelled {
+                let first = person.allVisits.filter { $0.kind == .cleaned }.map(\.date).min()
                 for visit in person.allVisits where visit.kind != .notDue {
+                    if !beforeFirstClean { guard let first, visit.date >= first else { continue } }
                     total += 1
                     if visit.kind == .skipped { skipped += 1 }
                 }
@@ -596,6 +598,7 @@ enum SimulatorSelfTest {
             return total == 0 ? 0 : Double(skipped) / Double(total)
         }
         check("skip rate counts every visit ever, without cancelled customers", abs(stats().skipRate - manualSkipRate(includingCancelled: false)) < 0.000001)
+        check("skips before a first clean (not started) don't count", abs(manualSkipRate(includingCancelled: false, beforeFirstClean: true) - manualSkipRate(includingCancelled: false)) > 0.000001)
         check("a cancelled customer's skips would have changed it", abs(manualSkipRate(includingCancelled: true) - manualSkipRate(includingCancelled: false)) > 0.000001)
         // Round length: average gap over the last 12 weeks, skips and old gaps left out. The test's "today" is
         // 400 days ahead so real customers' gaps can't fall in its window; before(n) is n days before that.

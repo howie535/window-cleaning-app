@@ -43,8 +43,15 @@ struct EditVisitView: View {
                         LabeledField(label: "Paid (0 if not paid yet)") {
                             TextField("0.00", text: $paidText).keyboardType(.decimalPad)
                         }
+                        if let charged, paid != charged {
+                            Button("Paid \(charged.formatted(.currency(code: "GBP")))") {
+                                paidText = chargedText
+                                save()
+                            }
+                            .bold()
+                        }
                     } footer: {
-                        Text("Charged is what the clean counts for in the stats. Paid less than charged shows on Money Owed.")
+                        Text("Paid saves it as paid in full. A different amount: type it in Paid. Paid less than charged shows on Money Owed.")
                     }
                 }
                 Section {
