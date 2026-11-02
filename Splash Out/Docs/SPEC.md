@@ -105,7 +105,7 @@ These replace typing dates into the spreadsheet, so they must be fast with wet h
   - **Cleaned + extra**, which asks for the extra £ and a note
 - **Defaults:** the date defaults to today. The amount defaults to the price, or the front-only price. Undo is available for 10 seconds.
 - **Record a payment:** from Money Owed or the customer page, mark one or more unpaid visits paid. You can enter a single lump sum, which pays the oldest visits first. Cash, BACS and SO are all handled the same way.
-- **Customer page:** details, visit history newest first, balance, price history, notes, and the WhatsApp or Ring button.
+- **Customer page:** details, visit history newest first (swipe an unpaid clean right to mark it paid in full; tap to edit or enter a different amount), balance, price history, notes, and the WhatsApp or Ring button.
 - **New customer:** choose where they go in round order (after which customer), then status `not_started` until their first clean.
 
 ## 4. Rules and calculations
@@ -189,7 +189,7 @@ The app records skips explicitly, so this is more reliable than the spreadsheet'
 
 - **New this tax year:** first cleaned visit this tax year. For 2026-27 only, ignore first cleans before 18 May 2026, because records start in April 2026.
 - **Lost this tax year:** status cancelled, with the last clean in this tax year.
-- **Skip rate:** skipped ÷ (skipped + cleaned) over each customer's last 6 visits.
+- **Skip rate:** skipped ÷ (skipped + cleaned), cancelled customers left out. Not-due visits and skips before a customer's first clean (while not started) don't count.
 - **This month:** work so far this calendar month.
 
 ### 4.13 Crew averages

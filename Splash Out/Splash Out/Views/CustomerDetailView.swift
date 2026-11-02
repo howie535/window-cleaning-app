@@ -19,6 +19,7 @@ struct CustomerDetailView: View {
     /// Set while deleting, so nothing reads the customer once it's gone.
     @State private var isDeleted = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(UndoCenter.self) private var undoCenter
 
     private var sortedLogs: [Visit] {
         customer.allVisits.sorted { $0.date > $1.date }
@@ -197,13 +198,30 @@ struct CustomerDetailView: View {
                             CleanLogRow(log: log).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            if log.isUnpaid {
+                                Button { markPaid(log) } label: {
+                                    Label("Paid", systemImage: "checkmark.circle.fill")
+                                }
+                                .tint(.green)
+                            }
+                        }
+                        // Spelled out: any swipe action on a row replaces the automatic swipe-to-delete.
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) { VisitLogger.remove(log, in: modelContext) } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
-                    .onDelete(perform: deleteLogs)
                 }
             } header: {
                 Text("History")
             } footer: {
-                if !sortedLogs.isEmpty { Text("Tap a visit to correct it or delete it.") }
+                if !sortedLogs.isEmpty {
+                    Text(sortedLogs.contains(where: \.isUnpaid)
+                         ? "Swipe an unpaid clean right to mark it paid in full. Tap a visit to enter a different amount, correct it or delete it."
+                         : "Tap a visit to correct it or delete it.")
+                }
             }
         }
         .navigationTitle(customer.name)
@@ -245,10 +263,11 @@ struct CustomerDetailView: View {
         }
     }
 
-    private func deleteLogs(at offsets: IndexSet) {
-        for index in offsets {
-            VisitLogger.remove(sortedLogs[index], in: modelContext)
-        }
+    /// Pays off what's left on one clean, dated today, the same way Record Payment does.
+    private func markPaid(_ visit: Visit) {
+        let result = VisitLogger.recordPayment(visit.charged - visit.paid, across: [visit])
+        try? modelContext.save()
+        undoCenter.offer("\(customer.name): marked paid", undo: result.undo)
     }
 }
 
@@ -347,4 +366,5 @@ private struct CleanLogRow: View {
         CustomerDetailView(customer: Customer(name: "Jane Doe", address: "1 High Street", phone: "447700900123", price: 15, notes: ["Side gate code 1234"]))
     }
     .modelContainer(for: Customer.self, inMemory: true)
+    .environment(UndoCenter())
 }

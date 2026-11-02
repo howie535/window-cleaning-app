@@ -62,7 +62,7 @@ enum RoundReview {
                 score += 2
                 reasons.append("On its own")
             }
-            let recent = customer.allVisits.filter { $0.kind != .notDue && $0.date >= yearAgo && $0.date < today }
+            let recent = RoundStats.skipCountable(customer.allVisits).filter { $0.date >= yearAgo && $0.date < today }
             let skips = recent.filter { $0.kind == .skipped }.count
             // A skip only hurts when the house is part of a group (the crew is there anyway and has to go back);
             // a house on its own that skips just isn't visited.
