@@ -293,6 +293,40 @@ enum SimulatorSelfTest {
             check("moving the rest to the next day leaves nobody else on today", !ended.contains { $0.dayIndex == 0 } && ended.filter { $0.dayIndex == 1 }.count == 5)
         }
 
+        // ---- Where the round carries on from: only cleans move it, along an unbroken run (3 Nov: Marshall skipped the
+        //      evening before jumped the round past Ian Barton and everyone between them)
+        do {
+            let cal = RoundCalendar.london
+            let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+            let old = cal.date(byAdding: .day, value: -40, to: today)!
+            let recent = cal.date(byAdding: .day, value: -10, to: today)!
+            func cand(_ seq: Int, _ kind: VisitKind?, last: Date = old, everyOther: Bool = false) -> NextUp.Candidate {
+                let visit = kind == nil ? last : yesterday
+                return NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: 20, everyOther: everyOther,
+                                        lastCleaned: kind == .cleaned ? yesterday : last, lastNotDue: nil, lastVisit: visit,
+                                        lastVisitBeforeToday: visit, visitDates: kind == nil ? [last] : [last, yesterday],
+                                        cleanDates: kind == .cleaned ? [last, yesterday] : [last])
+            }
+            func pointer(_ cands: [NextUp.Candidate]) -> Int? {
+                NextUp.startOfDayPointer(in: cands, today: today, hideWeeks: 5, lapDays: 35, calendar: cal)?.key
+            }
+            // 1-4 cleaned yesterday, 5-7 still due, 8 skipped (asked to be missed), 9 booked and cleaned out of order.
+            var round = (1...4).map { cand($0, .cleaned) } + (5...7).map { cand($0, nil) } + [cand(8, .skipped), cand(9, .cleaned), cand(10, nil)]
+            check("carrying on from: a skip further down doesn't move it", pointer(round) == 4, "\(String(describing: pointer(round)))")
+            let lap = NextUp.lapOrder(round, today: today, hideWeeks: 5, lapDays: 35, calendar: cal).map(\.key)
+            check("carrying on from: the customers in between come next", Array(lap.prefix(3)) == [5, 6, 7], "\(lap)")
+            // An every-other customer on their off round doesn't break the run.
+            round[5] = cand(6, nil, last: cal.date(byAdding: .day, value: -30, to: today)!, everyOther: true)
+            round[4] = cand(5, .cleaned); round[6] = cand(7, .cleaned)
+            check("carrying on from: an every-other off-round customer doesn't break the run", pointer(round) == 9, "\(String(describing: pointer(round)))")
+            // Skipped on the last stop with the rest of the round already done: stays on the last clean.
+            let done = (1...4).map { cand($0, .cleaned) } + [cand(5, .skipped)] + (6...10).map { cand($0, nil, last: recent) }
+            check("carrying on from: a skip at the end of the day doesn't move it", pointer(done) == 4, "\(String(describing: pointer(done)))")
+            // A run across the end of the round list.
+            let wrap = [cand(1, .cleaned), cand(2, .cleaned)] + (3...8).map { cand($0, nil) } + [cand(9, .cleaned), cand(10, .cleaned)]
+            check("carrying on from: a run across the end of the list ends at its last clean", pointer(wrap) == 2, "\(String(describing: pointer(wrap)))")
+        }
+
         // ---- Skips only top today back up to its real target (day three: Jay jumped from Monday to today)
         do {
             let cal = RoundCalendar.london

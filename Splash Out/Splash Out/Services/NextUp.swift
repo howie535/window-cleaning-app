@@ -6,8 +6,8 @@ import Foundation
 /// How the list is built:
 /// - A customer is **done this lap** if they had any visit (clean, skip or not due) in the `hideWeeks` weeks before the day
 ///   the round reaches them ("due when it's their turn").
-/// - The list carries on from where the round had got to **at the start of today** (the last customer visited before
-///   today; on a tie, the one furthest along). Nothing done today changes the order, so cleaning someone further
+/// - The list carries on from where the round had got to **at the start of today**: the last clean of the unbroken run
+///   on the last day anyone was cleaned (see `startOfDayPointer`). Skips don't move it. Nothing done today changes the order, so cleaning someone further
 ///   down never pushes the customers above them to the end, and anyone passed over earlier stays near the top.
 /// - Customers visited **today** stay on today, shown as done; a clean counts towards today's total, so marking a
 ///   clean never pulls new customers onto the day. A skip doesn't count, so the next customers move up.
@@ -31,6 +31,9 @@ enum NextUp {
         var lastVisit: Date?
         /// The latest visit before today: where the round had got to when the day started.
         var lastVisitBeforeToday: Date? = nil
+        /// Every visit date (any kind) and every clean date, start-of-day. Used to find where the round got to.
+        var visitDates: [Date] = []
+        var cleanDates: [Date] = []
         /// Not started yet: shown in the round, greyed, but never counted in a day's total.
         var isPending: Bool = false
         /// What happened today, if they've been visited today.
@@ -111,19 +114,58 @@ enum NextUp {
             && !isEveryOtherOff(c, today: today, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar)
     }
 
-    /// Where the round had got to at the start of today: the last customer visited before today
-    /// (on a tie, the one furthest along the round).
-    static func startOfDayPointer(in all: [Candidate]) -> Candidate? {
-        all.filter { $0.lastVisitBeforeToday != nil }.max { a, b in
-            if a.lastVisitBeforeToday! != b.lastVisitBeforeToday! { return a.lastVisitBeforeToday! < b.lastVisitBeforeToday! }
-            return a.sequence < b.sequence
+    /// Where the round had got to at the start of today.
+    ///
+    /// Only cleans move it on, and only along an unbroken run: on the last day anyone was cleaned, the round is cut
+    /// wherever a customer was due and wasn't dealt with that day. The run with the most cleans wins, and the pointer is
+    /// its last clean. So skipping someone further down (say the evening before), or cleaning a booked customer out of
+    /// order, never jumps the round past the customers in between.
+    /// With no cleans recorded yet, falls back to the latest visit of any kind.
+    static func startOfDayPointer(in all: [Candidate], today: Date, hideWeeks: Int, lapDays: Int,
+                                  everyOtherFactor: Double = 1.5, calendar: Calendar) -> Candidate? {
+        guard let day = all.compactMap({ c in c.cleanDates.filter { $0 < today }.max() }).max() else {
+            return all.filter { $0.lastVisitBeforeToday != nil }.max { a, b in
+                if a.lastVisitBeforeToday! != b.lastVisitBeforeToday! { return a.lastVisitBeforeToday! < b.lastVisitBeforeToday! }
+                return a.sequence < b.sequence
+            }
         }
+        let ordered = all.sorted { $0.sequence < $1.sequence }
+        /// Due on `day` and not dealt with that day: the run can't pass them.
+        func blocks(_ c: Candidate) -> Bool {
+            guard c.isListable, !c.isPending, !c.visitDates.contains(day) else { return false }
+            var before = c
+            before.lastVisit = c.visitDates.filter { $0 < day }.max()
+            before.lastCleaned = c.cleanDates.filter { $0 < day }.max()
+            return !isDoneThisLap(before, today: day, hideWeeks: hideWeeks, calendar: calendar)
+                && !isEveryOtherOff(before, today: day, lapDays: lapDays, factor: everyOtherFactor, calendar: calendar)
+        }
+        let blocked = ordered.map(blocks)
+        // Walk the round once, starting just after a blocker so no run is split by the end of the list.
+        let start = (blocked.firstIndex(of: true) ?? ordered.count - 1) + 1
+        var best: (count: Int, end: Candidate)?
+        var count = 0
+        var end: Candidate?
+        func close() {
+            if let e = end, best.map({ count > $0.count || (count == $0.count && e.sequence > $0.end.sequence) }) ?? true {
+                best = (count, e)
+            }
+            count = 0; end = nil
+        }
+        for step in 0..<ordered.count {
+            let i = (start + step) % ordered.count
+            if blocked[i] { close(); continue }
+            if ordered[i].cleanDates.contains(day) { count += 1; end = ordered[i] }
+        }
+        close()
+        return best?.end
     }
 
     /// Everyone in round order, carrying on just after where the round had got to at the start of today.
-    static func lapOrder(_ all: [Candidate], today: Date, hideWeeks: Int, calendar: Calendar) -> [Candidate] {
+    static func lapOrder(_ all: [Candidate], today: Date, hideWeeks: Int, lapDays: Int, everyOtherFactor: Double = 1.5,
+                         calendar: Calendar) -> [Candidate] {
         let ordered = all.sorted { $0.sequence < $1.sequence }
-        guard let pointer = startOfDayPointer(in: all) else { return ordered }
+        guard let pointer = startOfDayPointer(in: all, today: today, hideWeeks: hideWeeks, lapDays: lapDays,
+                                              everyOtherFactor: everyOtherFactor, calendar: calendar) else { return ordered }
         return ordered.filter { $0.sequence > pointer.sequence } + ordered.filter { $0.sequence <= pointer.sequence }
     }
 
@@ -157,7 +199,7 @@ enum NextUp {
         todayEnded: Bool = false,
         calendar: Calendar
     ) -> [Placement] {
-        let lap = lapOrder(all, today: today, hideWeeks: hideWeeks, calendar: calendar)
+        let lap = lapOrder(all, today: today, hideWeeks: hideWeeks, lapDays: lapDays, everyOtherFactor: everyOtherFactor, calendar: calendar)
         let capacity = days.map { $0.target * (1 + overbook) }
         var load = [Decimal](repeating: 0, count: days.count)
         let todayIndex = days.firstIndex { $0.date == today }

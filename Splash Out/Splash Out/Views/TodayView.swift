@@ -96,8 +96,8 @@ struct TodayView: View {
                          detail: "this tax year"))
                     card(.priceRise, Tile(title: "Price rises due", value: "\(risesDueCount)",
                          detail: noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years"))
-                    card(.skipRate, Tile(title: "Skip rate", value: (rate?.skipRate ?? stats.skipRate).formatted(.percent.precision(.fractionLength(1))),
-                             detail: rate == nil ? "all time" : stats.analysisLabel))
+                    card(.skipRate, Tile(title: "Skip rate", value: stats.trailingSkipRate.formatted(.percent.precision(.fractionLength(1))),
+                             detail: stats.skipRateLabel))
                 }
 
         NavigationStack {

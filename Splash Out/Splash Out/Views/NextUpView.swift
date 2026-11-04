@@ -234,8 +234,12 @@ struct NextUpView: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !dayRow.isDone {
+                // An every-other customer on their off round isn't due, so there's nothing to skip (a skip would count
+                // against their skip rate). Leave them greyed; they can still be cleaned with the swipe the other way.
+                if dayRow.state != .everyOtherOff {
                 Button(role: leaves && !owes ? .destructive : nil) { log(.skipped, for: customer) } label: { Label("Skipped", systemImage: "forward.circle") }
                     .tint(.red)
+                }
                 if date > today && !dayRow.isPending {
                     // Pull a later day's customer into today's work (books them for today).
                     Button { withAnimation { customer.bookedFor = today } } label: { Label("Do today", systemImage: "arrow.up.to.line") }

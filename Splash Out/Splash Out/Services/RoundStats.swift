@@ -184,6 +184,32 @@ struct RoundStats {
         return total == 0 ? 0 : Double(skipped) / Double(total)
     }
 
+    /// The skip rate's period: the last 6 months (182 days to yesterday), or since the first clean while there's less history.
+    var skipRateStart: Date {
+        let sixMonthsAgo = calendar.date(byAdding: .day, value: -182, to: today)!
+        let first = dayTotals.keys.filter { $0 < today }.min() ?? today
+        return max(sixMonthsAgo, first)
+    }
+
+    /// "last 6 months", or "since 6 Apr" while there's less than 6 months of history.
+    var skipRateLabel: String {
+        let sixMonthsAgo = calendar.date(byAdding: .day, value: -182, to: today)!
+        return skipRateStart <= sixMonthsAgo ? "last 6 months" : "since \(RoundCalendar.short(skipRateStart))"
+    }
+
+    /// Skipped / (skipped + cleaned) over the last 6 months up to yesterday, on the rules of `skipRateVisits`.
+    var trailingSkipRate: Double {
+        let start = skipRateStart
+        var skipped = 0, total = 0
+        for customer in customers {
+            for visit in skipRateVisits(customer) where visit.date >= start && visit.date < today {
+                total += 1
+                if visit.kind == .skipped { skipped += 1 }
+            }
+        }
+        return total == 0 ? 0 : Double(skipped) / Double(total)
+    }
+
     /// Average per house the spreadsheet's way (each finished day's £ ÷ houses, averaged over the days), over the
     /// last 12 months like the other averages.
     func averagePerHouseByDay() -> (average: Decimal, days: Int)? {
@@ -222,7 +248,7 @@ struct RoundStats {
         var daysPerWeek: Decimal
         /// Total £ ÷ total houses (each house counts once, unlike the spreadsheet's average of days).
         var perHouse: Decimal
-        /// Skipped share of visits (not-due visits and cancelled customers left out).
+        /// Skipped share of visits over the last 6 months (not-due visits and cancelled customers left out).
         var skipRate: Double
         var weeks: Decimal
     }
@@ -242,16 +268,9 @@ struct RoundStats {
         guard workedDays > 0, allHouses > 0 else { return nil }
         let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0   // up to yesterday
         let weeks = Decimal(max(days, 7)) / 7
-        var skipped = 0, visits = 0
-        for customer in customers {
-            for visit in skipRateVisits(customer) where visit.date >= start && visit.date < today {
-                visits += 1
-                if visit.kind == .skipped { skipped += 1 }
-            }
-        }
         return WorkRate(housesPerDay: Decimal(houses) / Decimal(workedDays), workedDays: workedDays,
                         daysPerWeek: Decimal(workedDays) / weeks, perHouse: work / Decimal(allHouses),
-                        skipRate: visits == 0 ? 0 : Double(skipped) / Double(visits), weeks: weeks)
+                        skipRate: trailingSkipRate, weeks: weeks)
     }
 
     /// How long a round is taking now: the average gap between one clean and the next for regular customers on the

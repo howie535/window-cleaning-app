@@ -189,7 +189,7 @@ The app records skips explicitly, so this is more reliable than the spreadsheet'
 
 - **New this tax year:** first cleaned visit this tax year. For 2026-27 only, ignore first cleans before 18 May 2026, because records start in April 2026.
 - **Lost this tax year:** status cancelled, with the last clean in this tax year.
-- **Skip rate:** skipped ÷ (skipped + cleaned) over each customer's last 6 visits.
+- **Skip rate (Stats):** skipped ÷ (skipped + cleaned) over the last 6 months up to yesterday, from each customer's first clean; not-due visits and cancelled customers left out.
 - **This month:** work so far this calendar month.
 
 ### 4.13 Crew averages

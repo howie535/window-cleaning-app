@@ -11,6 +11,11 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.3", date: "November 2026", changes: [
+            "Round: only a clean moves where the round carries on from, and never past someone still due. Skipping a customer further down (even the evening before) no longer sends the customers in between to the back.",
+            "Round: greyed every-other customers (not due this round) have no Skipped swipe. Leave them; they drop off once the round passes. They can still be cleaned.",
+            "Stats: the skip rate is the last 6 months.",
+        ]),
         Release(version: "1.2", date: "October 2026", changes: [
             "Faster: the daily backup and calendar update now run in the background a few seconds after opening, and screens read the visit history in one go.",
             "Stats cards are all the same size.",

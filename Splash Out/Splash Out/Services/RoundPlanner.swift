@@ -76,7 +76,9 @@ enum RoundPlanner {
             var visitedToday: VisitKind?
             var chargedToday: Decimal = 0
             var cleans: [Date] = []
+            var visitDates: [Date] = []
             for visit in customer.allVisits {
+                visitDates.append(visit.date)
                 if lastVisit.map({ visit.date > $0 }) ?? true { lastVisit = visit.date }
                 if visit.date < today, lastVisitBeforeToday.map({ visit.date > $0 }) ?? true { lastVisitBeforeToday = visit.date }
                 if visit.kind == .cleaned {
@@ -101,6 +103,8 @@ enum RoundPlanner {
                 lastNotDue: lastNotDue,
                 lastVisit: lastVisit,
                 lastVisitBeforeToday: lastVisitBeforeToday,
+                visitDates: visitDates,
+                cleanDates: cleans,
                 isPending: customer.status == .notStarted,
                 visitedToday: visitedToday,
                 chargedToday: chargedToday,
@@ -151,7 +155,8 @@ enum RoundPlanner {
         // One full round, no empty days on the end.
         while dayPlans.count > 1, dayPlans.last?.rows.isEmpty == true { dayPlans.removeLast() }
 
-        let pointer = NextUp.startOfDayPointer(in: candidates).map { customers[$0.key] }
+        let pointer = NextUp.startOfDayPointer(in: candidates, today: today, hideWeeks: settings.nextUpHideWeeks,
+                                                lapDays: lapDays, calendar: calendar).map { customers[$0.key] }
         return Plan(days: dayPlans, later: later, pointer: pointer, lapDays: lapDays)
     }
 
