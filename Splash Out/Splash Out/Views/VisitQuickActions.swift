@@ -172,6 +172,7 @@ struct FrontOnlySheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(amount == nil) }
             }
             .onAppear {
+                guard amountText.isEmpty else { return }
                 if let last = VisitLogger.lastFrontOnlyPrice(for: customer) { amountText = NSDecimalNumber(decimal: last).stringValue }
             }
         }

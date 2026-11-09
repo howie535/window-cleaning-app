@@ -101,3 +101,24 @@ final class AppSettings {
         set { targetRoundWeeksValue = newValue }
     }
 }
+
+/// A business expense, for the tax return. Kept one by one so the detail can be shown to HMRC if asked.
+@Model
+final class Expense {
+    var date: Date = Date()
+    var amount: Decimal = 0
+    var category: String = ""
+    var note: String = ""
+
+    init(date: Date, amount: Decimal, category: String, note: String = "") {
+        self.date = date
+        self.amount = amount
+        self.category = category
+        self.note = note
+    }
+
+    /// Offered when adding an expense, alongside any category already used.
+    static let standardCategories = [
+        "Fuel", "Vehicle", "Equipment", "Cleaning supplies", "Insurance", "Phone", "Advertising", "Wages", "Other",
+    ]
+}

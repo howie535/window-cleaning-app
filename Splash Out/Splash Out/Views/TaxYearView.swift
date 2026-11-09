@@ -9,6 +9,7 @@ struct TaxYearView: View {
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
+    @Query private var expenses: [Expense]
 
     @State private var chosenYear: Int?
     @State private var exportURL: URL?
@@ -28,6 +29,8 @@ struct TaxYearView: View {
             sum.work += row.work; sum.paid += row.paid; sum.notYetPaid += row.notYetPaid
             sum.cleans += row.cleans; sum.extras += row.extras
         }
+        let yearRange = TaxYear.range(startYear: year)
+        let yearExpenses = expenses.filter { yearRange.contains($0.date) }.reduce(Decimal(0)) { $0 + $1.amount }
         let weeksSoFar = max(1, Decimal((RoundCalendar.london.dateComponents([.day], from: total.from, to: min(today, total.to)).day ?? 0) + 1) / 7)
 
         List {
@@ -38,8 +41,19 @@ struct TaxYearView: View {
                 LabeledContent("Runs", value: "\(RoundCalendar.shortWithYear(total.from)) to \(RoundCalendar.shortWithYear(total.to))")
             }
 
+            Section {
+                LabeledContent("Total sales") { Text(pounds(total.work)).font(.headline) }
+                NavigationLink { ExpensesView(chosenYear: year) } label: {
+                    LabeledContent("Expenses", value: pounds(yearExpenses))
+                }
+                LabeledContent("Profit") { Text(pounds(total.work - yearExpenses)).font(.headline) }
+            } header: {
+                Text("For the tax return")
+            } footer: {
+                Text("Sales are every clean done in the year, paid or not. Profit is sales less expenses.")
+            }
+
             Section("Totals") {
-                LabeledContent("Work", value: pounds(total.work))
                 LabeledContent("Paid", value: pounds(total.paid))
                 LabeledContent("Not yet paid", value: pounds(total.notYetPaid))
                 LabeledContent("Cleans", value: "\(total.cleans)")
@@ -88,7 +102,7 @@ struct TaxYearView: View {
                     }
                 } else {
                     Button("Prepare CSV for Self Assessment") {
-                        exportURL = try? writeCSV(year: year, months: months, rounds: rounds, total: total)
+                        exportURL = try? writeCSV(year: year, months: months, rounds: rounds, total: total, expenses: yearExpenses)
                     }
                 }
             } footer: {
@@ -97,11 +111,14 @@ struct TaxYearView: View {
         }
         .navigationTitle("Tax Year")
         .onChange(of: chosenYear) { exportURL = nil }
+        .onChange(of: yearExpenses) { exportURL = nil }
     }
 
-    private func writeCSV(year: Int, months: [WeekMetrics.MonthRow], rounds: [RoundStats.RoundRow], total: WeekMetrics.MonthRow) throws -> URL {
+    private func writeCSV(year: Int, months: [WeekMetrics.MonthRow], rounds: [RoundStats.RoundRow], total: WeekMetrics.MonthRow, expenses: Decimal) throws -> URL {
         func n(_ value: Decimal) -> String { NSDecimalNumber(decimal: value).stringValue }
-        var lines = ["Tax year \(TaxYear.label(startYear: year))", "", "Month,From,To,Work,Paid,Not yet paid,Cleans,Extras"]
+        var lines = ["Tax year \(TaxYear.label(startYear: year))", "",
+                     "Total sales (paid or not),\(n(total.work))", "Expenses,\(n(expenses))", "Profit,\(n(total.work - expenses))",
+                     "", "Month,From,To,Work,Paid,Not yet paid,Cleans,Extras"]
         for month in months {
             lines.append("\(month.label),\(RoundCalendar.dayString(month.from)),\(RoundCalendar.dayString(month.to)),\(n(month.work)),\(n(month.paid)),\(n(month.notYetPaid)),\(month.cleans),\(n(month.extras))")
         }

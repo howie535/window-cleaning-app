@@ -11,6 +11,15 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.4", date: "November 2026", changes: [
+            "Price Rise: customers due a rise show their new price (the percentage set in Settings, to the nearest pound, exactly 50p going down). Tap Done once it's in place and the price changes, logged as today. With no rise logged, it's counted from their first clean. The Stats card shows what the rises add a round.",
+            "Expenses (More): add, categorise and total expenses by month. The tax year total goes on the Tax Year page, and every expense can be shared as a CSV for HMRC. Expenses are kept in backups.",
+            "Tax Year: Total sales (every clean, paid or not), Expenses and Profit at the top.",
+            "Targets: current figures, then Ideal beside Actual, each with its sum.",
+            "Fixed: Round, Area and Pays by now keep the choice made on Edit Customer. Switching to monthly works the monthly amount out from the price.",
+            "Fixed: the map on a customer's page moves when their address or area changes. Customers brought in from a spreadsheet are placed using their area too, so they no longer land in the wrong town.",
+            "Fixed: after changing a customer's round, the area already chosen still shows (it was hidden as None but kept).",
+        ]),
         Release(version: "1.3", date: "November 2026", changes: [
             "Round: only a clean moves where the round carries on from, and never past someone still due. Skipping a customer further down (even the evening before) no longer sends the customers in between to the back.",
             "Round: greyed every-other customers (not due this round) have no Skipped swipe. Leave them; they drop off once the round passes. They can still be cleaned.",

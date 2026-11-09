@@ -8,6 +8,7 @@ enum ImportService {
         var visits = 0
         var diary = 0
         var tips = 0
+        var expenses = 0
         /// Visits left out because their date wasn't a real one.
         var skippedVisits = 0
         var statusCounts: [String: Int] = [:]
@@ -117,6 +118,16 @@ enum ImportService {
             guard let date = RoundCalendar.parseDay(tip.date) else { continue }
             context.insert(Tip(date: date, name: tip.name, amount: Money.decimal(tip.amount)))
             summary.tips += 1
+        }
+
+        // Expenses are only replaced when the file has them, so an older file never wipes them.
+        if includeHistory, let expenses = file.expenses {
+            try context.delete(model: Expense.self)
+            for expense in expenses {
+                guard let date = RoundCalendar.parseDay(expense.date) else { continue }
+                context.insert(Expense(date: date, amount: Money.decimal(expense.amount), category: expense.category, note: expense.note ?? ""))
+                summary.expenses += 1
+            }
         }
 
         try context.save()

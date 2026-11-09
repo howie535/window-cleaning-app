@@ -3,7 +3,7 @@ import SwiftData
 
 enum Persistence {
     static let schema = Schema([
-        Customer.self, Visit.self, PriceChange.self, Crew.self, WorkDay.self, Tip.self, AppSettings.self,
+        Customer.self, Visit.self, PriceChange.self, Crew.self, WorkDay.self, Tip.self, AppSettings.self, Expense.self,
     ])
 
     /// Local-only for now. Once the iCloud capability and container exist (paid developer account),

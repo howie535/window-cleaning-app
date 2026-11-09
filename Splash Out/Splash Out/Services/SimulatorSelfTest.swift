@@ -688,14 +688,39 @@ enum SimulatorSelfTest {
         check("a visit dated in the future is flagged", issues.contains { $0.customer === future })
         check("normal customers aren't flagged", !issues.contains { $0.customer === skipper })
 
-        // price rise: due when no rise for the set time, or no date logged
-        let riser = synthetic("ST riser", price: 15)
+        // price rise: due when no rise for the set time; with no rise logged, counted from the first clean
+        let riser = synthetic("ST riser", price: 15); add(riser, .cleaned, daysAgo: 900)
+        let newish = synthetic("ST newish", price: 15); add(newish, .cleaned, daysAgo: 200)
+        let neverCleaned = synthetic("ST never cleaned", price: 15)
         let recent = synthetic("ST recent", price: 20); recent.priceSince = RoundCalendar.london.date(byAdding: .month, value: -6, to: today)
         let brandNew = synthetic("ST brand new", price: 20); brandNew.priceSince = RoundCalendar.london.date(byAdding: .month, value: -30, to: today)
         let dueNow = stats().risesDue()
-        check("a customer with no price date is due a rise", dueNow.contains { $0 === riser })
+        check("no rise logged: first clean 900 days ago is due", dueNow.contains { $0 === riser })
+        check("no rise logged: first clean 200 days ago isn't due", !dueNow.contains { $0 === newish })
+        check("no rise logged and never cleaned isn't due", !dueNow.contains { $0 === neverCleaned })
         check("a price changed 6 months ago isn't due", !dueNow.contains { $0 === recent })
         check("a price unchanged for 30 months is due", dueNow.contains { $0 === brandNew })
+        check("10% on £20 is £22", PriceRise.risen(20, percent: 0.10) == 22)
+        check("10% on £15 is £16 (exactly 50p goes down)", PriceRise.risen(15, percent: 0.10) == 16)
+        check("10% on £12 is £13 (13.20 rounds down)", PriceRise.risen(12, percent: 0.10) == 13)
+        check("5% on £11 is £12 (11.55 rounds up)", PriceRise.risen(11, percent: 0.05) == 12)
+        check("3% on £12 is £12 (12.36 rounds down)", PriceRise.risen(12, percent: 0.03) == 12)
+        check("5% on £18.50 is £19", PriceRise.risen(Decimal(string: "18.5")!, percent: 0.05) == 19)
+        PriceRise.confirm(riser, percent: 0.10, today: today, context: context)
+        check("confirming a rise sets the new price and date", riser.price == 16 && riser.priceSince == today
+              && (riser.priceChanges ?? []).contains { $0.newPrice == 16 && $0.oldPrice == 15 && $0.reason == .rise })
+        check("a confirmed rise is no longer due", !stats().risesDue().contains { $0 === riser })
+        let monthlyPayer = synthetic("ST monthly", price: DirectDebit.perClean(monthly: 30))
+        monthlyPayer.payMethod = .directDebit; monthlyPayer.monthlyAmount = 30
+        let mp = PriceRise.proposal(for: monthlyPayer, percent: 0.10)
+        check("a monthly payer's rise goes on the monthly amount", mp.newMonthly == 33 && mp.newPrice == DirectDebit.perClean(monthly: 33))
+
+        // expenses are kept in the backup file
+        let expense = Expense(date: today, amount: Decimal(string: "45.67")!, category: "Fuel", note: "ST expense")
+        context.insert(expense)
+        let fileWithExpense = try ExportService.makeFile(from: context)
+        check("expenses are saved in the backup", fileWithExpense.expenses?.contains { $0.category == "Fuel" && $0.amount == 45.67 && $0.note == "ST expense" } == true)
+        context.delete(expense)
 
         // ---- Customers screen: filters and reordering
         let everyone = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))

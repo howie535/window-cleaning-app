@@ -108,6 +108,8 @@ struct CustomerMapView: View {
                     Marker(customer.name, coordinate: coordinate)
                 }
                 .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                // A new position (address changed) starts a new map: the starting view is only read once.
+                .id("\(coordinate.latitude),\(coordinate.longitude)")
                 .allowsHitTesting(false)
                 .frame(height: 170)
                 .clipShape(RoundedRectangle(cornerRadius: 12))

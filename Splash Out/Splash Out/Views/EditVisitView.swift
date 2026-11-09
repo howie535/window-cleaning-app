@@ -9,6 +9,8 @@ struct EditVisitView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(UndoCenter.self) private var undoCenter
 
+    /// Filled from the visit once (see AddEditCustomerView.loaded).
+    @State private var loaded = false
     @State private var date = Date()
     @State private var kind: VisitKind = .cleaned
     @State private var chargedText = ""
@@ -82,6 +84,8 @@ struct EditVisitView: View {
     private func text(_ value: Decimal) -> String { NSDecimalNumber(decimal: value).stringValue }
 
     private func load() {
+        guard !loaded else { return }
+        loaded = true
         date = visit.date
         kind = visit.kind
         chargedText = text(visit.kind == .cleaned ? visit.charged : visit.listPrice)

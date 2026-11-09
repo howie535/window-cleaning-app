@@ -53,13 +53,14 @@ struct TodayView: View {
         let gap = stats.roundLengthWeeks()
         let onRoundList = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.price > 0 }
         let riseMonths = settings.first?.priceRiseDueAfterMonths ?? 24
-        let risesKnown = onRoundList.filter { $0.priceSince != nil && PriceRise.isDue(priceSince: $0.priceSince, today: today, dueAfterMonths: riseMonths, calendar: RoundCalendar.london) }.count
-        let noPriceDate = onRoundList.filter { $0.priceSince == nil }.count
+        let risePercent = settings.first?.priceRisePercent ?? 0.10
+        let risesDue = onRoundList.filter { PriceRise.isDue($0, today: today, dueAfterMonths: riseMonths) }
+        let riseAdds = risesDue.reduce(Decimal(0)) { $0 + PriceRise.proposal(for: $1, percent: risePercent).addsPerRound }
         let notStarted = customers.filter { $0.status == .notStarted }.count
         let everyOther = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.everyOther }.count
         let _ = PerfProbe.end("Stats", perfStart)
         let newVsLost = "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))"
-        let risesDueCount = risesKnown
+        let risesDueCount = risesDue.count
         let _ = VisitLookup.end()
         let showIdeal = { destination = .ideal }
         let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
@@ -95,7 +96,9 @@ struct TodayView: View {
                     card(nil, Tile(title: "New vs lost", value: newVsLost,
                          detail: "this tax year"))
                     card(.priceRise, Tile(title: "Price rises due", value: "\(risesDueCount)",
-                         detail: noPriceDate > 0 ? "\(noPriceDate) with no price date" : "no rise in \(riseMonths / 12) years"))
+                         detail: risesDueCount > 0
+                            ? "+\(risePercent.formatted(.percent.precision(.fractionLength(0...1)))) adds \(pounds(riseAdds)) a round"
+                            : "none due"))
                     card(.skipRate, Tile(title: "Skip rate", value: stats.trailingSkipRate.formatted(.percent.precision(.fractionLength(1))),
                              detail: stats.skipRateLabel))
                 }

@@ -11,6 +11,8 @@ struct RecordPaymentView: View {
 
     @State private var date: Date = .now
     @State private var selected: Set<PersistentIdentifier> = []
+    /// Filled in once, so showing the form again never wipes what has been typed or chosen.
+    @State private var loaded = false
     @State private var amountText = ""
     @State private var amountEdited = false
 
@@ -95,6 +97,8 @@ struct RecordPaymentView: View {
                 }
             }
             .onAppear {
+                guard !loaded else { return }
+                loaded = true
                 selected = Set(unpaid.map(\.persistentModelID))
                 syncAmount()
             }

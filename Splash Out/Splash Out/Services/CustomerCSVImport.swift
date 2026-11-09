@@ -144,13 +144,9 @@ enum CustomerCSVImport {
             imported += 1
             nextSequence += 1
 
-            let addressToFind = address
-            if !addressToFind.isEmpty {
-                Task {
-                    let coordinate = await Geocoding.coordinate(for: addressToFind)
-                    customer.latitude = coordinate?.latitude
-                    customer.longitude = coordinate?.longitude
-                }
+            // Looked up with the area too (MapPositions.query), as everywhere else: the address alone can land in the wrong town.
+            if !address.isEmpty {
+                Task { @MainActor in await MapPositions.find(customer) }
             }
         }
 

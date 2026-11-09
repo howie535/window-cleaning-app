@@ -10,6 +10,8 @@ nonisolated struct RoundFile: Codable, Sendable {
     var customers: [CustomerRecord]
     var diary: [DiaryRecord]
     var tips: [TipRecord]
+    /// Optional so files from before expenses existed still load.
+    var expenses: [ExpenseRecord]? = nil
 
     nonisolated static let currentSchema = 1
 
@@ -91,6 +93,13 @@ nonisolated struct RoundFile: Codable, Sendable {
         var date: String
         var name: String
         var amount: Double
+    }
+
+    struct ExpenseRecord: Codable {
+        var date: String
+        var amount: Double
+        var category: String
+        var note: String?
     }
 
     static func decode(_ data: Data) throws -> RoundFile {

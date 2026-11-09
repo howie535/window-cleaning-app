@@ -16,6 +16,7 @@ enum ExportService {
         let customers = try context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))
         let diary = try context.fetch(FetchDescriptor<WorkDay>(sortBy: [SortDescriptor(\.date)]))
         let tips = try context.fetch(FetchDescriptor<Tip>(sortBy: [SortDescriptor(\.date)]))
+        let expenses = try context.fetch(FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date)]))
 
         var usualWeek: [String: String?] = [:]
         for (index, day) in weekdays.enumerated() {
@@ -96,6 +97,10 @@ enum ExportService {
             },
             tips: tips.map {
                 .init(date: RoundCalendar.dayString($0.date), name: $0.name, amount: Money.double($0.amount))
+            },
+            expenses: expenses.map {
+                .init(date: RoundCalendar.dayString($0.date), amount: Money.double($0.amount), category: $0.category,
+                      note: $0.note.isEmpty ? nil : $0.note)
             }
         )
     }

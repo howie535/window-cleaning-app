@@ -38,6 +38,9 @@ struct AddEditCustomerView: View {
     @State private var isConfirmingOwedCancel = false
     @State private var cancelAnyway = false
     @State private var contactsMessage: String?
+    /// The form is filled from the customer once. Coming back from a picker list (Round, Area, Pays by) shows the
+    /// form again, and filling it again then threw away the choice just made.
+    @State private var loaded = false
 
     private var isEditing: Bool { customer != nil }
 
@@ -56,7 +59,9 @@ struct AddEditCustomerView: View {
     /// Areas in the chosen round (all areas if no round is chosen).
     private var areaOptions: [String] {
         let pool = round.isEmpty ? allCustomers : allCustomers.filter { $0.round == round }
-        return Array(Set(pool.map(\.area).filter { !$0.isEmpty })).sorted()
+        // The area already chosen stays in the list after the round changes; otherwise it showed as None but was
+        // still saved.
+        return Array(Set(pool.map(\.area).filter { !$0.isEmpty } + (area.isEmpty ? [] : [area]))).sorted()
     }
 
     /// Where a new customer goes unless placed by hand: after the last customer in the same round and area
@@ -186,6 +191,16 @@ struct AddEditCustomerView: View {
             }
             .keyboardDoneButton()
             .onAppear(perform: populateFieldsIfEditing)
+            .onChange(of: payMethod) { old, new in
+                // Switching to monthly: work the monthly amount out from the price per clean, so nothing has to be retyped.
+                if new == .directDebit, monthlyAmount == nil, let price = Decimal(string: priceText), price > 0 {
+                    monthlyText = NSDecimalNumber(decimal: DirectDebit.monthly(perClean: price)).stringValue
+                }
+                // Switching away from monthly: keep the price per clean it worked out to.
+                if old == .directDebit, new != .directDebit, let monthly = monthlyAmount {
+                    priceText = NSDecimalNumber(decimal: DirectDebit.perClean(monthly: monthly)).stringValue
+                }
+            }
             .alert("They still owe money", isPresented: $isConfirmingOwedCancel) {
                 Button("Cancel anyway", role: .destructive) { cancelAnyway = true; save() }
                 Button("Go back", role: .cancel) {}
@@ -217,6 +232,8 @@ struct AddEditCustomerView: View {
     }
 
     private func populateFieldsIfEditing() {
+        guard !loaded else { return }
+        loaded = true
         if customer == nil, let old = replacing {
             address = old.address
             priceText = NSDecimalNumber(decimal: old.price).stringValue
@@ -262,7 +279,8 @@ struct AddEditCustomerView: View {
         let altText = altPriceText.trimmingCharacters(in: .whitespaces)
         let altPrice: Decimal? = altText.isEmpty ? nil : Decimal(string: altText)
         let altLabel = altPriceLabel.trimmingCharacters(in: .whitespaces)
-        let addressChanged = address != customer?.address
+        // The map position comes from the address and area, so either changing means finding it again.
+        let addressChanged = address != customer?.address || area != customer?.area
         let target: Customer
 
         if let customer {
@@ -313,12 +331,14 @@ struct AddEditCustomerView: View {
         }
 
         if addressChanged {
-            Task {
-                target.latitude = nil
-                target.longitude = nil
-                await MapPositions.find(target)
-            }
+            // Cleared straight away so the old pin never shows against the new address; the customer page's map
+            // looks the new one up as soon as it shows.
+            target.latitude = nil
+            target.longitude = nil
+            MapPositions.forgetFailure(target)
+            Task { await MapPositions.find(target) }
         }
+        try? modelContext.save()
 
         if customer == nil, saveToContacts {
             // The customer is already saved; Contacts is a bonus, so a problem there only gets a message.

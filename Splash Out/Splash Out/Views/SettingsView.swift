@@ -463,11 +463,12 @@ private struct RoundSettingsSections: View {
         }
 
         Section {
+            Stepper("Rise: \(percentBinding(\.priceRisePercent).wrappedValue)%", value: percentBinding(\.priceRisePercent), in: 1...25)
             Stepper("Rise due after: \(settings.priceRiseDueAfterMonths) months", value: $settings.priceRiseDueAfterMonths, in: 6...60, step: 6)
         } header: {
             Text("Price rise")
         } footer: {
-            Text("Customers whose price hasn't gone up for this long show as due on Stats and Price Rise.")
+            Text("A price that hasn't gone up for this long (or since the first clean, if no rise is logged) shows as due on Stats and Price Rise, with the new price to the nearest pound.")
         }
     }
 }

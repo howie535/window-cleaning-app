@@ -5,12 +5,12 @@ import SwiftData
 extension RoundStats {
     // MARK: Price rise
 
-    /// Active or leaving customers whose price hasn't changed for the "due after" period.
+    /// Active or leaving customers whose price hasn't changed for the "due after" period (counted from their first
+    /// clean when no rise is logged).
     func risesDue() -> [Customer] {
         customers.filter {
-            ($0.status == .active || $0.status == .leaving) && $0.price > 0
-                && PriceRise.isDue(priceSince: $0.priceSince, today: today,
-                                   dueAfterMonths: settings.priceRiseDueAfterMonths, calendar: RoundCalendar.london)
+            ($0.status == .active || $0.status == .leaving)
+                && PriceRise.isDue($0, today: today, dueAfterMonths: settings.priceRiseDueAfterMonths)
         }
     }
 

@@ -204,6 +204,8 @@ private struct DiaryDayEditor: View {
     @State private var dayOff = false
     @State private var crewName = ""
     @State private var note = ""
+    /// Filled in once, so showing the form again never wipes what has been typed or chosen.
+    @State private var loaded = false
 
     private static let titleFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -273,6 +275,8 @@ private struct DiaryDayEditor: View {
     }
 
     private func prefill() {
+        guard !loaded else { return }
+        loaded = true
         note = entry?.note ?? ""
         if let entry, entry.dayOff {
             dayOff = true

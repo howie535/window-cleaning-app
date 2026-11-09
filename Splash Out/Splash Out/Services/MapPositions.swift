@@ -24,6 +24,13 @@ enum MapPositions {
         return true
     }
 
+    /// The address has changed: a past failure to find the old one shouldn't hold up finding the new one.
+    static func forgetFailure(_ customer: Customer, defaults: UserDefaults = .standard) {
+        var failed = defaults.dictionary(forKey: failedKey) as? [String: Double] ?? [:]
+        guard failed.removeValue(forKey: customer.id.uuidString) != nil else { return }
+        defaults.set(failed, forKey: failedKey)
+    }
+
     /// Positions found but not yet saved. Saving each one as it came made every screen rebuild every couple of
     /// seconds (a hitch at the end of scrolling), so they're saved together instead.
     private static var found: [PersistentIdentifier: CLLocationCoordinate2D] = [:]

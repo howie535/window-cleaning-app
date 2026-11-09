@@ -79,4 +79,12 @@ enum DirectDebit {
         NSDecimalRound(&pence, &exact, 2, .plain)
         return pence
     }
+
+    /// The other way round: the monthly amount that works out at `perClean` a clean, to the penny.
+    static func monthly(perClean: Decimal) -> Decimal {
+        var exact = perClean * 52 / (12 * weeksBetweenCleans)
+        var pence = Decimal()
+        NSDecimalRound(&pence, &exact, 2, .plain)
+        return pence
+    }
 }
