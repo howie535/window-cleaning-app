@@ -93,6 +93,10 @@ Replace the existing `frequencyWeeks` and `isDue` logic with sequence plus every
 
 `date`, `name`, `amount`. Tips are never counted as income anywhere.
 
+### Expense
+
+`date`, `amount`, `category`, `note`. Kept one by one (detail for HMRC if asked: CSV per tax year) and saved in backups as `expenses` (optional, so older files still load; a file without it leaves existing expenses alone). Totals by month and category on the Expenses screen.
+
 ## 3. Logging the round (the screens used every day)
 
 These replace typing dates into the spreadsheet, so they must be fast with wet hands.
@@ -117,6 +121,8 @@ Work for any period = Σ `charged` over visits with `kind == cleaned` in that pe
 ### 4.2 Tax year
 
 A date belongs to tax year Y–(Y+1) when it falls on or after 6 April Y and before 6 April Y+1. Every total can be shown for any tax year. Months run April (from the 6th), May … March, then April (to the 5th).
+
+The Tax Year screen leads with **Total sales** (work value of every clean in the year, paid or not), **Expenses** (the year's total) and **Profit** (sales less expenses).
 
 ### 4.3 Working days and weekly target
 
@@ -174,11 +180,9 @@ The app records skips explicitly, so this is more reliable than the spreadsheet'
 ### 4.10 Price rise
 
 - **New price** = round(price × (1 + percent)) to the nearest pound, with exactly 50p going down. £15 → £16, £12 → £13, £20 → £22.
-- **Takes effect on** the rise date. If the customer's priceSince is less than 12 months before the rise date, it takes effect 12 months after priceSince instead.
-- **Doesn't apply** if priceSince is on or after the rise date.
-- **When it applies,** create a PriceChange and update price. Don't change past visits.
-- **Preview screen:** every active customer with their current price, new price, effective date and pay method, plus the uplift per cycle. Every-other customers count at half.
-- **Rise due** = active or leaving, price > 0, and priceSince blank or more than 24 months ago.
+- **Percent** is set in Settings (1% to 25%, default 10%).
+- **Rise due** = active or leaving, price > 0, and no rise for the "due after" months (default 24), counted from priceSince or, with none logged, from the first clean. Never cleaned and no rise logged: not due.
+- **Price Rise screen:** each due customer with old → new price (monthly payers: old → new monthly amount, price per clean worked out from it; a second price rises too) and a Done button. Done (after a confirmation) creates a PriceChange (rise), updates the price and sets priceSince to today. Past visits don't change. The uplift a round is shown, every-other customers at half; the Stats card shows the count and the uplift.
 
 ### 4.11 Checks
 
