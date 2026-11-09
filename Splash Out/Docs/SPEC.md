@@ -179,7 +179,7 @@ The app records skips explicitly, so this is more reliable than the spreadsheet'
 
 ### 4.10 Price rise
 
-- **New price** = round(price × (1 + percent)) to the nearest pound, with exactly 50p going down. £15 → £16, £12 → £13, £20 → £22.
+- **New price** = round(price × (1 + percent)) to the nearest pound with standard rounding: 50p and above goes up, below 50p goes down. £15 → £17 (16.50), £12 → £13 (13.20), £20 → £22. (Changed from 50p-down on 9 Nov 2026.)
 - **Percent** is set in Settings (1% to 25%, default 10%).
 - **Rise due** = active or leaving, price > 0, and no rise for the "due after" months (default 24), counted from priceSince or, with none logged, from the first clean. Never cleaned and no rise logged: not due.
 - **Price Rise screen:** each due customer with old → new price (monthly payers: old → new monthly amount, price per clean worked out from it; a second price rises too) and a Done button. Done (after a confirmation) creates a PriceChange (rise), updates the price and sets priceSince to today. Past visits don't change. The uplift a round is shown, every-other customers at half; the Stats card shows the count and the uplift.
@@ -236,7 +236,7 @@ All dates display as d-MMM (6-Oct), or d-MMM-yy where the year matters. All mone
     "overbook": 0.1,
     "next_up_hide_weeks": 3,
     "next_up_hide_weeks_every_other": 8,
-    "price_rise": {"date": null, "percent": 0.1, "rounding": "nearest_pound_half_down", "delay_months": 12, "due_after_months": 24},
+    "price_rise": {"date": null, "percent": 0.1, "rounding": "nearest_pound_half_up", "delay_months": 12, "due_after_months": 24},
     "records_start": "2026-04-06"
   },
   "customers": [{

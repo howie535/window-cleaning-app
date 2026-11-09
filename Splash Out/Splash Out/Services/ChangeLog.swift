@@ -12,7 +12,7 @@ enum ChangeLog {
 
     static let releases: [Release] = [
         Release(version: "1.4", date: "November 2026", changes: [
-            "Price Rise: customers due a rise show their new price (the percentage set in Settings, to the nearest pound, exactly 50p going down). Tap Done once it's in place and the price changes, logged as today. With no rise logged, it's counted from their first clean. The Stats card shows what the rises add a round.",
+            "Price Rise: customers due a rise show their new price (the percentage set in Settings, to the nearest pound: 50p and above goes up, below 50p goes down). Tap Done once it's in place and the price changes, logged as today. With no rise logged, it's counted from their first clean. The Stats card shows what the rises add a round.",
             "Expenses (More): add, categorise and total expenses by month. The tax year total goes on the Tax Year page, and every expense can be shared as a CSV for HMRC. Expenses are kept in backups.",
             "Tax Year: Total sales (every clean, paid or not), Expenses and Profit at the top.",
             "Targets: current figures, then Ideal beside Actual, each with its sum.",

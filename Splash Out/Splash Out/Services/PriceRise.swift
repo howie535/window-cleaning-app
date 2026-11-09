@@ -27,13 +27,14 @@ enum PriceRise {
         return due <= today
     }
 
-    /// `amount` plus `percent` (0.10 = 10%), to the nearest pound, exactly 50p going down (SPEC 4.10): £15 → £16.
+    /// `amount` plus `percent` (0.10 = 10%), to the nearest pound with standard rounding: 50p and above goes up,
+    /// below 50p goes down. £15 → £16.50 → £17; £12 → £13.20 → £13.
     static func risen(_ amount: Decimal, percent: Double) -> Decimal {
         let rate = Decimal(string: String(format: "%.4f", percent)) ?? 0
         var exact = amount * (1 + rate)
-        var down = Decimal()
-        NSDecimalRound(&down, &exact, 0, .down)
-        return exact - down > Decimal(string: "0.5")! ? down + 1 : down
+        var whole = Decimal()
+        NSDecimalRound(&whole, &exact, 0, .plain)
+        return whole
     }
 
     struct Proposal {

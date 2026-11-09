@@ -212,7 +212,7 @@ def read_settings(wb):
         next_up_hide_weeks=int(st.cell(8, 2).value or 3),
         next_up_hide_weeks_every_other=int(st.cell(9, 2).value or 8),
         price_rise=dict(date=rise.isoformat() if rise else None, percent=float(st.cell(12, 2).value or 0.10),
-                        rounding="nearest_pound_half_down", delay_months=int(st.cell(14, 2).value or 12),
+                        rounding="nearest_pound_half_up", delay_months=int(st.cell(14, 2).value or 12),
                         due_after_months=int(st.cell(15, 2).value or 24)),
         records_start=(as_date(st.cell(24, 2).value) or dt.date(2026, 4, 6)).isoformat(),
     )

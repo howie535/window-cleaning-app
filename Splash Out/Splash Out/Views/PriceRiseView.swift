@@ -77,7 +77,7 @@ struct PriceRiseView: View {
         .alert("Price rises", isPresented: $showingHelp) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("A rise is due once a price hasn't gone up for the months set in Settings. With no rise logged, it's counted from their first clean. The new price is \(percentText) on top, to the nearest pound (exactly 50p goes down). Monthly payers get the rise on their monthly amount. Tap Done once you've told them and the new price has started. Percentage and months are in Settings.")
+            Text("A rise is due once a price hasn't gone up for the months set in Settings. With no rise logged, it's counted from their first clean. The new price is \(percentText) on top, to the nearest pound (50p and above goes up, below 50p goes down). Monthly payers get the rise on their monthly amount. Tap Done once you've told them and the new price has started. Percentage and months are in Settings.")
         }
     }
 

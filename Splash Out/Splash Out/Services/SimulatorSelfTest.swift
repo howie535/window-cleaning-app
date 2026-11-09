@@ -701,14 +701,14 @@ enum SimulatorSelfTest {
         check("a price changed 6 months ago isn't due", !dueNow.contains { $0 === recent })
         check("a price unchanged for 30 months is due", dueNow.contains { $0 === brandNew })
         check("10% on £20 is £22", PriceRise.risen(20, percent: 0.10) == 22)
-        check("10% on £15 is £16 (exactly 50p goes down)", PriceRise.risen(15, percent: 0.10) == 16)
+        check("10% on £15 is £17 (50p goes up)", PriceRise.risen(15, percent: 0.10) == 17)
         check("10% on £12 is £13 (13.20 rounds down)", PriceRise.risen(12, percent: 0.10) == 13)
         check("5% on £11 is £12 (11.55 rounds up)", PriceRise.risen(11, percent: 0.05) == 12)
         check("3% on £12 is £12 (12.36 rounds down)", PriceRise.risen(12, percent: 0.03) == 12)
         check("5% on £18.50 is £19", PriceRise.risen(Decimal(string: "18.5")!, percent: 0.05) == 19)
         PriceRise.confirm(riser, percent: 0.10, today: today, context: context)
-        check("confirming a rise sets the new price and date", riser.price == 16 && riser.priceSince == today
-              && (riser.priceChanges ?? []).contains { $0.newPrice == 16 && $0.oldPrice == 15 && $0.reason == .rise })
+        check("confirming a rise sets the new price and date", riser.price == 17 && riser.priceSince == today
+              && (riser.priceChanges ?? []).contains { $0.newPrice == 17 && $0.oldPrice == 15 && $0.reason == .rise })
         check("a confirmed rise is no longer due", !stats().risesDue().contains { $0 === riser })
         let monthlyPayer = synthetic("ST monthly", price: DirectDebit.perClean(monthly: 30))
         monthlyPayer.payMethod = .directDebit; monthlyPayer.monthlyAmount = 30

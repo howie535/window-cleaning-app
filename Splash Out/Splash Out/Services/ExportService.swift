@@ -36,7 +36,7 @@ enum ExportService {
             priceRise: .init(
                 date: settings.priceRiseDate.map(RoundCalendar.dayString),
                 percent: settings.priceRisePercent,
-                rounding: "nearest_pound_half_down",
+                rounding: "nearest_pound_half_up",
                 delayMonths: settings.priceRiseDelayMonths,
                 dueAfterMonths: settings.priceRiseDueAfterMonths
             ),
