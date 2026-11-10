@@ -79,7 +79,13 @@ enum ImportService {
             customer.pendingPriceToldAt = record.pendingPriceToldAt.flatMap(RoundCalendar.parseDay)
             customer.monthlyAmount = record.monthlyAmount.map(Money.decimal)
             customer.nextVisitNote = record.nextVisitNote
+            customer.historyFrom = record.historyFrom.flatMap(RoundCalendar.parseDay)
             context.insert(customer)
+            for change in record.priceChanges ?? [] {
+                guard let date = RoundCalendar.parseDay(change.date) else { continue }
+                context.insert(PriceChange(date: date, oldPrice: Money.decimal(change.oldPrice), newPrice: Money.decimal(change.newPrice),
+                                           reason: PriceChangeReason(rawValue: change.reason) ?? .rise, customer: customer))
+            }
             summary.customers += 1
             summary.statusCounts[customer.statusRaw, default: 0] += 1
 

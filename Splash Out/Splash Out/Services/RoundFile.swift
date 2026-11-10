@@ -68,6 +68,16 @@ nonisolated struct RoundFile: Codable, Sendable {
         var pendingPriceToldAt: String? = nil
         var monthlyAmount: Double? = nil
         var nextVisitNote: String? = nil
+        /// Optional so older files still load.
+        var historyFrom: String? = nil
+        var priceChanges: [PriceChangeRecord]? = nil
+    }
+
+    struct PriceChangeRecord: Codable {
+        var date: String
+        var oldPrice: Double
+        var newPrice: Double
+        var reason: String
     }
 
     struct VisitRecord: Codable {

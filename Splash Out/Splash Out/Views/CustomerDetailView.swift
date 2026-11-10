@@ -98,7 +98,8 @@ struct CustomerDetailView: View {
                 LabeledContent("Address", value: customer.address)
                 LabeledContent("Phone", value: customer.phone)
                 LabeledContent("Price", value: customer.price, format: .currency(code: "GBP"))
-                LabeledContent("Last price rise", value: customer.priceSince.map { RoundCalendar.shortWithYear($0) } ?? "No date logged")
+                LabeledContent("Last price rise", value: customer.priceSince.map { RoundCalendar.shortWithYear($0) }
+                               ?? PriceRise.countedFrom(customer).map { "None since \(RoundCalendar.shortWithYear($0))" } ?? "No date logged")
                 if customer.payMethod == .directDebit, let monthly = customer.monthlyAmount {
                     LabeledContent("Direct Debit", value: "\(monthly.formatted(.currency(code: "GBP"))) a month")
                 }
@@ -186,7 +187,7 @@ struct CustomerDetailView: View {
                         HStack {
                             Text(change.date, format: .dateTime.day().month().year())
                             Spacer()
-                            Text("\(change.oldPrice.formatted(.currency(code: "GBP"))) to \(change.newPrice.formatted(.currency(code: "GBP")))")
+                            Text(change.oldPrice > 0 ? "\(change.oldPrice.pounds) to \(change.newPrice.pounds)" : "to \(change.newPrice.pounds)")
                                 .foregroundStyle(.secondary)
                         }
                     }

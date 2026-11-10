@@ -77,7 +77,7 @@ struct PriceRiseView: View {
         .alert("Price rises", isPresented: $showingHelp) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("A rise is due once a price hasn't gone up for the months set in Settings. With no rise logged, it's counted from their first clean. The new price is \(percentText) on top, to the nearest pound (50p and above goes up, below 50p goes down). Monthly payers get the rise on their monthly amount. Tap Done once you've told them and the new price has started. Percentage and months are in Settings.")
+            Text("A rise is due once a price hasn't gone up for the months set in Settings. With no rise logged, it's counted from their first clean, on the old worksheets if their price history has been added (Settings). The new price is \(percentText) on top, to the nearest pound (50p and above goes up, below 50p goes down). Monthly payers get the rise on their monthly amount. Tap Done once you've told them and the new price has started. Percentage and months are in Settings.")
         }
     }
 
@@ -92,7 +92,7 @@ struct PriceRiseView: View {
         HStack {
             link(customer) {
                 Text(customer.priceSince != nil ? "Last rise \(from.map(RoundCalendar.shortWithYear) ?? "")"
-                     : "No rise logged · first clean \(from.map(RoundCalendar.shortWithYear) ?? "")")
+                     : "No rise since \(from.map(RoundCalendar.shortWithYear) ?? "")")
                     .font(.caption).foregroundStyle(.secondary)
             } trailing: {
                 VStack(alignment: .trailing, spacing: 2) {

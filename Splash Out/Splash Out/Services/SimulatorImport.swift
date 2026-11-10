@@ -46,6 +46,36 @@ enum SimulatorImport {
                 print("PLAN OK")
             }
 
+            // `-PriceHistoryFile <name>`: adds price history (as Settings > Add price history does) and writes what
+            // it did, plus the rises due before and after, to `<name>.result.txt`.
+            if let historyPath = value(after: "-PriceHistoryFile") {
+                let today = RoundCalendar.startOfDay()
+                let months = (try context.fetch(FetchDescriptor<AppSettings>())).first?.priceRiseDueAfterMonths ?? 24
+                let customers = try context.fetch(FetchDescriptor<Customer>())
+                func dueCount() -> String {
+                    ["2026-11-10", "2027-04-06", "2027-07-01", "2027-10-01", "2028-04-06"].map { text in
+                        let day = RoundCalendar.parseDay(text)!
+                        let n = customers.filter { ($0.status == .active || $0.status == .leaving)
+                            && PriceRise.isDue($0, today: day, dueAfterMonths: months) }.count
+                        return "\(text): \(n)"
+                    }.joined(separator: ", ")
+                }
+                let before = dueCount()
+                let file = try PriceHistoryImport.decode(Data(contentsOf: URL(fileURLWithPath: historyPath)))
+                let plan = PriceHistoryImport.plan(file, customers: customers, today: today)
+                let done = try PriceHistoryImport.apply(plan, today: today, context: context, backupDirectory: nil)
+                let again = PriceHistoryImport.plan(file, customers: customers, today: today)
+                let text = """
+                PRICE HISTORY OK: matched \(done.matched), not matched \(done.notMatched.count) \(done.notMatched)
+                \(done.summary)
+                Rises due before: \(before), after: \(dueCount())
+                Second run would add: \(again.risesToAdd) rises, \(again.customersGettingHistory) history
+                Different price on the worksheet: \(done.priceDiffers.joined(separator: "; "))
+                """
+                try text.write(toFile: historyPath + ".result.txt", atomically: true, encoding: .utf8)
+                print(text)
+            }
+
             if let exportPath = value(after: "-ExportFile") {
                 try ExportService.data(from: context).write(to: URL(fileURLWithPath: exportPath), options: .atomic)
                 print("EXPORT OK")

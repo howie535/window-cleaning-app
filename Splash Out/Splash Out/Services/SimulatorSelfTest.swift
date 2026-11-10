@@ -715,6 +715,42 @@ enum SimulatorSelfTest {
         let mp = PriceRise.proposal(for: monthlyPayer, percent: 0.10)
         check("a monthly payer's rise goes on the monthly amount", mp.newMonthly == 33 && mp.newPrice == DirectDebit.perClean(monthly: 33))
 
+        // price history from the old worksheets: a merge that only adds history
+        let oldTimer = synthetic("ST old timer", price: 15); add(oldTimer, .cleaned, daysAgo: 100)
+        let worksheetRiser = synthetic("ST worksheet riser", price: 14); add(worksheetRiser, .cleaned, daysAgo: 100)
+        check("before history: first clean 100 days ago isn't due", !stats().risesDue().contains { $0 === oldTimer })
+        func day(_ daysAgo: Int) -> String { RoundCalendar.dayString(RoundCalendar.london.date(byAdding: .day, value: -daysAgo, to: today)!) }
+        let historyJSON = """
+        {"schema": 1, "worksheets": ["2025-6"], "customers": [
+          {"id": "\(oldTimer.id.uuidString)", "round": "", "name": "ST old timer", "address": "", "first_seen": "\(day(900))", "changes": []},
+          {"id": "00000000-0000-0000-0000-000000000000", "round": "", "name": "ST worksheet riser", "address": "", "first_seen": "\(day(800))",
+           "changes": [{"date": "\(day(400))", "old": 12, "new": 14, "source": "comment"}, {"date": "\(day(-30))", "old": 14, "new": 16, "source": "comment"}]},
+          {"id": "00000000-0000-0000-0000-000000000001", "round": "", "name": "ST nobody", "address": "", "first_seen": null, "changes": []}
+        ]}
+        """
+        let visitsBefore = (oldTimer.visits ?? []).count + (worksheetRiser.visits ?? []).count
+        if let file = try? PriceHistoryImport.decode(Data(historyJSON.utf8)) {
+            let all = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
+            let plan = PriceHistoryImport.plan(file, customers: all, today: today)
+            check("price history matches by ID and by name", plan.matched == 2 && plan.notMatched == [" · ST nobody"])
+            check("price history leaves out a rise dated in the future", plan.risesToAdd == 1)
+            _ = try? PriceHistoryImport.apply(plan, today: today, context: context, backupDirectory: nil)
+            check("with worksheet history, no rise since 900 days ago is due", stats().risesDue().contains { $0 === oldTimer })
+            check("a worksheet rise becomes the last rise", worksheetRiser.priceSince.map { RoundCalendar.dayString($0) } == day(400)
+                  && !stats().risesDue().contains { $0 === worksheetRiser })
+            check("price history never changes a price or a visit", oldTimer.price == 15 && worksheetRiser.price == 14
+                  && (oldTimer.visits ?? []).count + (worksheetRiser.visits ?? []).count == visitsBefore)
+            let again = PriceHistoryImport.plan(file, customers: all, today: today)
+            check("adding the same price history twice adds nothing", again.risesToAdd == 0 && again.customersGettingHistory == 0)
+            if let record = try? RoundFile.decode(ExportService.data(from: context)).customers.first(where: { $0.name == "ST worksheet riser" }) {
+                check("backups keep price history", record.historyFrom == day(800) && record.priceChanges?.count == 1)
+            } else {
+                check("backups keep price history", false)
+            }
+        } else {
+            check("price history file decodes", false)
+        }
+
         // expenses are kept in the backup file
         let expense = Expense(date: today, amount: Decimal(string: "45.67")!, category: "Fuel", note: "ST expense")
         context.insert(expense)

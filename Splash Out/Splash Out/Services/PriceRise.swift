@@ -12,9 +12,12 @@ enum PriceRise {
         return due <= today
     }
 
-    /// When the current price started: the last rise logged, otherwise the first clean. nil = never cleaned.
+    /// When the current price started: the last rise logged, otherwise the first clean (on the old worksheets if
+    /// their history has been added, else in the app). nil = never cleaned.
     static func countedFrom(_ customer: Customer) -> Date? {
-        customer.priceSince ?? customer.allVisits.filter { $0.kind == .cleaned }.map(\.date).min()
+        if let since = customer.priceSince { return since }
+        let firstInApp = customer.allVisits.filter { $0.kind == .cleaned }.map(\.date).min()
+        return [customer.historyFrom, firstInApp].compactMap { $0 }.min()
     }
 
     /// When the next rise is due (nil = never cleaned and no rise logged, so not due).

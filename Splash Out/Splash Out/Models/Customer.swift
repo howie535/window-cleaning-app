@@ -17,6 +17,9 @@ final class Customer {
     var phone: String = ""
     var price: Decimal = 0
     var priceSince: Date?
+    /// The first clean on the old yearly worksheets (Settings > Add price history). With no rise logged, a price
+    /// rise is counted from here rather than from the first clean in the app.
+    var historyFrom: Date?
     /// A price rise that's been set but hasn't started yet: the new price and the day it starts.
     var pendingPrice: Decimal?
     var pendingPriceFrom: Date?

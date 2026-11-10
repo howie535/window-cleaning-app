@@ -81,7 +81,12 @@ enum ExportService {
                 pendingPriceFrom: customer.pendingPriceFrom.map(RoundCalendar.dayString),
                 pendingPriceToldAt: customer.pendingPriceToldAt.map(RoundCalendar.dayString),
                 monthlyAmount: customer.monthlyAmount.map(Money.double),
-                nextVisitNote: customer.nextVisitNote
+                nextVisitNote: customer.nextVisitNote,
+                historyFrom: customer.historyFrom.map(RoundCalendar.dayString),
+                priceChanges: (customer.priceChanges ?? []).sorted { $0.date < $1.date }.map {
+                    .init(date: RoundCalendar.dayString($0.date), oldPrice: Money.double($0.oldPrice),
+                          newPrice: Money.double($0.newPrice), reason: $0.reasonRaw)
+                }
             )
         }
 
