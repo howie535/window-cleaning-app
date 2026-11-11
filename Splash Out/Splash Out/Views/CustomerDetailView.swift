@@ -182,7 +182,7 @@ struct CustomerDetailView: View {
             }
 
             if !sortedPriceChanges.isEmpty {
-                Section("Price history") {
+                Section {
                     ForEach(sortedPriceChanges) { change in
                         HStack {
                             Text(change.date, format: .dateTime.day().month().year())
@@ -191,6 +191,14 @@ struct CustomerDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .onDelete { offsets in
+                        let changes = sortedPriceChanges
+                        for index in offsets { PriceHistoryEditing.delete(changes[index], from: customer, context: modelContext) }
+                    }
+                } header: {
+                    Text("Price history")
+                } footer: {
+                    Text("Swipe left to delete one entered by mistake. It doesn't change the price.")
                 }
             }
 

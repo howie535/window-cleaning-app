@@ -11,6 +11,10 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.9", date: "November 2026", changes: [
+            "Price history on a customer's page: swipe left to delete an entry made by mistake. The price stays as it is.",
+            "Changing a price more than once in a day now keeps one entry for that day, and changing it back removes it.",
+        ]),
         Release(version: "1.8", date: "November 2026", changes: [
             "Charged per house and Houses per workday show one bar a day on the 1M and 3M ranges, so a weak day stands out. Longer ranges stay weekly.",
             "Under the chart, the days in the range: houses and £ a house, orange when below the 12-month average. Tap a day to see who was cleaned and what each was charged.",

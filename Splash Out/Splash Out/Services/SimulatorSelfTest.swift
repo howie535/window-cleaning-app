@@ -1212,6 +1212,27 @@ enum SimulatorSelfTest {
         check("no money owed or work left", RoundMetrics.moneyOwed(after).cleans == 0 && RoundMetrics.totals(for: after, in: TaxYear.range(startYear: 2026)).work == 0)
         check("settings and crews are kept", settingsLeft == 1 && crewsLeft > 0)
 
+        // Price history edited by hand: one line a day however many times Edit is saved, and swipe to delete.
+        do {
+            let editor = synthetic("ST price editor", price: 20)
+            let earlier = RoundCalendar.london.date(byAdding: .day, value: -200, to: today)!
+            context.insert(PriceChange(date: earlier, oldPrice: 18, newPrice: 20, reason: .rise, customer: editor))
+            editor.priceSince = earlier
+            func edit(to new: Decimal) { PriceHistoryEditing.record(editor, from: editor.price, to: new, context: context); editor.price = new }
+            edit(to: 22); edit(to: 23); edit(to: 23)
+            let todays = (editor.priceChanges ?? []).filter { RoundCalendar.london.isDateInToday($0.date) }
+            check("editing the price twice in a day leaves one entry, 20 to 23", todays.count == 1 && todays.first?.oldPrice == 20 && todays.first?.newPrice == 23, "\(todays.map { "\($0.oldPrice)>\($0.newPrice)" })")
+            edit(to: 20)
+            check("putting the price back the same day removes the entry", (editor.priceChanges ?? []).filter { !$0.isDeleted }.count == 1 && editor.priceSince.map { RoundCalendar.london.isDate($0, inSameDayAs: earlier) } == true)
+            edit(to: 21)
+            if let last = (editor.priceChanges ?? []).first(where: { RoundCalendar.london.isDateInToday($0.date) }) {
+                PriceHistoryEditing.delete(last, from: editor, context: context)
+            }
+            check("deleting an entry keeps the price and moves last rise back", editor.price == 21 && (editor.priceChanges ?? []).filter { !$0.isDeleted }.count == 1 && editor.priceSince == nil,
+                  "\(editor.price) \(String(describing: editor.priceSince))")
+            context.delete(editor)
+        }
+
         lines.append(failures == 0 ? "SELFTEST: ALL \(lines.count) CHECKS PASSED" : "SELFTEST: \(failures) FAILED")
         return lines.joined(separator: "\n")
     }

@@ -285,8 +285,7 @@ struct AddEditCustomerView: View {
 
         if let customer {
             if price != customer.price {
-                modelContext.insert(PriceChange(date: .now, oldPrice: customer.price, newPrice: price, reason: price > customer.price ? .rise : .correction, customer: customer))
-                customer.priceSince = .now
+                PriceHistoryEditing.record(customer, from: customer.price, to: price, context: modelContext)
             }
             customer.name = name
             customer.address = address
