@@ -12,7 +12,7 @@ enum ChangeLog {
 
     static let releases: [Release] = [
         Release(version: "1.7", date: "November 2026", changes: [
-            "Every clean from the 2025-6 worksheet is now in the app (2,760 cleans, £44,878 charged, £44,809 paid), with skips and off-cycle visits, added once on first open after a backup. Stats, Weekly and Tax Year go back to 6 April 2025.",
+            "Every clean from the 2025-6 worksheet is now in the app (2,760 cleans, £44,878, all paid), with skips and off-cycle visits, added once on first open after a backup. Stats, Weekly and Tax Year go back to 6 April 2025.",
             "Customers who stopped during 2025-6 have their cleans too, and two more were added as Cancelled (separate properties of customers already here).",
             "New customers this tax year counts properly now that last year's history is here.",
             "The Round and Stats pages read only the visits they need (the last 12 to 13 months, plus anything unpaid) so they stay quick as the history grows.",

@@ -282,8 +282,10 @@ def worksheet_visits(row):
                             note=sk["note"], date_estimated=True))
         run = []
         list_price = row["price"] or v["paid"] or 0
+        # Unpaid on the worksheet (P = £0) counts as paid at the list price: those were all settled (Howie, 11 Nov 2026).
+        charged = v["paid"] if v["paid"] > 0 else list_price
         out.append(dict(date=v["date"].isoformat(), kind="cleaned", list_price=list_price,
-                        charged=v["paid"] if v["paid"] > 0 else list_price, paid=v["paid"], note=v["note"]))
+                        charged=charged, paid=charged, note=v["note"]))
         last = v["date"]
     return [x for x in out if dt.date.fromisoformat(x["date"]) < RECORDS_START]
 
@@ -399,7 +401,7 @@ def main():
         n, ch, pd = by_month[m]
         lines.append(f"  {m}: {n} cleans, {pounds(ch)} / {pounds(pd)}")
     tot = [sum(a[i] for a in by_month.values()) for i in range(3)]
-    unpaid = [(vs.get("id") or vs["name"], v) for vs in visit_sets for v in vs["visits"] if v["kind"] == "cleaned" and v["paid"] == 0]
+    unpaid = [(vs.get("id") or vs["name"], v) for vs in visit_sets for v in vs["visits"] if v["kind"] == "cleaned" and v["paid"] < v["charged"]]
     lines.append(f"  Total: {tot[0]} cleans, {pounds(tot[1])} charged, {pounds(tot[2])} paid; "
                  f"{sum(1 for vs in visit_sets for v in vs['visits'] if v['kind'] != 'cleaned')} skips and off-cycle visits")
     names = {c["id"]: c["name"] for c in reference}
