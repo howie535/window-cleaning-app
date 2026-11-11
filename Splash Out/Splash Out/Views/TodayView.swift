@@ -35,7 +35,7 @@ struct TodayView: View {
     private var content: some View {
         let perfStart = PerfProbe.now()
         let today = clock.today
-        let _ = VisitLookup.begin(visits)
+        let _ = VisitLookup.begin(VisitIndex.statsWindow(visits, today: today))
         let stats = RoundStats(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let week = stats.thisWeek
         let owed = RoundMetrics.moneyOwed(customers)

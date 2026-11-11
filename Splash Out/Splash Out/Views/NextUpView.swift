@@ -4,7 +4,9 @@ import SwiftData
 /// The working screen: who's next, day by day (Docs/SPEC.md sections 3 and 4.6).
 struct NextUpView: View {
     @Query private var customers: [Customer]
-    @Query private var visits: [Visit]
+    /// The last 12 months only (see VisitIndex.roundWindow): after logging a clean the round fetches again, and a
+    /// year of visits is much quicker to fetch than every visit back to the 2025-6 worksheet.
+    @Query(filter: VisitIndex.roundWindowAtLaunch) private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]

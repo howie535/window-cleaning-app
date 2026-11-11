@@ -562,6 +562,39 @@ enum SimulatorSelfTest {
             }
             lines.append("PERF export \(ms(tExport))ms, clusters \(ms(tClusters))ms (x\(everyone.count) rows = \(ms(tClusters) * everyone.count)ms), cold stats \(ms(tColdStats))ms vs indexed \(ms(tIndexedStats))ms")
             lines.append("PERF plan first \(ms(tCold))ms then \(ms(tPlan))ms, stats \(ms(tStats))ms, owed \(ms(tOwed))ms (\(everyone.count) customers)")
+
+            // The Stats page reads a window of visits: every figure on it must match the same figure from all visits.
+            let windowed = VisitIndex.statsWindow(coldVisits2, today: today)
+            func cards(_ visits: [Visit]) -> String {
+                VisitLookup.begin(visits)
+                defer { VisitLookup.end() }
+                let s = RoundStats(customers: coldCustomers2, settings: settings, crews: crews, workDays: workDays, today: today)
+                let owed = RoundMetrics.moneyOwed(coldCustomers2)
+                let year = RoundMetrics.totals(for: coldCustomers2, in: TaxYear.range(startYear: s.currentTaxYear))
+                let r = s.workRate()
+                return "\(s.thisWeek.work) \(owed.amount) \(owed.cleans) \(year) \(r.map { "\($0.housesPerDay) \($0.perHouse) \($0.skipRate) \($0.daysPerWeek)" } ?? "-") "
+                    + "\(s.newCustomers(taxYear: s.currentTaxYear)) \(s.lostCustomers(taxYear: s.currentTaxYear)) \(s.roundLengthWeeks().map { "\($0)" } ?? "-")"
+            }
+            check("Stats figures from its window of visits match those from every visit (\(windowed.count) of \(coldVisits2.count))",
+                  cards(windowed) == cards(coldVisits2))
+            // The round reads the last 12 months: the plan must be the same as from every visit.
+            let roundVisits = try cold2.fetch(FetchDescriptor<Visit>(predicate: VisitIndex.roundWindowAtLaunch))
+            func planText(_ visits: [Visit]) -> String {
+                VisitLookup.begin(visits)
+                defer { VisitLookup.end() }
+                let plan = RoundPlanner.plan(customers: coldCustomers2, settings: settings, crews: crews, workDays: workDays, today: today)
+                var parts: [String] = []
+                for d in plan.days {
+                    let rows: [String] = d.customers.map { c in c.id.uuidString } + d.rows.map { r in "\(r.customer.id)\(r.state)" }
+                    parts.append("\(d.date):" + rows.joined(separator: ","))
+                }
+                let later: [String] = plan.later.map { $0.id.uuidString }
+                parts.append(later.joined(separator: ","))
+                parts.append(plan.pointer?.id.uuidString ?? "-")
+                return parts.joined(separator: "|")
+            }
+            check("the round plan from 12 months of visits matches the plan from every visit (\(roundVisits.count) of \(coldVisits2.count))",
+                  planText(roundVisits) == planText(coldVisits2))
         }
         // Ideal figures, with inputs worked out by hand: 20 houses a workday, 3 usual days (2.5 actually worked),
         // £16 a house, 4% skips, 400 people = 390 cleans a round, £1,200 a week, 5-week round.
@@ -729,8 +762,14 @@ enum SimulatorSelfTest {
         ], "former": [
           {"round": "Rhyl", "name": "ST former", "address": "1 Gone St", "price": 12.5, "every_other": false,
            "first_clean": "2025-04-30", "last_clean": "2025-06-24", "cleans": 2, "worksheet": "2025-6"},
-          {"round": "Rhyl", "name": "ST old timer", "address": "elsewhere", "price": 10, "every_other": false,
+          {"round": "Rhyl", "name": "ST old timer", "address": "", "price": 10, "every_other": false,
            "first_clean": "2025-04-30", "last_clean": "2025-06-24", "cleans": 2, "worksheet": "2025-6"}
+        ], "visits": [
+          {"round": "Rhyl", "name": "ST former", "address": "1 Gone St", "visits": [
+            {"date": "2025-04-30", "kind": "cleaned", "list_price": 12.5, "charged": 12.5, "paid": 12.5},
+            {"date": "2025-05-28", "kind": "skipped", "list_price": 12.5, "charged": 0, "paid": 0, "date_estimated": true},
+            {"date": "2025-06-24", "kind": "cleaned", "list_price": 12.5, "charged": 12.5, "paid": 0}]},
+          {"id": "\(oldTimer.id.uuidString)", "visits": [{"date": "2025-05-01", "kind": "cleaned", "list_price": 15, "charged": 16, "paid": 16}]}
         ]}
         """
         let visitsBefore = (oldTimer.visits ?? []).count + (worksheetRiser.visits ?? []).count
@@ -750,6 +789,18 @@ enum SimulatorSelfTest {
             check("a former customer is added once, as Cancelled, with no cleans", former.count == 1 && former[0].status == .cancelled
                   && (former[0].visits ?? []).isEmpty && former[0].price == Decimal(string: "12.5")! && plan.formerToAdd.count == 1)
             check("a former customer isn't due a rise or on the round", !stats().risesDue().contains { $0 === former.first })
+            let settingsRow = (try? context.fetch(FetchDescriptor<AppSettings>()))?.first
+            let startBefore = settingsRow?.recordsStart
+            let added = (try? PriceHistoryImport.addVisits(file, context: context)) ?? -1
+            let formerVisits = former.first?.visits ?? []
+            check("worksheet cleans are added to the right customers", added == 3 && formerVisits.count == 3
+                  && (oldTimer.visits ?? []).contains { RoundCalendar.dayString($0.date) == "2025-05-01" && $0.charged == 16 })
+            check("an unpaid worksheet clean is owed; a paid one leaves the balance alone",
+                  formerVisits.filter(\.isUnpaid).count == 1 && oldTimer.outstandingBalance == 0)
+            check("records start moves back to the worksheet's tax year",
+                  settingsRow.map { RoundCalendar.dayString($0.recordsStart) } == "2025-04-06")
+            check("adding the worksheet cleans twice adds nothing", (try? PriceHistoryImport.addVisits(file, context: context)) == 0)
+            if let startBefore { settingsRow?.recordsStart = startBefore }
             let again = PriceHistoryImport.plan(file, customers: afterAll, today: today)
             check("adding the same price history twice adds nothing", again.risesToAdd == 0 && again.customersGettingHistory == 0
                   && again.formerToAdd.isEmpty)

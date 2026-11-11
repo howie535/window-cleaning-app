@@ -36,6 +36,8 @@ ROUND_SHEETS = ["Rhyl", "Abergele", "Llanddulas", "Llandudno"]
 NAME, ADDR, PRICE = "B", "C", "D"
 FIRST_CLEAN = 6          # column F = Clean 1, G = P1, and so on in pairs
 EARLIEST = dt.date(2000, 1, 1)
+RECORDS_START = dt.date(2026, 4, 6)   # the app's own records start here; older cleans come from the worksheets
+DASHES = {"—", "–", "-", "--"}
 
 # "£15 from here", "£17 from today", "£15 new price", "new price £15". One-off notes (front only, conservatory
 # roof, gate locked) don't match.
@@ -148,9 +150,15 @@ def read_customers(path, label):
             if not name:
                 continue
             cleans = []
+            slots = []      # every clean and dash in order, for bringing the cleans over
             for k, c in enumerate(range(FIRST_CLEAN, max_col + 1, 2)):
                 d = excel_date(cells.get((r, c)))
                 note = " / ".join(x for x in (comments.get((r, c)), comments.get((r, c + 1))) if x)
+                raw = cells.get((r, c))
+                if d:
+                    slots.append(dict(kind="cleaned", date=d, paid=money(cells.get((r, c + 1))) or 0.0, note=note or None))
+                elif isinstance(raw, str) and raw.strip() in DASHES:
+                    slots.append(dict(kind="skipped", date=None, paid=0.0, note=note or None))
                 if d:
                     cleans.append(dict(slot=k + 1, date=d, paid=money(cells.get((r, c + 1))), note=note))
                 elif note and rise_in(note):
@@ -159,7 +167,7 @@ def read_customers(path, label):
             side = " / ".join(x for x in (comments.get((r, colnum(NAME))), comments.get((r, colnum(PRICE)))) if x)
             rows.append(dict(sheet=sheet, row=r, worksheet=label, name=name,
                              address=str(cells.get((r, colnum(ADDR))) or "").strip(),
-                             price=money(cells.get((r, colnum(PRICE)))), cleans=cleans, side_note=side,
+                             price=money(cells.get((r, colnum(PRICE)))), cleans=cleans, side_note=side, slots=slots,
                              every_other=str(cells.get((r, colnum("E"))) or "").strip().upper() == "EO"))
     return rows
 
@@ -249,6 +257,37 @@ def pounds(v):
     return f"£{v:,.0f}" if abs(v - round(v)) < 0.005 else f"£{v:,.2f}"
 
 
+# ---------------------------------------------------------------- cleans for the app
+
+def worksheet_visits(row):
+    """A worksheet row's cleans and skips before the app's records start, by the same rules as
+    convert_round_workbook.py: charged = what was paid, or the list price if unpaid (P = £0); dashes before the first
+    clean and after the last are dropped; for every-other customers one dash between cleans is their off cycle
+    (not due) and every second dash in a longer run is a skip; skips are dated halfway between the cleans either
+    side, marked estimated."""
+    slots = [dict(v) for v in row["slots"]]
+    cleaned = [i for i, v in enumerate(slots) if v["kind"] == "cleaned"]
+    if not cleaned:
+        return []
+    slots = slots[cleaned[0]:cleaned[-1] + 1]
+    out, run, last = [], [], None
+    for v in slots:
+        if v["kind"] == "skipped":
+            run.append(v)
+            continue
+        for j, sk in enumerate(run):
+            kind = ("skipped" if j % 2 == 1 else "not_due") if row["every_other"] else "skipped"
+            date = last + (v["date"] - last) * (j + 1) / (len(run) + 1) if last else v["date"]
+            out.append(dict(date=date.isoformat(), kind=kind, list_price=row["price"] or 0, charged=0, paid=0,
+                            note=sk["note"], date_estimated=True))
+        run = []
+        list_price = row["price"] or v["paid"] or 0
+        out.append(dict(date=v["date"].isoformat(), kind="cleaned", list_price=list_price,
+                        charged=v["paid"] if v["paid"] > 0 else list_price, paid=v["paid"], note=v["note"]))
+        last = v["date"]
+    return [x for x in out if dt.date.fromisoformat(x["date"]) < RECORDS_START]
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -275,7 +314,7 @@ def main():
                 return hits[0]
         return None
 
-    records, report_rows, unmatched_in_app = [], [], []
+    records, report_rows, unmatched_in_app, visit_sets = [], [], [], []
     used = {label: set() for label, _ in years}
     for c in reference:
         found = []
@@ -288,6 +327,8 @@ def main():
             unmatched_in_app.append(c)
             continue
         first_seen, changes, checks = history(found)
+        old_rows = [row for label, row in found[:-1] if row]
+        visit_sets.append(dict(id=c["id"], visits=[v for row in old_rows for v in worksheet_visits(row)]))
         last = changes[-1] if changes else None
         if last and c.get("price") and abs(last["new"] - c["price"]) >= 0.005:
             checks.append(f"last rise found is to {pounds(last['new'])} but the price in the import file is {pounds(c['price'])}")
@@ -300,7 +341,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     # Former customers: on an older worksheet, cleaned at least once, gone by the newest one and not in the app.
     # They go into the app as Cancelled (no cleans, so no stats change), with when they were cleaned in a note.
-    app_names = {norm(c["name"]) for c in reference}
+    app_keys = {(norm(c["name"]), norm(c["address"])) for c in reference}
     former, seen = [], set()
     for label, rows in reversed(years[:-1]):
         for r in rows:
@@ -309,8 +350,9 @@ def main():
             if (r["sheet"], r["row"]) in used[label] or not dated or key in seen:
                 continue
             seen.add(key)
-            if norm(r["name"]) in app_names:
-                continue          # same name already in the app: probably moved or respelt, not a former customer
+            if key in app_keys:
+                continue          # already in the app
+            visit_sets.append(dict(round=r["sheet"], name=r["name"], address=r["address"], visits=worksheet_visits(r)))
             former.append(dict(round=r["sheet"], name=r["name"], address=r["address"],
                                price=r["price"] or usual([c["paid"] for c in r["cleans"] if c["date"]]) or 0,
                                every_other=r["every_other"], first_clean=min(dated).isoformat(),
@@ -346,6 +388,22 @@ def main():
         for r in rows:
             if (r["sheet"], r["row"]) not in used[label] and r["cleans"]:
                 lines.append(f"  {label} {r['sheet']} row {r['row']}: {r['name']} ({r['address']})")
+    lines += ["", f"== Cleans brought over (before {RECORDS_START:%-d %b %Y}), by month: charged / paid"]
+    by_month = {}
+    for vs in visit_sets:
+        for v in vs["visits"]:
+            if v["kind"] == "cleaned":
+                m = v["date"][:7]; a = by_month.setdefault(m, [0, 0.0, 0.0])
+                a[0] += 1; a[1] += v["charged"]; a[2] += v["paid"]
+    for m in sorted(by_month):
+        n, ch, pd = by_month[m]
+        lines.append(f"  {m}: {n} cleans, {pounds(ch)} / {pounds(pd)}")
+    tot = [sum(a[i] for a in by_month.values()) for i in range(3)]
+    unpaid = [(vs.get("id") or vs["name"], v) for vs in visit_sets for v in vs["visits"] if v["kind"] == "cleaned" and v["paid"] == 0]
+    lines.append(f"  Total: {tot[0]} cleans, {pounds(tot[1])} charged, {pounds(tot[2])} paid; "
+                 f"{sum(1 for vs in visit_sets for v in vs['visits'] if v['kind'] != 'cleaned')} skips and off-cycle visits")
+    names = {c["id"]: c["name"] for c in reference}
+    lines += [f"  Unpaid on the worksheet: {names.get(k, k)} {v['date']} {pounds(v['charged'])}" for k, v in unpaid]
     lines += ["", "== Former customers, added as Cancelled (no cleans brought over)"]
     lines += [f"  {f['round']} · {f['name']} ({f['address']}): {pounds(f['price'])}, {f['cleans']} cleans "
               f"{dt.date.fromisoformat(f['first_clean']):%-d %b %Y} to {dt.date.fromisoformat(f['last_clean']):%-d %b %Y}"
@@ -361,7 +419,7 @@ def main():
     (out_dir / "price-history-app.json").write_text(json.dumps(dict(
         schema=SCHEMA, worksheets=[label for label, _ in years],
         customers=[dict(id=r["id"], first_seen=r["first_seen"], changes=r["changes"]) for r in records],
-        former=former), separators=(",", ":"), ensure_ascii=False))
+        former=former, visits=[v for v in visit_sets if v["visits"]]), separators=(",", ":"), ensure_ascii=False))
     (out_dir / "price-history-report.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines[:8]))
 

@@ -151,10 +151,11 @@ struct RoundStats {
     /// because records start in April 2026.
     func newCustomers(taxYear: Int) -> Int {
         let range = TaxYear.range(startYear: taxYear)
-        let floor: Date? = taxYear == 2026 ? RoundCalendar.date(year: 2026, month: 5, day: 18) : nil
         return customers.filter { customer in
-            guard let first = visitsOf(customer).filter({ $0.kind == .cleaned }).map(\.date).min() else { return false }
-            return range.contains(first) && (floor.map { first >= $0 } ?? true)
+            // The first clean ever: on the old worksheets (historyFrom) if earlier than any visit read here.
+            let firstVisit = visitsOf(customer).filter({ $0.kind == .cleaned }).map(\.date).min()
+            guard let first = [customer.historyFrom, firstVisit].compactMap({ $0 }).min() else { return false }
+            return range.contains(first)
         }.count
     }
 

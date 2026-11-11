@@ -13,6 +13,27 @@ enum PriceHistoryImport {
         var customers: [Record]
         /// Customers on the old worksheets who had stopped before the app: added as Cancelled.
         var former: [Former]?
+        /// Every clean, skip and off-cycle visit on the old worksheets before the app's records start.
+        var visits: [VisitSet]?
+    }
+
+    struct VisitSet: Decodable {
+        /// Current customers by ID; former customers by round and name.
+        var id: String?
+        var round: String?
+        var name: String?
+        var address: String?
+        var visits: [VisitRecord]
+    }
+
+    struct VisitRecord: Decodable {
+        var date: String
+        var kind: String
+        var listPrice: Double
+        var charged: Double
+        var paid: Double
+        var note: String?
+        var dateEstimated: Bool?
     }
 
     struct Former: Decodable {
@@ -117,8 +138,8 @@ enum PriceHistoryImport {
                 plan.priceDiffers.append("\(customer.name): worksheet \(Money.decimal(last.new).pounds), app \(customer.price.pounds)")
             }
         }
-        let names = Set(customers.map { clean($0.name) })
-        plan.formerToAdd = (file.former ?? []).filter { !names.contains(clean($0.name)) }
+        let keys = Set(customers.map { clean($0.name) + "|" + clean($0.address) })
+        plan.formerToAdd = (file.former ?? []).filter { !keys.contains(clean($0.name) + "|" + clean($0.address)) }
         return plan
     }
 
@@ -139,20 +160,61 @@ enum PriceHistoryImport {
         }
     }
 
-    static let mergedKey = "priceHistory2025Merged"
+    /// Set once the 2025-6 worksheet (history, former customers and cleans) has been merged. (1.6 used
+    /// "priceHistory2025Merged" for the history alone; this merge repeats that part harmlessly and adds the cleans.)
+    static let mergedKey = "worksheet2025CleansMerged"
 
-    /// The one-time merge of the 2025-6 worksheet history built into the app. Does nothing once done, or if the file
-    /// isn't in this build. Returns what it did.
+    /// The one-time merge of the 2025-6 worksheet built into the app. Does nothing once done, or if the file
+    /// isn't in this build. Returns the number of cleans added.
     @discardableResult
-    static func mergeBundledOnce(context: ModelContext, today: Date = RoundCalendar.startOfDay()) -> Plan? {
+    static func mergeBundledOnce(context: ModelContext, today: Date = RoundCalendar.startOfDay()) -> Int? {
         guard !UserDefaults.standard.bool(forKey: mergedKey),
               let url = Bundle.main.url(forResource: "PriceHistory2025", withExtension: "json"),
               let data = try? Data(contentsOf: url), let file = try? decode(data),
               let customers = try? context.fetch(FetchDescriptor<Customer>()), !customers.isEmpty
         else { return nil }
-        guard let done = try? apply(plan(file, customers: customers, today: today), today: today, context: context) else { return nil }
+        guard (try? apply(plan(file, customers: customers, today: today), today: today, context: context)) != nil,
+              let added = try? addVisits(file, context: context) else { return nil }
         UserDefaults.standard.set(true, forKey: mergedKey)
-        return done
+        return added
+    }
+
+    /// Adds the worksheet's cleans, skips and off-cycle visits (none on a day the customer already has one), and moves
+    /// Records start back to the first of them so Stats and Weekly include them. Returns the number of cleans added.
+    /// Charged is what was paid, or the list price if unpaid, so no customer's balance or next price changes.
+    static func addVisits(_ file: File, context: ModelContext) throws -> Int {
+        let customers = try context.fetch(FetchDescriptor<Customer>())
+        let byID = Dictionary(customers.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var cleans = 0
+        var earliest: Date?
+        for set in file.visits ?? [] {
+            let customer: Customer? = {
+                if let id = set.id.flatMap(UUID.init(uuidString:)) { return byID[id] }
+                let same = customers.filter { $0.round == (set.round ?? "") && clean($0.name) == clean(set.name ?? "")
+                    && clean($0.address) == clean(set.address ?? "") }
+                return same.count == 1 ? same[0] : nil
+            }()
+            guard let customer else { continue }
+            let days = Set(customer.allVisits.map { RoundCalendar.dayString($0.date) })
+            for record in set.visits where !days.contains(record.date) {
+                guard let date = RoundCalendar.parseDay(record.date) else { continue }
+                let kind = VisitKind(rawValue: record.kind) ?? .cleaned
+                let visit = Visit(date: date, kind: kind, listPrice: Money.decimal(record.listPrice),
+                                  charged: Money.decimal(record.charged), paid: Money.decimal(record.paid),
+                                  paidDate: record.paid > 0 ? date : nil, note: record.note,
+                                  dateEstimated: record.dateEstimated ?? false, creditApplied: 0)
+                context.insert(visit)
+                visit.customer = customer
+                if kind == .cleaned { cleans += 1 }
+                earliest = min(earliest ?? date, date)
+            }
+        }
+        if let earliest, let settings = try context.fetch(FetchDescriptor<AppSettings>()).first {
+            let start = RoundCalendar.date(year: TaxYear.startYear(containing: earliest), month: 4, day: 6)
+            if start < settings.recordsStart { settings.recordsStart = start }
+        }
+        try context.save()
+        return cleans
     }
 
     /// Adds the history. A backup of what's there is written first.
