@@ -9,7 +9,7 @@ struct MoreView: View {
                     NavigationLink { RoundSheetView() } label: { Label("Round Sheet", systemImage: "tablecells") }
                 }
                 Section("Reports") {
-                    NavigationLink { WeeklyView() } label: { Label("Weekly", systemImage: "calendar") }
+                    NavigationLink { WeeklyView() } label: { Label("Weekly & Daily", systemImage: "calendar") }
                     NavigationLink { TaxYearView() } label: { Label("Tax Year", systemImage: "sterlingsign.square") }
                     NavigationLink { PriceRiseView() } label: { Label("Price Rise", systemImage: "arrow.up.right.circle") }
                     NavigationLink { RoundReviewView() } label: { Label("Round review", systemImage: "exclamationmark.magnifyingglass") }

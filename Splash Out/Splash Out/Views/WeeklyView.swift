@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// One row per week from records start (Docs/SPEC.md section 5), with crew averages underneath.
+/// Weeks and days in one place (Docs/SPEC.md section 5). Weeks: one row per week from records start, each opening its
+/// days, with crew averages underneath. Days: every day with cleans, by month.
 struct WeeklyView: View {
     @Environment(RoundClock.self) private var clock
     @Query private var customers: [Customer]
@@ -9,6 +10,9 @@ struct WeeklyView: View {
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
+
+    enum Mode: String, CaseIterable { case weeks = "Weeks", days = "Days" }
+    @State private var mode: Mode = .weeks
 
     private func pounds(_ value: Decimal) -> String {
         value.pounds
@@ -36,8 +40,22 @@ struct WeeklyView: View {
         let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
 
         List {
+            Picker("Show", selection: $mode) {
+                ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+
+            if mode == .days {
+                DaySections(stats: stats, today: today)
+            } else {
             Section {
                 ForEach(stats.weeks.reversed(), id: \.start) { week in
+                    let sunday = RoundCalendar.london.date(byAdding: .day, value: 6, to: week.start)!
+                    NavigationLink {
+                        DailyView(from: week.start, through: sunday, title: "Week of \(RoundCalendar.short(week.start))")
+                    } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Week of \(RoundCalendar.shortWithYear(week.start))")
@@ -57,6 +75,8 @@ struct WeeklyView: View {
                         }
                     }
                     .padding(.vertical, 2)
+                    }
+                    .disabled(week.houses == 0)
                 }
             } header: {
                 Text("From \(RoundCalendar.shortWithYear((settings.first ?? AppSettings()).recordsStart))")
@@ -79,7 +99,8 @@ struct WeeklyView: View {
                     }
                 }
             }
+            }
         }
-        .navigationTitle("Weekly")
+        .navigationTitle(mode == .weeks ? "Weekly" : "Daily")
     }
 }

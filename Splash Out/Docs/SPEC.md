@@ -210,6 +210,7 @@ For days with a known crew (a WorkDay override, or the usual crew): average £ p
 | Customers | Search and filter by round, area and status. Drag to reorder. |
 | Money Owed | §4.8, with record-payment. |
 | Weekly | One row per week from records start: work, houses, target, days worked. Green when work ≥ target, amber when within 10% below, red when lower. |
+| Daily (the Days side of Weekly & Daily; tapping a week opens that week's days) | One row per day with cleans, newest first, by month: houses, £ a house (orange when below the 12-month average of the days, §4.12), day total. Tapping a day shows houses, charged, £ a house, paid, skips, and each customer cleaned in round order with what they were charged (list price shown when different). The Charged per house and Houses per workday charts use one bar a day on the 1M and 3M ranges (weekly otherwise) and list the range's days underneath. |
 | Tax Year | Pick a year. Months with work, paid, not yet paid, cleans, extras and average per week, plus totals by round. Export to CSV/PDF for Self Assessment. |
 | Frequent Skips | §4.9 |
 | Price Rise | §4.10 |

@@ -11,6 +11,11 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.8", date: "November 2026", changes: [
+            "Charged per house and Houses per workday show one bar a day on the 1M and 3M ranges, so a weak day stands out. Longer ranges stay weekly.",
+            "Under the chart, the days in the range: houses and £ a house, orange when below the 12-month average. Tap a day to see who was cleaned and what each was charged.",
+            "Weekly is now Weekly & Daily: a Weeks / Days switch at the top. Tap a week to see its days, and a day to see who was cleaned.",
+        ]),
         Release(version: "1.7", date: "November 2026", changes: [
             "Every clean from the 2025-6 worksheet is now in the app (2,760 cleans, £44,878, all paid), with skips and off-cycle visits, added once on first open after a backup. Stats, Weekly and Tax Year go back to 6 April 2025.",
             "Customers who stopped during 2025-6 have their cleans too, and two more were added as Cancelled (separate properties of customers already here).",

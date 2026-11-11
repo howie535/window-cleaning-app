@@ -55,6 +55,11 @@ struct StatDetailView: View {
 
     private var calendar: Calendar { RoundCalendar.london }
 
+    /// Per house and houses per day go to one bar a day over a month or three; longer ranges stay weekly.
+    private var daily: Bool {
+        (metric == .perHouse || metric == .housesPerDay) && (span == .oneMonth || span == .threeMonths)
+    }
+
     var body: some View {
         let today = clock.today
         let perfStart = PerfProbe.now()
@@ -85,6 +90,26 @@ struct StatDetailView: View {
                     }
                 }
             }
+            if metric == .perHouse || metric == .housesPerDay {
+                let days = stats.dayTotals.filter { $0.key >= from && $0.key < today && $0.value.houses > 0 }.sorted { $0.key > $1.key }
+                let average = stats.averagePerHouseByDay()?.average
+                Section {
+                    ForEach(days.prefix(daily ? days.count : 0), id: \.key) { day in
+                        NavigationLink { DayView(date: day.key) } label: {
+                            DayRow(date: day.key, totals: day.value, average: average)
+                        }
+                    }
+                    if !daily {
+                        NavigationLink { DailyView(from: span.days == nil ? nil : from) } label: {
+                            Text("Each day in this range (\(days.count))")
+                        }
+                    }
+                } header: {
+                    Text("Days")
+                } footer: {
+                    if daily, let average { Text("Orange: below the 12-month average of \(Money.perHouse(average)) a house.") }
+                }
+            }
         }
         .navigationTitle(metric.rawValue)
         .navigationBarTitleDisplayMode(.inline)
@@ -110,9 +135,11 @@ struct StatDetailView: View {
         case .perHouse:
             // Finished days only: today's first few cleans would skew it.
             let days = stats.dayTotals.filter { $0.key < today && $0.value.houses > 0 }
+            if daily { return byDay(days.map { ($0.key, double($0.value.work) / Double($0.value.houses), $0.value.houses, double($0.value.work)) }) }
             return weekly(days.map { ($0.key, double($0.value.work) / Double($0.value.houses), $0.value.houses, double($0.value.work)) })
         case .housesPerDay:
             let days = stats.dayTotals.filter { $0.key < today && $0.value.houses >= minHouses }
+            if daily { return byDay(days.map { ($0.key, Double($0.value.houses), $0.value.houses, double($0.value.work)) }) }
             return weekly(days.map { ($0.key, Double($0.value.houses), $0.value.houses, double($0.value.work)) })
         case .roundLength:
             // Each gap counts once, so the 12-week line is the true average gap, not an average of weeks.
@@ -154,6 +181,27 @@ struct StatDetailView: View {
             let from = calendar.date(byAdding: .day, value: -77, to: points[index].date)!
             let window = points[...index].filter { $0.date >= from }
             points[index].second = window.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, window.reduce(0) { $0 + $1.days }))
+        }
+        return points
+    }
+
+    /// One point a day, with the same rolling 12-week average of the days alongside.
+    private func byDay(_ days: [(date: Date, value: Double, houses: Int, work: Double)]) -> [Point] {
+        let sorted = days.sorted { $0.date < $1.date }
+        var points = sorted.map { day -> Point in
+            var point = Point(date: day.date, value: day.value)
+            point.days = 1
+            point.sumOfDays = day.value
+            point.houses = day.houses
+            point.work = day.work
+            return point
+        }
+        var start = 0, sum = 0.0
+        for index in points.indices {
+            sum += points[index].value
+            let from = calendar.date(byAdding: .day, value: -83, to: points[index].date)!
+            while points[start].date < from { sum -= points[start].value; start += 1 }
+            points[index].second = sum / Double(index - start + 1)
         }
         return points
     }
@@ -201,15 +249,16 @@ struct StatDetailView: View {
             let low = (values.min() ?? 0), high = (values.max() ?? 0)
             let floor = max(0, low - (high - low) * 0.6 - 1)
             let overall = points.reduce(0) { $0 + $1.sumOfDays } / Double(max(1, points.reduce(0) { $0 + $1.days }))
+            let unit: Calendar.Component = daily ? .day : .weekOfYear
             Chart {
                 ForEach(points) { point in
-                    BarMark(x: .value("Week", point.date, unit: .weekOfYear),
-                            yStart: .value("Base", floor), yEnd: .value("Week", point.value), width: ChartStyle.barWidth)
-                        .cornerRadius(ChartStyle.cornerRadius)
+                    BarMark(x: .value("Date", point.date, unit: unit),
+                            yStart: .value("Base", floor), yEnd: .value("Value", point.value), width: ChartStyle.barWidth)
+                        .cornerRadius(daily ? 2 : ChartStyle.cornerRadius)
                         .foregroundStyle(ChartStyle.barFill())
                 }
                 ForEach(points) { point in
-                    LineMark(x: .value("Week", point.date, unit: .weekOfYear), y: .value("12-week average", point.second ?? point.value))
+                    LineMark(x: .value("Date", point.date, unit: unit), y: .value("12-week average", point.second ?? point.value))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(ChartStyle.trendColour)
                         .lineStyle(ChartStyle.trendStroke)
@@ -269,8 +318,8 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork: "Work charged each week; orange fell short. Dashed: the target."
         case .monthlyWork: "Work charged each month."
-        case .perHouse: "What was actually charged per house each week, extras included. Line: 12-week average. Dashed: average for the range."
-        case .housesPerDay: "Houses per worked day each week. Line: 12-week average. Dashed: average for the range."
+        case .perHouse: "What was actually charged per house each \(daily ? "day" : "week"), extras included. Line: 12-week average. Dashed: average for the range."
+        case .housesPerDay: "Houses per worked day\(daily ? "" : " each week"). Line: 12-week average. Dashed: average for the range."
         case .skipRate: "Skips as a share of visits each month. Dashed: average for the range."
         case .roundLength: "Average weeks between cleans, by the week of the later clean. Rising means the round is slowing down. Line: 12-week average. Dashed: average for the range. Every-other customers and gaps with a skip are left out."
         }
