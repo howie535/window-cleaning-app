@@ -14,3 +14,6 @@ splash-out-import.json
 import-report.txt
 *.xlsx
 Backups/
+price-history*.json
+price-history-report.txt
+PriceHistory*.json

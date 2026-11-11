@@ -726,6 +726,11 @@ enum SimulatorSelfTest {
           {"id": "00000000-0000-0000-0000-000000000000", "round": "", "name": "ST worksheet riser", "address": "", "first_seen": "\(day(800))",
            "changes": [{"date": "\(day(400))", "old": 12, "new": 14, "source": "comment"}, {"date": "\(day(-30))", "old": 14, "new": 16, "source": "comment"}]},
           {"id": "00000000-0000-0000-0000-000000000001", "round": "", "name": "ST nobody", "address": "", "first_seen": null, "changes": []}
+        ], "former": [
+          {"round": "Rhyl", "name": "ST former", "address": "1 Gone St", "price": 12.5, "every_other": false,
+           "first_clean": "2025-04-30", "last_clean": "2025-06-24", "cleans": 2, "worksheet": "2025-6"},
+          {"round": "Rhyl", "name": "ST old timer", "address": "elsewhere", "price": 10, "every_other": false,
+           "first_clean": "2025-04-30", "last_clean": "2025-06-24", "cleans": 2, "worksheet": "2025-6"}
         ]}
         """
         let visitsBefore = (oldTimer.visits ?? []).count + (worksheetRiser.visits ?? []).count
@@ -740,8 +745,14 @@ enum SimulatorSelfTest {
                   && !stats().risesDue().contains { $0 === worksheetRiser })
             check("price history never changes a price or a visit", oldTimer.price == 15 && worksheetRiser.price == 14
                   && (oldTimer.visits ?? []).count + (worksheetRiser.visits ?? []).count == visitsBefore)
-            let again = PriceHistoryImport.plan(file, customers: all, today: today)
-            check("adding the same price history twice adds nothing", again.risesToAdd == 0 && again.customersGettingHistory == 0)
+            let afterAll = (try? context.fetch(FetchDescriptor<Customer>())) ?? []
+            let former = afterAll.filter { $0.name == "ST former" }
+            check("a former customer is added once, as Cancelled, with no cleans", former.count == 1 && former[0].status == .cancelled
+                  && (former[0].visits ?? []).isEmpty && former[0].price == Decimal(string: "12.5")! && plan.formerToAdd.count == 1)
+            check("a former customer isn't due a rise or on the round", !stats().risesDue().contains { $0 === former.first })
+            let again = PriceHistoryImport.plan(file, customers: afterAll, today: today)
+            check("adding the same price history twice adds nothing", again.risesToAdd == 0 && again.customersGettingHistory == 0
+                  && again.formerToAdd.isEmpty)
             if let record = try? RoundFile.decode(ExportService.data(from: context)).customers.first(where: { $0.name == "ST worksheet riser" }) {
                 check("backups keep price history", record.historyFrom == day(800) && record.priceChanges?.count == 1)
             } else {

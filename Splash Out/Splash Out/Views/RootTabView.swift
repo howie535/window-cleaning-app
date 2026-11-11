@@ -50,6 +50,11 @@ struct RootTabView: View {
         .environment(tabState)
         .onAppear { if !onboardingSeen && !LagTour.enabled { showTour = true } }
         .task { await LagTour.run(tabs: tabState, context: modelContext) }
+        .task {
+            // One-time merge of the 2025-6 worksheet history (does nothing once done), a few seconds after opening.
+            try? await Task.sleep(for: .seconds(4))
+            PriceHistoryImport.mergeBundledOnce(context: modelContext)
+        }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

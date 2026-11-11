@@ -11,6 +11,11 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.6", date: "November 2026", changes: [
+            "The app is now called Sudsy.",
+            "Price rises now count from the 2025-6 worksheet: past rises and how long each price has stood were added once, on first open (a backup was saved first). Prices, cleans and payments didn't change. The Add price history button has gone.",
+            "Customers who stopped during 2025-6 were added as Cancelled, with when they were last cleaned in their notes. Their cleans weren't brought over, so no totals changed.",
+        ]),
         Release(version: "1.5", date: "November 2026", changes: [
             "Price history: Settings > Add price history brings in past price rises from the old worksheets (2025-6 onwards), so a price that hasn't gone up since 2025 shows as due. It only adds history: prices, cleans and payments don't change.",
             "Price Rise and the customer page show \"No rise since\" with the date the price has stood from.",

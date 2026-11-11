@@ -31,9 +31,6 @@ struct SettingsView: View {
     @State private var isShowingImporter = false
     @State private var importCustomersOnly = false
     @State private var pendingImportData: Data?
-    @State private var importingPriceHistory = false
-    @State private var pendingPriceHistory: PriceHistoryImport.Plan?
-    @Environment(RoundClock.self) private var clock
     @State private var isShowingExporter = false
     @State private var exportDocument = RoundBackupDocument(data: Data())
     @State private var isConfirmingClear = false
@@ -100,16 +97,10 @@ struct SettingsView: View {
                     }
                     Button("Import round data...") {
                         importCustomersOnly = false
-                        importingPriceHistory = false
                         isShowingImporter = true
                     }
                     Button("Import customers only...") {
                         importCustomersOnly = true
-                        importingPriceHistory = false
-                        isShowingImporter = true
-                    }
-                    Button("Add price history...") {
-                        importingPriceHistory = true
                         isShowingImporter = true
                     }
                     Button("Export backup...") {
@@ -121,7 +112,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Backup")
                 } footer: {
-                    Text("A copy is saved on this phone automatically every day you use the app (the last 14 days are kept). Choose a backup folder (iCloud Drive or OneDrive in the Files app) and each day's copy is also saved there automatically, which protects you if the phone is lost. Export backup saves a one-off copy. Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. \"Add price history\" adds past price rises from the old worksheets to the customers already here; it changes nothing else. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
+                    Text("A copy is saved on this phone automatically every day you use the app (the last 14 days are kept). Choose a backup folder (iCloud Drive or OneDrive in the Files app) and each day's copy is also saved there automatically, which protects you if the phone is lost. Export backup saves a one-off copy. Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
                 }
             }
             .navigationTitle("Settings")
@@ -161,15 +152,6 @@ struct SettingsView: View {
                      ? "This wipes everything currently in the app and loads only the customers from the file: no cleans, payments, diary or tips. A backup is saved first."
                      : "This wipes the customers, visits, diary and tips currently in the app and loads the file instead. A backup is saved first.")
             }
-            .alert("Add price history?", isPresented: Binding(
-                get: { pendingPriceHistory != nil },
-                set: { if !$0 { pendingPriceHistory = nil } }
-            )) {
-                Button("Add") { runPriceHistory() }
-                Button("Cancel", role: .cancel) { pendingPriceHistory = nil }
-            } message: {
-                Text((pendingPriceHistory?.summary ?? "") + " Prices, cleans and payments don't change. A backup is saved first.")
-            }
             .alert("Clear all cleaning history?", isPresented: $isConfirmingClear) {
                 Button("Clear history", role: .destructive) { clearHistory() }
                 Button("Cancel", role: .cancel) {}
@@ -204,31 +186,10 @@ struct SettingsView: View {
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
             do {
-                let data = try Data(contentsOf: url)
-                if importingPriceHistory {
-                    importingPriceHistory = false
-                    let file = try PriceHistoryImport.decode(data)
-                    pendingPriceHistory = PriceHistoryImport.plan(file, customers: customers, today: clock.today)
-                } else {
-                    pendingImportData = data
-                }
+                pendingImportData = try Data(contentsOf: url)
             } catch {
                 message = "Couldn't read that file: \(error.localizedDescription)"
             }
-        }
-    }
-
-    private func runPriceHistory() {
-        guard let plan = pendingPriceHistory else { return }
-        pendingPriceHistory = nil
-        do {
-            let done = try PriceHistoryImport.apply(plan, today: clock.today, context: modelContext)
-            var text = "Added \(done.risesToAdd) past rises to \(done.customersGettingRises) customers."
-            if !done.notMatched.isEmpty { text += " Not matched: \(done.notMatched.joined(separator: ", "))." }
-            if !done.priceDiffers.isEmpty { text += " Different price on the worksheet, left as they are: \(done.priceDiffers.joined(separator: "; "))." }
-            message = text
-        } catch {
-            message = "Couldn't add the price history: \(error.localizedDescription)"
         }
     }
 

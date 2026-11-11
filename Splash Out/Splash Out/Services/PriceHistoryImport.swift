@@ -1,22 +1,37 @@
 import Foundation
 import SwiftData
 
-/// Adds price history from the old yearly worksheets (Tools/price_history.py → price-history.json) to the customers
-/// already in the app. A merge, never a replace: it adds past rises and the first clean on the worksheets, and
-/// never changes a price, a visit or a payment. Running it twice adds nothing the second time.
+/// Adds price history from the old yearly worksheets (Tools/price_history.py → price-history-app.json, built into the
+/// app as PriceHistory2025.json) to the customers already in the app, once, on first open. A merge, never a replace:
+/// it adds past rises and the first clean on the worksheets, and never changes a price, a visit or a payment.
+/// Running it twice adds nothing the second time.
 @MainActor
 enum PriceHistoryImport {
     struct File: Decodable {
         var schema: Int
         var worksheets: [String]?
         var customers: [Record]
+        /// Customers on the old worksheets who had stopped before the app: added as Cancelled.
+        var former: [Former]?
+    }
+
+    struct Former: Decodable {
+        var round: String
+        var name: String
+        var address: String
+        var price: Double
+        var everyOther: Bool
+        var firstClean: String
+        var lastClean: String
+        var cleans: Int
+        var worksheet: String
     }
 
     struct Record: Decodable {
         var id: String
-        var round: String
-        var name: String
-        var address: String
+        var round: String?
+        var name: String?
+        var address: String?
         var firstSeen: String?
         var changes: [Change]
     }
@@ -39,12 +54,15 @@ enum PriceHistoryImport {
         var customersGettingHistory = 0
         /// The worksheet's last rise doesn't match the app's price, so it isn't used as "last rise" (checked by hand).
         var priceDiffers: [String] = []
+        /// Former customers not already in the app (same name), to add as Cancelled.
+        var formerToAdd: [Former] = []
         var backupURL: URL?
 
         var summary: String {
             var parts = ["Adds \(risesToAdd) past \(risesToAdd == 1 ? "rise" : "rises") to \(customersGettingRises) customers"]
             parts.append("history back to the worksheets for \(customersGettingHistory)")
             var text = parts.joined(separator: ", ") + "."
+            if !formerToAdd.isEmpty { text += " Adds \(formerToAdd.count) former customers as Cancelled." }
             if !notMatched.isEmpty { text += " \(notMatched.count) not matched." }
             if !priceDiffers.isEmpty { text += " \(priceDiffers.count) with a different price on the worksheet (left as they are)." }
             return text
@@ -78,13 +96,14 @@ enum PriceHistoryImport {
         for record in file.customers {
             let customer: Customer? = {
                 if let id = UUID(uuidString: record.id), let c = byID[id] { return c }
-                let both = customers.filter { clean($0.name) == clean(record.name) && clean($0.address) == clean(record.address) }
+                guard let name = record.name else { return nil }
+                let both = customers.filter { clean($0.name) == clean(name) && clean($0.address) == clean(record.address ?? "") }
                 if both.count == 1 { return both[0] }
-                let named = customers.filter { $0.round == record.round && clean($0.name) == clean(record.name) }
+                let named = customers.filter { $0.round == (record.round ?? "") && clean($0.name) == clean(name) }
                 return named.count == 1 ? named[0] : nil
             }()
             guard let customer else {
-                plan.notMatched.append("\(record.round) · \(record.name)")
+                plan.notMatched.append(record.name.map { "\(record.round ?? "") · \($0)" } ?? record.id)
                 continue
             }
             plan.matched += 1
@@ -98,6 +117,8 @@ enum PriceHistoryImport {
                 plan.priceDiffers.append("\(customer.name): worksheet \(Money.decimal(last.new).pounds), app \(customer.price.pounds)")
             }
         }
+        let names = Set(customers.map { clean($0.name) })
+        plan.formerToAdd = (file.former ?? []).filter { !names.contains(clean($0.name)) }
         return plan
     }
 
@@ -116,6 +137,22 @@ enum PriceHistoryImport {
         return usable(record, today: today).filter { c in
             !existing.contains { $0.newPrice == Money.decimal(c.new) && abs($0.date.timeIntervalSince(c.date)) <= 60 * 86_400 }
         }
+    }
+
+    static let mergedKey = "priceHistory2025Merged"
+
+    /// The one-time merge of the 2025-6 worksheet history built into the app. Does nothing once done, or if the file
+    /// isn't in this build. Returns what it did.
+    @discardableResult
+    static func mergeBundledOnce(context: ModelContext, today: Date = RoundCalendar.startOfDay()) -> Plan? {
+        guard !UserDefaults.standard.bool(forKey: mergedKey),
+              let url = Bundle.main.url(forResource: "PriceHistory2025", withExtension: "json"),
+              let data = try? Data(contentsOf: url), let file = try? decode(data),
+              let customers = try? context.fetch(FetchDescriptor<Customer>()), !customers.isEmpty
+        else { return nil }
+        guard let done = try? apply(plan(file, customers: customers, today: today), today: today, context: context) else { return nil }
+        UserDefaults.standard.set(true, forKey: mergedKey)
+        return done
     }
 
     /// Adds the history. A backup of what's there is written first.
@@ -137,6 +174,20 @@ enum PriceHistoryImport {
                customer.priceSince.map({ last.date > $0 }) ?? true {
                 customer.priceSince = last.date
             }
+        }
+        // Former customers: Cancelled, as they would have been when they stopped. No cleans are brought over, so no
+        // totals change; when they were cleaned is kept in a note. Added at the end of the round order.
+        var sequence = ((try? context.fetch(FetchDescriptor<Customer>()))?.map(\.sequence).max() ?? 0) + 1
+        for f in plan.formerToAdd {
+            guard let first = RoundCalendar.parseDay(f.firstClean), let last = RoundCalendar.parseDay(f.lastClean) else { continue }
+            let cleans = f.cleans == 1 ? "1 clean" : "\(f.cleans) cleans"
+            let customer = Customer(name: f.name, address: f.address, price: Money.decimal(f.price), sequence: sequence,
+                                    round: f.round, status: .cancelled,
+                                    notes: ["Stopped before the app: last cleaned \(RoundCalendar.shortWithYear(last)) (\(cleans) from \(RoundCalendar.shortWithYear(first)), \(f.worksheet) worksheet)."])
+            customer.everyOther = f.everyOther
+            customer.historyFrom = first
+            context.insert(customer)
+            sequence += 1
         }
         try context.save()
         return done

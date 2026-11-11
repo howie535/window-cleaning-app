@@ -16,7 +16,8 @@ customer's app ID, so the history lands on the right customer. Worksheets go old
 when it turns up.
 
 Writes:
-    OUTPUT_FOLDER/price-history.json         for the app (Settings > Add price history)
+    OUTPUT_FOLDER/price-history.json         every customer's history, with names
+    OUTPUT_FOLDER/price-history-app.json     the same with IDs only, built into the app and merged once on first open
     OUTPUT_FOLDER/price-history-report.txt   every rise found, the ones to check, customers not matched
 
 Never write the output inside the app's git repository: it holds customer data.
@@ -158,7 +159,8 @@ def read_customers(path, label):
             side = " / ".join(x for x in (comments.get((r, colnum(NAME))), comments.get((r, colnum(PRICE)))) if x)
             rows.append(dict(sheet=sheet, row=r, worksheet=label, name=name,
                              address=str(cells.get((r, colnum(ADDR))) or "").strip(),
-                             price=money(cells.get((r, colnum(PRICE)))), cleans=cleans, side_note=side))
+                             price=money(cells.get((r, colnum(PRICE)))), cleans=cleans, side_note=side,
+                             every_other=str(cells.get((r, colnum("E"))) or "").strip().upper() == "EO"))
     return rows
 
 
@@ -296,6 +298,25 @@ def main():
         report_rows.append((c, first_seen, changes, checks))
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Former customers: on an older worksheet, cleaned at least once, gone by the newest one and not in the app.
+    # They go into the app as Cancelled (no cleans, so no stats change), with when they were cleaned in a note.
+    app_names = {norm(c["name"]) for c in reference}
+    former, seen = [], set()
+    for label, rows in reversed(years[:-1]):
+        for r in rows:
+            dated = [c["date"] for c in r["cleans"] if c["date"]]
+            key = (norm(r["name"]), norm(r["address"]))
+            if (r["sheet"], r["row"]) in used[label] or not dated or key in seen:
+                continue
+            seen.add(key)
+            if norm(r["name"]) in app_names:
+                continue          # same name already in the app: probably moved or respelt, not a former customer
+            former.append(dict(round=r["sheet"], name=r["name"], address=r["address"],
+                               price=r["price"] or usual([c["paid"] for c in r["cleans"] if c["date"]]) or 0,
+                               every_other=r["every_other"], first_clean=min(dated).isoformat(),
+                               last_clean=max(dated).isoformat(), cleans=len(dated), worksheet=label))
+    former.sort(key=lambda f: (ROUND_SHEETS.index(f["round"]), f["name"].lower()))
+
     (out_dir / "price-history.json").write_text(json.dumps(dict(
         schema=SCHEMA, generated=dt.date.today().isoformat(), worksheets=[label for label, _ in years],
         customers=records), indent=1, ensure_ascii=False))
@@ -306,7 +327,8 @@ def main():
     lines += [f"Customers matched: {len(records)} of {len(reference)}",
               f"Rises from a note: {noted}", f"Rises worked out from the figures (check these): {inferred}",
               f"Customers with something to check: {sum(1 for r in report_rows if r[3])}",
-              f"Customers in the app with no worksheet row: {len(unmatched_in_app)}", ""]
+              f"Customers in the app with no worksheet row: {len(unmatched_in_app)}",
+              f"Former customers added as Cancelled: {len(former)}", ""]
     lines.append("== Rises worked out from the figures (check these)")
     for c, _, changes, _ in report_rows:
         for ch in changes:
@@ -324,12 +346,22 @@ def main():
         for r in rows:
             if (r["sheet"], r["row"]) not in used[label] and r["cleans"]:
                 lines.append(f"  {label} {r['sheet']} row {r['row']}: {r['name']} ({r['address']})")
+    lines += ["", "== Former customers, added as Cancelled (no cleans brought over)"]
+    lines += [f"  {f['round']} · {f['name']} ({f['address']}): {pounds(f['price'])}, {f['cleans']} cleans "
+              f"{dt.date.fromisoformat(f['first_clean']):%-d %b %Y} to {dt.date.fromisoformat(f['last_clean']):%-d %b %Y}"
+              for f in former]
     lines += ["", "== Every customer: price since (first clean on the worksheets) and rises"]
     for c, first_seen, changes, _ in report_rows:
         rises = "; ".join(f"{ch['date']:%-d %b %Y} {pounds(ch['old'])} → {pounds(ch['new'])}"
                           + (" (worked out)" if ch["source"] == "inferred" else "") for ch in changes) or "no rise"
         lines.append(f"  {c['round']} · {c['name']}: first clean {first_seen:%-d %b %Y} · {rises}" if first_seen
                      else f"  {c['round']} · {c['name']}: no cleans · {rises}")
+    # The app's copy: IDs, dates and prices (no names) for current customers, plus the former customers. Copy it to
+    # "Splash Out/PriceHistory2025.json" (git-ignored); the app merges it once on first open.
+    (out_dir / "price-history-app.json").write_text(json.dumps(dict(
+        schema=SCHEMA, worksheets=[label for label, _ in years],
+        customers=[dict(id=r["id"], first_seen=r["first_seen"], changes=r["changes"]) for r in records],
+        former=former), separators=(",", ":"), ensure_ascii=False))
     (out_dir / "price-history-report.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines[:8]))
 
