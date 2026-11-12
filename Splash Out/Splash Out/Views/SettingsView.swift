@@ -45,14 +45,14 @@ struct SettingsView: View {
     var body: some View {
         OptionalNavigationStack(embedded: embedded) {
             List {
-                Section("Your data") {
+                Section("Data") {
                     LabeledContent("Customers", value: "\(customers.count)")
                     LabeledContent("Visits", value: "\((try? modelContext.fetchCount(FetchDescriptor<Visit>())) ?? 0)")
                 }
 
                 Section("About") {
                     LabeledContent("Version", value: ChangeLog.currentVersion)
-                    NavigationLink("What's new") { WhatsNewView() }
+                    NavigationLink("What's New") { WhatsNewView() }
                 }
 
                 if let settings = settings.first {
@@ -74,12 +74,12 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     LabeledContent("Backup folder") {
-                        Text(folderName.isEmpty ? "Not set" : folderName).foregroundStyle(folderError.isEmpty ? Color.secondary : Color.orange)
+                        Text(folderName.isEmpty ? "Not set" : folderName).foregroundStyle(folderError.isEmpty ? Color.secondary : Color.notPaidText)
                     }
                     if !folderName.isEmpty {
                         LabeledContent("Last copied there") {
                             Text(folderError.isEmpty ? (folderLast > 0 ? Date(timeIntervalSince1970: folderLast).formatted(date: .abbreviated, time: .shortened) : "Not yet") : folderError)
-                                .foregroundStyle(folderError.isEmpty ? Color.secondary : Color.orange)
+                                .foregroundStyle(folderError.isEmpty ? Color.secondary : Color.notPaidText)
                                 .multilineTextAlignment(.trailing)
                         }
                     }
@@ -112,9 +112,16 @@ struct SettingsView: View {
                 } header: {
                     Text("Backup")
                 } footer: {
-                    Text("A copy is saved on this phone automatically every day you use the app (the last 14 days are kept). Choose a backup folder (iCloud Drive or OneDrive in the Files app) and each day's copy is also saved there automatically, which protects you if the phone is lost. Export backup saves a one-off copy. Importing replaces everything in the app, and a backup of the current data is saved first. \"Customers only\" brings in names, addresses, prices, notes and round order but no cleans or payments. Exported files contain customer details, so keep them somewhere safe such as OneDrive.")
+                    InfoFooter(text: "A copy is saved on this phone every day.", title: "Backups", points: [
+                        "Choose a backup folder in iCloud Drive or OneDrive and each day's copy goes there too, so a lost phone loses nothing.",
+                        "This phone keeps the last 14 days.",
+                        "Export backup saves one copy now.",
+                        "Import replaces everything in the app. A backup is saved first.",
+                        "Customers only brings in names, addresses, prices, notes and round order. No cleans or payments.",
+                        "Backups hold customer details, so keep them somewhere private."])
                 }
             }
+            .sudsyBackground()
             .navigationTitle("Settings")
             .fileImporter(isPresented: $isShowingImporter, allowedContentTypes: [.json]) { result in
                 handlePickedFile(result)
@@ -125,7 +132,7 @@ struct SettingsView: View {
                     do {
                         try AutoBackup.setFolder(url)
                         _ = AutoBackup.run(context: modelContext)
-                        message = folderError.isEmpty ? "Backups will now be copied to \"\(url.lastPathComponent)\" every day. The first one has been saved." : folderError
+                        message = folderError.isEmpty ? nil : folderError     // success shows in the rows above
                     } catch { message = "Couldn't use that folder: \(error.localizedDescription)" }
                 case .failure(let error): message = "Couldn't open that folder: \(error.localizedDescription)"
                 }
@@ -149,14 +156,14 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) { pendingImportData = nil }
             } message: {
                 Text(importCustomersOnly
-                     ? "This wipes everything currently in the app and loads only the customers from the file: no cleans, payments, diary or tips. A backup is saved first."
-                     : "This wipes the customers, visits, diary and tips currently in the app and loads the file instead. A backup is saved first.")
+                     ? "Replaces everything with just the customers in the file: no cleans, payments, diary or tips. A backup is saved first."
+                     : "Replaces all customers, visits, diary and tips with the file. A backup is saved first.")
             }
             .alert("Clear all cleaning history?", isPresented: $isConfirmingClear) {
                 Button("Clear history", role: .destructive) { clearHistory() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes every clean, payment, diary entry and tip. Customers, prices, notes and round order stay. A backup is saved first.")
+                Text("Removes every clean, payment, diary entry and tip. Customers stay. A backup is saved first.")
             }
             .alert("Round data", isPresented: Binding(
                 get: { message != nil },
@@ -242,7 +249,10 @@ private struct MessageSection: View {
         } header: {
             Text("WhatsApp message")
         } footer: {
-            Text("Sent to everyone on a day from the Message button on the Round screen. {name} becomes the customer's name and {date} the day, like \"Tuesday 13 October\". {when} gives \"tomorrow\" or \"on Tuesday\" instead.")
+            InfoFooter(text: "Sent from the Message button on the Round.", title: "Fill-ins", points: [
+                "{name}: the customer's name",
+                "{date}: the day, e.g. Tuesday 13 October",
+                "{when}: \"tomorrow\" or \"on Tuesday\""])
         }
     }
 }
@@ -260,7 +270,10 @@ private struct OwedReminderSection: View {
         } header: {
             Text("Reminder for money owed")
         } footer: {
-            Text("Offered when you skip someone who owes. {name} becomes their name, {amount} what they owe (like £32) and {cleans} \"clean\" or \"2 cleans\".")
+            InfoFooter(text: "Offered when you skip someone who owes.", title: "Fill-ins", points: [
+                "{name}: their name",
+                "{amount}: what they owe, e.g. £32",
+                "{cleans}: \"clean\" or \"2 cleans\""])
         }
     }
 }
@@ -271,6 +284,7 @@ private struct CalendarSection: View {
     @AppStorage(CalendarSync.enabledKey) private var enabled = false
     @State private var message: String?
     @State private var working = false
+    @State private var needsSettings = false
 
     var body: some View {
         Section {
@@ -288,9 +302,15 @@ private struct CalendarSection: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Puts a \"Splash Out\" calendar in your Calendar app with who is working each day (the crew, or Day off), for the next four months. No targets, customers or notes. Switching it off deletes the calendar. It's one way: change the diary here, not in Calendar. To share it, open Calendar > Calendars, tap the i next to Splash Out, then Add Person. For someone on Android, turn on Public Calendar there and send them the link: they can add it to Google Calendar from its address.")
+            InfoFooter(text: "Shows who's working each day in your Calendar app.", title: "Calendar", points: [
+                "Covers the next four months: the crew, or Day off. No customers, targets or notes.",
+                "Change days in the Diary here, not in Calendar.",
+                "Switching it off deletes the calendar.",
+                "To share it: in Calendar tap Calendars, the i next to Splash Out, then Add Person.",
+                "For Android: turn on Public Calendar there and send the link. It adds to Google Calendar."])
         }
         .alert("Calendar", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            if needsSettings { Button("Open Settings") { openAppSettings() } }
             Button("OK", role: .cancel) {}
         } message: {
             Text(message ?? "")
@@ -303,6 +323,7 @@ private struct CalendarSection: View {
             let outcome = await work()
             working = false
             message = outcome.message
+            needsSettings = outcome == .notAllowed
             if outcome == .notAllowed { enabled = false }
         }
     }
@@ -378,7 +399,7 @@ private struct RoundSettingsSections: View {
         } header: {
             Text("Team")
         } footer: {
-            Text("Everyone who works on the round. Tap a name to rename it, or swipe to remove someone who isn't in any crew.")
+            InfoFooter(text: "Tap a name to rename. Swipe to remove.", points: ["Only someone who isn't in a crew can be removed."])
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $renameText)
@@ -421,8 +442,8 @@ private struct RoundSettingsSections: View {
             Text("Crews and day targets")
         } footer: {
             Text(settings.teamMembers.isEmpty
-                 ? "Add your team first, then make a crew for each combination of people who work together. Each crew has a target for how much work it does in a day."
-                 : "A crew is a combination of people who work together, with the amount of work it aims to do in a day (in pounds). Swipe a crew to delete it.")
+                 ? "Add your team first, then a crew for each group that works together."
+                 : "Each crew has a day target in pounds. Swipe to delete.")
         }
 
         Section {
@@ -447,7 +468,9 @@ private struct RoundSettingsSections: View {
         } header: {
             Text("Usual week")
         } footer: {
-            Text("The usual week sets each week's target. A day outside it counts as worked once enough houses are cleaned, and adds the extra-day crew's target.")
+            InfoFooter(text: "Sets each week's target.", title: "Usual week", points: [
+                "A day outside the usual week counts as worked once enough houses are cleaned.",
+                "Each extra day worked adds the extra-day crew's target."])
         }
 
         Section {
@@ -459,7 +482,9 @@ private struct RoundSettingsSections: View {
         } header: {
             Text("Counting and Next Up")
         } footer: {
-            Text("Target round length is how long a full round should take. Stats uses it for the \"ideal\" figures: how big the round, and how quick the days, need to be to hit the weekly target in that time.")
+            InfoFooter(text: "Round length sets the ideal figures on Stats.", title: "Target round length", points: [
+                "How long a full round should take.",
+                "Stats works out how big the round, and how quick the days, need to be to hit the weekly target in that time."])
         }
 
         Section {
@@ -468,7 +493,10 @@ private struct RoundSettingsSections: View {
         } header: {
             Text("Price rise")
         } footer: {
-            Text("A price that hasn't gone up for this long (or since the first clean, if no rise is logged) shows as due on Stats and Price Rise, with the new price to the nearest pound.")
+            InfoFooter(text: "Rises due show on Stats and Price Rise.", title: "Price rise", points: [
+                "Due when a price hasn't gone up for this many months.",
+                "No rise logged? It counts from the first clean.",
+                "New prices are rounded to the nearest pound."])
         }
     }
 }
@@ -507,7 +535,7 @@ private struct NewCrewSheet: View {
                     Text(chosen.isEmpty ? "The crew is named after its people." : "This crew will be called \"\(previewName)\".")
                 }
             }
-            .navigationTitle("New crew")
+            .navigationTitle("New Crew")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

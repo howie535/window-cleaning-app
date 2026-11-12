@@ -87,7 +87,7 @@ struct VisitQuickActions: View {
                     Button("Skip and send a reminder") { OwedReminder.open(for: customer); run(.skipped) }
                 }
                 Button("Skip anyway", role: .destructive) { run(.skipped) }
-                Button("Go back", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             } message: {
                 Text("They still owe \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s"). Skip them anyway?")
             }
@@ -165,7 +165,7 @@ struct FrontOnlySheet: View {
                          ?? "Their full price is \(customer.price.pounds).")
                 }
             }
-            .navigationTitle("Front only")
+            .navigationTitle("Front Only")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -232,7 +232,7 @@ struct ExtraCleanSheet: View {
                     Toggle("Paid", isOn: $isPaid)
                 }
             }
-            .navigationTitle("Cleaned + extra")
+            .navigationTitle("Cleaned + Extra")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

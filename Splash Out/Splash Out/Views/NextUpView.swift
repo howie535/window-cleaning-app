@@ -75,8 +75,14 @@ struct NextUpView: View {
     private func roundList(plan: RoundPlanner.Plan, today: Date) -> some View {
         List(selection: sizeClass == .regular ? $selectedID : .constant(nil)) {
             if plan.days.isEmpty {
-                ContentUnavailableView("No working days", systemImage: "calendar.badge.exclamationmark",
-                                       description: Text("There are no working days coming up. Check the usual week in Settings."))
+                ContentUnavailableView {
+                    Label("No Working Days", systemImage: "calendar.badge.exclamationmark")
+                } description: {
+                    Text("No working days are coming up.")
+                } actions: {
+                    NavigationLink("Set the usual week") { SettingsView(embedded: true) }
+                        .buttonStyle(.borderedProminent)
+                }
             }
 
             ForEach(Array(plan.days.enumerated()), id: \.element.id) { index, day in
@@ -131,16 +137,17 @@ struct NextUpView: View {
         }
         .sheet(item: $grouping) { GroupPickerView(customer: $0) }
         .owedOnPaidPrompt($paidRequest)
-        .alert("Skip anyway?", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), presenting: skipAsk) { person in
+        .confirmationDialog("They still owe money", isPresented: Binding(get: { skipAsk != nil }, set: { if !$0 { skipAsk = nil } }), titleVisibility: .visible, presenting: skipAsk) { person in
             if OwedReminder.canSend(to: person) {
                 Button("Skip and send a reminder") { OwedReminder.open(for: person); perform(.skipped, for: person) }
             }
             Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
-            Button("Go back", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: { person in
             let owed = RoundMetrics.moneyOwed([person])
             Text("\(person.name) still owes \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s").")
         }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { RoundKeyButton() } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(.bar, for: .navigationBar)
@@ -186,12 +193,12 @@ struct NextUpView: View {
                 Label {
                     Text("Done today: \(cleaned) cleaned · \(total.pounds)" + (other > 0 ? " · \(other) skipped or not due" : ""))
                 } icon: {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.paidText)
                 }
                 .font(.subheadline.weight(.semibold))
                 Spacer()
                 Image(systemName: showDone ? "chevron.up" : "chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
@@ -224,8 +231,10 @@ struct NextUpView: View {
                     .frame(width: 4)
                     .padding(.vertical, 2)
                     .offset(x: -12)
+                    .accessibilityHidden(true)
             }
         }
+        .accessibilityValue(dayRow.inCluster ? "Kept with neighbours" : "")
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !dayRow.isDone {
                 Button(role: leaves && !owes ? .destructive : nil) { log(.cleanedPaid, for: customer) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }
@@ -295,6 +304,7 @@ private struct DayHeader: View {
     let day: RoundPlanner.DayPlan
     let isToday: Bool
     var onMessage: () -> Void = {}
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// Customers on this day who haven't had the message, once some others have (for example someone skipped,
     /// so the next people were pulled forward).
@@ -319,16 +329,18 @@ private struct DayHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .center) {
+        // Very large text: the Message button goes under the day instead of beside it.
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(alignment: .center))
+        layout {
         VStack(alignment: .leading, spacing: 2) {
             Text((isToday ? "Today, " : "") + RoundCalendar.weekdayShort(day.date))
                 .font(.headline)
-                .foregroundStyle(.primary)
+                .foregroundStyle(isToday ? Color.accentColor : .primary)
             Text(summary)
-                .font(.caption)
+                .font(.footnote)
                 .textCase(nil)
         }
-            Spacer()
+            if !typeSize.isAccessibilitySize { Spacer() }
             if !day.customers.isEmpty {
                 Button(action: onMessage) { Label(newCount > 0 ? "Message · \(newCount) new" : "Message", systemImage: "message") }
                     .font(.subheadline)
@@ -339,7 +351,11 @@ private struct DayHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background {
+            // Today stands out from the days after it with a brand-blue tint.
+            Rectangle().fill(.bar)
+            if isToday { Color.accentColor.opacity(0.16) }
+        }
         .listRowInsets(EdgeInsets())
     }
 }
@@ -347,6 +363,7 @@ private struct DayHeader: View {
 private struct NextUpRow: View {
     let customer: Customer
     var state: NextUp.State = .planned
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var isDimmed: Bool { state != .planned && state != .booked }
 
@@ -354,7 +371,10 @@ private struct NextUpRow: View {
 
     var body: some View {
         let owed = owed
-        HStack(alignment: .top) {
+        let big = typeSize.isAccessibilitySize
+        // Very large text: the price goes under the details, so the name and address keep the full width.
+        let layout = big ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(alignment: .top))
+        layout {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(customer.name).font(.headline)
@@ -371,44 +391,47 @@ private struct NextUpRow: View {
                 }
                 Text(customer.address)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(big ? 3 : 1)
                 HStack(spacing: 10) {
-                    if !customer.area.isEmpty { Text(customer.area) }
+                    // The area only when the address doesn't already say it.
+                    if !customer.area.isEmpty && !customer.address.localizedCaseInsensitiveContains(customer.area) {
+                        Text(customer.area)
+                    }
                     if let last = customer.lastCleanDate { Text("Last \(RoundCalendar.short(last))") }
                     if owed.cleans > 0 {
                         Text("Owes \(owed.amount.pounds)")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.owedText)
                     }
                 }
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 if let next = customer.nextVisitNote {
                     Label(next, systemImage: "pin.fill")
-                        .font(.caption.bold())
+                        .font(.footnote.bold())
                         .foregroundStyle(.purple)
                         .lineLimit(2)
                 }
                 if let note = customer.notes.first {
                     Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                        .font(.footnote)
+                        .foregroundStyle(Color.notPaidText)
                         .lineLimit(2)
                 }
             }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
+            if !big { Spacer(minLength: 8) }
+            (big ? AnyLayout(HStackLayout(spacing: 12)) : AnyLayout(VStackLayout(alignment: .trailing, spacing: 4))) {
                 if state == .cleanedToday {
                     Label(chargedToday.pounds, systemImage: "checkmark.circle.fill")
                         .font(.headline)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.paidText)
                 } else {
                     Text(customer.price.pounds)
                         .font(.headline)
                 }
-                Image(systemName: customer.contact == .ring ? "phone" : "message")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Image(systemName: customer.contact == .ring ? "phone.fill" : "message.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(customer.contact == .ring ? Color.notPaidText : Color.paidText)
+                    .accessibilityLabel(customer.contact == .ring ? "Ring" : "WhatsApp")
             }
         }
         .padding(.vertical, 4)
@@ -422,9 +445,9 @@ private struct NextUpRow: View {
         return customer.allVisits.filter { $0.kind == .cleaned && $0.date == today }.reduce(0) { $0 + $1.charged }
     }
 
-    private func tag(_ text: String, colour: Color = .blue) -> some View {
+    private func tag(_ text: String, colour: Color = .accentColor) -> some View {
         Text(text)
-            .font(.caption2.bold())
+            .font(.caption.bold())
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(colour.opacity(0.15), in: Capsule())
@@ -451,7 +474,7 @@ struct CustomerLogPanel: View {
                             .padding(.vertical, 6)
                     }
                 } footer: {
-                    Text("They haven't started yet, so they show greyed out and don't count towards the day's total.")
+                    Text("Greyed out, and not in the day's total, until started.")
                 }
             }
 
@@ -460,7 +483,7 @@ struct CustomerLogPanel: View {
                     LabeledContent("Booked for", value: RoundCalendar.weekdayShort(booked))
                     Button("Remove booking", role: .destructive) { customer.bookedFor = nil }
                 } footer: {
-                    Text("They were messaged for this day, so the round keeps them on it. Logging a clean or skip clears it.")
+                    Text("Kept on this day because they were messaged. Clears when logged.")
                 }
             }
 
@@ -478,10 +501,10 @@ struct CustomerLogPanel: View {
                 Text(customer.address)
                 if owed.cleans > 0 {
                     LabeledContent("Owes", value: owed.amount, format: .currency(code: "GBP"))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.owedText)
                 }
                 ForEach(customer.notes, id: \.self) { note in
-                    Text(note).foregroundStyle(.orange)
+                    Text(note).foregroundStyle(Color.notPaidText)
                 }
             }
 
@@ -516,6 +539,39 @@ struct QuickLogSheet: View {
                         Button("Close") { dismiss() }
                     }
                 }
+        }
+    }
+}
+
+/// What the marks on a Round row mean, behind a tap so the rows stay uncluttered.
+private struct RoundKeyButton: View {
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: { Label("Key", systemImage: "info.circle") }
+            .popover(isPresented: $showing) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Key").font(.headline)
+                    keyRow("Bar down the side: kept with neighbours on the same day") { Capsule().fill(Color.teal).frame(width: 4, height: 22) }
+                    keyRow("WhatsApp") { Image(systemName: "message.fill").foregroundStyle(Color.paidText) }
+                    keyRow("Ring") { Image(systemName: "phone.fill").foregroundStyle(Color.notPaidText) }
+                    keyRow("Every other round") { Text("EO").font(.caption.bold()).foregroundStyle(Color.accentColor) }
+                    keyRow("Note for the next visit") { Image(systemName: "pin.fill").foregroundStyle(.purple) }
+                    keyRow("Has unpaid cleans") { Text("Owes").font(.footnote).foregroundStyle(Color.owedText) }
+                    Text("Swipe right for Paid or Not paid, left for Skipped.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(minWidth: 280, alignment: .leading)
+                .presentationCompactAdaptation(.popover)
+            }
+    }
+
+    private func keyRow<Mark: View>(_ text: String, @ViewBuilder mark: () -> Mark) -> some View {
+        HStack(spacing: 12) {
+            mark().frame(width: 28)
+            Text(text).font(.subheadline)
         }
     }
 }

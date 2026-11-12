@@ -115,7 +115,7 @@ struct HistoryView: View {
                     Text(visit.charged.pounds).monospacedDigit()
                     Text(visit.paid == 0 ? "Not paid" : (visit.paid < visit.charged ? "Part paid" : "Paid"))
                         .font(.caption)
-                        .foregroundStyle(visit.paid == 0 ? .red : (visit.paid < visit.charged ? .orange : .green))
+                        .foregroundStyle(visit.paid == 0 ? Color.owedText : (visit.paid < visit.charged ? Color.notPaidText : Color.paidText))
                 }
             case .skipped:
                 Text("Skipped").foregroundStyle(.secondary)

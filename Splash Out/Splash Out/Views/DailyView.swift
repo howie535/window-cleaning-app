@@ -45,7 +45,7 @@ struct DaySections: View {
         if let average {
             Section {
             } footer: {
-                Text("Orange: below the average of \(Money.perHouse(average.average)) a house (\(average.days) worked days, \(stats.analysisLabel)).")
+                Text("↓ Orange: under the \(Money.perHouse(average.average)) a house average (\(stats.analysisLabel)).")
             }
         }
         if days.isEmpty {
@@ -82,7 +82,8 @@ struct DayRow: View {
                     .font(.headline)
                 HStack(spacing: 0) {
                     Text("\(totals.houses) house\(totals.houses == 1 ? "" : "s") · ")
-                    Text("\(Money.perHouse(perHouse)) a house").foregroundStyle(low ? .orange : .secondary)
+                    if low { Image(systemName: "arrow.down").foregroundStyle(Color.notPaidText).accessibilityLabel("Below average") }
+                    Text("\(Money.perHouse(perHouse)) a house").foregroundStyle(low ? Color.notPaidText : Color.secondary)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

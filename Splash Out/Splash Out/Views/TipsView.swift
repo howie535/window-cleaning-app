@@ -18,7 +18,7 @@ struct TipsView: View {
                 Text("Tips are never counted as income in any figure.")
             }
             Section {
-                if tips.isEmpty { Text("No tips recorded.").foregroundStyle(.secondary) }
+                if tips.isEmpty { Button { isAdding = true } label: { Label("Add the first tip", systemImage: "plus.circle.fill") } }
                 ForEach(tips) { tip in
                     HStack {
                         VStack(alignment: .leading) {
@@ -58,7 +58,7 @@ private struct AddTipView: View {
                 LabeledField(label: "From") { TextField("Customer name", text: $name) }
                 LabeledField(label: "Amount") { TextField("0.00", text: $amountText).keyboardType(.decimalPad) }
             }
-            .navigationTitle("New tip")
+            .navigationTitle("New Tip")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

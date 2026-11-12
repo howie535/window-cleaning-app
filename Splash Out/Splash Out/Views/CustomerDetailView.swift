@@ -67,8 +67,8 @@ struct CustomerDetailView: View {
     private var deleteSummary: String {
         let cleans = customer.allVisits.filter { $0.kind == .cleaned }
         let work = cleans.reduce(Decimal(0)) { $0 + $1.charged }
-        let owedText = owed.cleans > 0 ? " They owe \(owed.amount.pounds), which will no longer show on Money Owed." : ""
-        return "This removes \(customer.name) and all \(customer.allVisits.count) visits (\(cleans.count) cleans, \(work.pounds) of work) from every total, including the tax year.\(owedText) It can't be undone here, but a backup is saved first. To keep their history, cancel them instead."
+        let owedText = owed.cleans > 0 ? " Their \(owed.amount.pounds) owed drops off Money Owed." : ""
+        return "Removes \(customer.name) and \(customer.allVisits.count) visits (\(cleans.count) cleans, \(work.pounds)) from every total, including the tax year.\(owedText) A backup is saved first. To keep their history, cancel instead."
     }
 
     private func deleteCustomer() {
@@ -91,9 +91,53 @@ struct CustomerDetailView: View {
 
     private var details: some View {
         List {
+            // Doorstep first: contact, money owed, logging. Details and history follow; cancel and delete last.
+            Section("Contact") {
+                ContactButton(customer: customer)
+            }
+
+            if owed.cleans > 0 {
+                Section("Owed") {
+                    LabeledContent("\(owed.cleans) clean\(owed.cleans == 1 ? "" : "s")") {
+                        Text(owed.amount, format: .currency(code: "GBP"))
+                            .font(.headline)
+                            .foregroundStyle(Color.owedText)
+                    }
+                    Button {
+                        isShowingPayment = true
+                    } label: {
+                        Label("Record payment...", systemImage: "sterlingsign.circle")
+                            .font(.title3)
+                            .padding(.vertical, 6)
+                    }
+                }
+            }
+
+            Section("Log") {
+                VisitQuickActions(customer: customer, sheet: $logSheet)
+                if owed.cleans == 0 && customer.lastCleanDate != nil {
+                    Button("Payment in advance...") { isShowingPayment = true }
+                }
+            }
+
+            Section {
+                TextField("Extra job or reminder", text: $nextVisitDraft, axis: .vertical)
+                    .focused($focused, equals: .nextVisit)
+            } header: {
+                Text("Next visit")
+            } footer: {
+                Text("Shows on the round; cleared when the next clean is logged.")
+            }
+
+            Section("Notes") {
+                TextField("Add a note", text: $notesDraft, axis: .vertical)
+                    .focused($focused, equals: .notes)
+            }
+
             Section {
                 CustomerMapView(customer: customer)
             }
+
             Section {
                 LabeledContent("Address", value: customer.address)
                 LabeledContent("Phone", value: customer.phone)
@@ -106,7 +150,7 @@ struct CustomerDetailView: View {
                 if customer.outstandingBalance != 0 {
                     LabeledContent("Balance") {
                         Text(balanceDescription)
-                            .foregroundStyle(customer.outstandingBalance > 0 ? .blue : .orange)
+                            .foregroundStyle(customer.outstandingBalance > 0 ? Color.blue : Color.notPaidText)
                     }
                     LabeledContent("Next Price", value: customer.suggestedNextPrice, format: .currency(code: "GBP"))
                 }
@@ -139,48 +183,6 @@ struct CustomerDetailView: View {
                 }
             }
 
-            Section {
-                TextField("Extra job or reminder", text: $nextVisitDraft, axis: .vertical)
-                    .focused($focused, equals: .nextVisit)
-            } header: {
-                Text("Next visit")
-            } footer: {
-                Text("Shows on the round; cleared when the next clean is logged.")
-            }
-
-            Section("Notes") {
-                TextField("Add a note", text: $notesDraft, axis: .vertical)
-                    .focused($focused, equals: .notes)
-            }
-
-            if owed.cleans > 0 {
-                Section("Owed") {
-                    LabeledContent("\(owed.cleans) clean\(owed.cleans == 1 ? "" : "s")") {
-                        Text(owed.amount, format: .currency(code: "GBP"))
-                            .font(.headline)
-                            .foregroundStyle(.red)
-                    }
-                    Button {
-                        isShowingPayment = true
-                    } label: {
-                        Label("Record payment...", systemImage: "sterlingsign.circle")
-                            .font(.title3)
-                            .padding(.vertical, 6)
-                    }
-                }
-            }
-
-            Section("Log") {
-                VisitQuickActions(customer: customer, sheet: $logSheet)
-                if owed.cleans == 0 && customer.lastCleanDate != nil {
-                    Button("Payment in advance...") { isShowingPayment = true }
-                }
-            }
-
-            Section("Contact") {
-                ContactButton(customer: customer)
-            }
-
             if !sortedPriceChanges.isEmpty {
                 Section {
                     ForEach(sortedPriceChanges) { change in
@@ -203,21 +205,6 @@ struct CustomerDetailView: View {
             }
 
             Section {
-                if customer.status == .cancelled {
-                    Button("Reactivate this customer") { customer.status = .active }
-                    Button("Someone new has moved in...") { isShowingNewOccupant = true }
-                } else {
-                    Button("Cancel this customer...", role: .destructive) { isConfirmingCancel = true }
-                }
-                Button("Delete customer completely...", role: .destructive) { isConfirmingDelete = true }
-            } footer: {
-                Text((customer.status == .cancelled
-                     ? "Cancelled customers stay in the list and keep their history and anything they owe. Find them with Status > Cancelled on the Customers screen. If a new person has moved into the house, \"Someone new has moved in\" starts a fresh customer at the same address, so this customer's history stays separate and your stats stay right."
-                     : "Use this when a customer stops using you. Their history is kept, and so is anything they owe.")
-                     + " Delete is only for mistakes such as a duplicate: it takes their cleans out of the stats.")
-            }
-
-            Section {
                 if sortedLogs.isEmpty {
                     Text("No visits yet.")
                         .foregroundStyle(.secondary)
@@ -235,7 +222,27 @@ struct CustomerDetailView: View {
             } footer: {
                 if !sortedLogs.isEmpty { Text("Tap a visit to correct it or delete it.") }
             }
+
+            Section {
+                if customer.status == .cancelled {
+                    Button("Reactivate this customer") { customer.status = .active }
+                    Button("Someone new has moved in...") { isShowingNewOccupant = true }
+                } else {
+                    Button("Cancel this customer...", role: .destructive) { isConfirmingCancel = true }
+                }
+                Button("Delete customer completely...", role: .destructive) { isConfirmingDelete = true }
+            } footer: {
+                customer.status == .cancelled
+                    ? InfoFooter(text: "Their history and anything owed are kept.", title: "Cancelled customers", points: [
+                        "Find them under Status › Cancelled on Customers.",
+                        "Someone new moved in? Use \"Someone new has moved in\" so each history stays separate.",
+                        "Delete is only for mistakes, such as a duplicate. It takes their cleans out of the stats."])
+                    : InfoFooter(text: "Cancel keeps their history. Delete is for mistakes.", title: "Cancel or delete", points: [
+                        "Cancel when a customer stops using you. Their history and anything owed are kept.",
+                        "Delete is only for mistakes, such as a duplicate. It takes their cleans out of the stats."])
+            }
         }
+        .sudsyBackground()
         .navigationTitle(customer.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -257,7 +264,7 @@ struct CustomerDetailView: View {
         }
         .confirmationDialog("Cancel \(customer.name)?", isPresented: $isConfirmingCancel, titleVisibility: .visible) {
             Button("Cancel customer", role: .destructive) { customer.status = .cancelled }
-            Button("Keep them", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             if owed.cleans > 0 {
                 Text("They still owe \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) clean\(owed.cleans == 1 ? "" : "s"). That stays on Money Owed after they're cancelled.")
@@ -267,7 +274,7 @@ struct CustomerDetailView: View {
         }
         .alert("Delete \(customer.name) completely?", isPresented: $isConfirmingDelete) {
             Button("Delete for good", role: .destructive, action: deleteCustomer)
-            Button("Keep them", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(deleteSummary)
         }
@@ -345,7 +352,7 @@ private struct CleanLogRow: View {
                 Text(log.date, style: .date)
                 if let note = log.note, !note.isEmpty {
                     Text(note)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -354,7 +361,7 @@ private struct CleanLogRow: View {
                 VStack(alignment: .trailing) {
                     Text(log.charged, format: .currency(code: "GBP"))
                     Text(paymentStatusText)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(paymentStatusColor)
                 }
             } else {
@@ -376,7 +383,7 @@ private struct CleanLogRow: View {
         if log.paid == 0 { return .red }
         let difference = log.paymentDifference
         if difference == 0 { return .green }
-        return difference > 0 ? .blue : .orange
+        return difference > 0 ? .blue : .notPaidText
     }
 }
 

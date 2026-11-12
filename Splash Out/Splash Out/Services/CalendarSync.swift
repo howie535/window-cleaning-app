@@ -47,7 +47,7 @@ enum CalendarSync {
             case .removed(let count):
                 return count == 0 ? "There was no Splash Out calendar to remove." : "The Splash Out calendar was removed. Anyone you shared it with no longer sees it."
             case .notAllowed:
-                return "Splash Out isn't allowed to use Calendar. You can allow it in Settings > Privacy & Security > Calendars."
+                return "Sudsy isn't allowed to use Calendar."
             case .failed(let reason):
                 return "Couldn't update the calendar: \(reason)"
             }

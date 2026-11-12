@@ -1,26 +1,24 @@
 import SwiftUI
 import SwiftData
 
-/// Houses that may be harming the round: worth a price rise, or worth letting go.
-struct RoundReviewView: View {
-    @Environment(RoundClock.self) private var clock
-    @Query private var customers: [Customer]
-    @Query private var visits: [Visit]
-    @State private var showAll = false
+/// Houses that may be harming the round: worth a price rise, or worth letting go (a part of To Check).
+struct RoundReviewSections: View {
+    let review: (rows: [RoundReview.Row], average: Decimal)
+    @Binding var showAll: Bool
 
     var body: some View {
-        let _ = VisitLookup.begin(visits)
-        let review = RoundReview.rows(customers: customers, today: clock.today, threshold: showAll ? 1 : 3)
-        let _ = VisitLookup.end()
-
-        List {
             Section {
                 LabeledContent("Average price (full cleans)", value: review.average.formatted(.currency(code: "GBP").precision(.fractionLength(2))))
                 Toggle("Show every house with a reason", isOn: $showAll)
+            } header: {
+                Text("Round Review")
             } footer: {
-                Text("Cheap for the round and on its own count most; skipping a lot (only when part of a group) and slow paying count less. Front-only houses are never counted as cheap.")
+                InfoFooter(text: "Houses that may be holding the round back.", title: "How houses are picked", points: [
+                    "Counts most: cheap for the round, or out on their own.",
+                    "Counts less: skipping a lot (only in a group), or paying slowly.",
+                    "Front-only houses are never counted as cheap."])
             }
-            Section("\(review.rows.count) houses") {
+            Section("Houses to Review (\(review.rows.count))") {
                 if review.rows.isEmpty {
                     Text("Nothing stands out.").foregroundStyle(.secondary)
                 }
@@ -47,14 +45,12 @@ struct RoundReviewView: View {
                                         .font(.caption2.bold())
                                         .padding(.horizontal, 6).padding(.vertical, 2)
                                         .background(Color.orange.opacity(0.15), in: Capsule())
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.notPaidText)
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        .navigationTitle("Round review")
     }
 }

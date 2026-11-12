@@ -1,19 +1,11 @@
 import SwiftUI
 import SwiftData
 
-/// Customers who skipped 2 or more times in the last 12 months.
-struct FrequentSkipsView: View {
-    @Query private var customers: [Customer]
-    @Query private var visits: [Visit]
-    @Query private var crews: [Crew]
-    @Query private var workDays: [WorkDay]
-    @Query private var settings: [AppSettings]
+/// Customers who skipped 2 or more times in the last 12 months (a part of To Check).
+struct FrequentSkipsSections: View {
+    let rows: [RoundStats.SkipRow]
 
     var body: some View {
-        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays)
-        let rows = stats.frequentSkippers()
-
-        List {
             Section {
                 if rows.isEmpty { Text("Nobody has skipped twice in the last year.").foregroundStyle(.secondary) }
                 ForEach(rows) { row in
@@ -31,14 +23,17 @@ struct FrequentSkipsView: View {
                                 }
                             }
                             Spacer()
-                            Text("\(row.skips) of \(row.ofLast) visits").font(.headline).foregroundStyle(.orange)
+                            Text("\(row.skips) of \(row.ofLast) visits").font(.headline).foregroundStyle(Color.notPaidText)
                         }
                     }
                 }
+            } header: {
+                Text("Skipping Often (\(rows.count))")
             } footer: {
-                Text("Skips in the last 12 months, counted from each customer's first clean. Active and leaving customers only. Every-other customers' off-cycle visits don't count as skips.")
+                InfoFooter(text: "Skips in the last 12 months.", points: [
+                    "Counted from each customer's first clean.",
+                    "Active and leaving customers only.",
+                    "Every-other customers' off rounds aren't skips."])
             }
-        }
-        .navigationTitle("Frequent Skips")
     }
 }

@@ -11,7 +11,6 @@ struct PriceRiseView: View {
     @Query private var visits: [Visit]
     @Query private var settings: [AppSettings]
     @State private var confirming: Customer?
-    @State private var showingHelp = false
     @State private var opened: Customer?
 
     private var percent: Double { settings.first?.priceRisePercent ?? 0.10 }
@@ -39,7 +38,11 @@ struct PriceRiseView: View {
                     LabeledContent("Adds a round", value: adds.pounds)
                 }
             } footer: {
-                Button("How this works") { showingHelp = true }.font(.footnote)
+                InfoFooter(text: "How rises work", title: "Price rises", points: [
+                    "Due when a price hasn't gone up for the months set in Settings. No rise logged? It counts from the first clean.",
+                    "New price: \(percentText) more, to the nearest pound (50p rounds up).",
+                    "Monthly payers: the rise goes on the monthly amount.",
+                    "Tap Done once they've been told and the new price has started."])
             }
             if !due.isEmpty {
                 Section("Due (\(due.count))") {
@@ -73,11 +76,6 @@ struct PriceRiseView: View {
             }
         } message: {
             Text("Changes their price and logs the rise as \(RoundCalendar.shortWithYear(today)).")
-        }
-        .alert("Price rises", isPresented: $showingHelp) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("A rise is due once a price hasn't gone up for the months set in Settings. With no rise logged, it's counted from their first clean, going back to the 2025-6 worksheet. The new price is \(percentText) on top, to the nearest pound (50p and above goes up, below 50p goes down). Monthly payers get the rise on their monthly amount. Tap Done once you've told them and the new price has started. Percentage and months are in Settings.")
         }
     }
 

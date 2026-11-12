@@ -82,10 +82,10 @@ struct RecordPaymentView: View {
                     DatePicker("Date paid", selection: $date, displayedComponents: .date)
                 } footer: {
                     Text(footer)
-                        .foregroundStyle(problem == nil ? Color.secondary : Color.red)
+                        .foregroundStyle(problem == nil ? Color.secondary : Color.owedText)
                 }
             }
-            .navigationTitle("Record payment")
+            .navigationTitle("Record Payment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

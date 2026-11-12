@@ -24,7 +24,7 @@ struct WhatsAppButton: View {
         .alert("Can't Open WhatsApp", isPresented: $showsUnavailableAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("WhatsApp couldn't be opened. Check it is installed and that the number \(customer.phone) is right.")
+            Text("Couldn't open WhatsApp. Check the number: \(customer.phone).")
         }
     }
 

@@ -56,7 +56,7 @@ struct MoneyOwedView: View {
         if tabs == nil || tabs?.selection == .owed {
             content
         } else {
-            Color(.systemGroupedBackground)
+            Color.sudsyBackground
         }
     }
 
@@ -76,6 +76,7 @@ struct MoneyOwedView: View {
             NavigationSplitView {
                 owedList(rows: rows, credits: credits, total: total, cleans: cleans, today: today)
                     .roomyRows()
+                    .sudsyBackground()
                     .navigationTitle("Money Owed")
             } detail: {
                 NavigationStack {
@@ -91,6 +92,7 @@ struct MoneyOwedView: View {
         } else {
             NavigationStack {
                 owedList(rows: rows, credits: credits, total: total, cleans: cleans, today: today)
+                    .sudsyBackground()
                     .navigationTitle("Money Owed")
                     .sheet(item: $payingCustomer) { customer in
                         RecordPaymentView(customer: customer)
@@ -107,7 +109,7 @@ struct MoneyOwedView: View {
                 LabeledContent("Total owed") {
                     Text(total, format: .currency(code: "GBP"))
                         .font(.title3.bold())
-                        .foregroundStyle(total > 0 ? .red : .primary)
+                        .foregroundStyle(total > 0 ? Color.owedText : Color.primary)
                 }
                 LabeledContent("Cleans", value: "\(cleans)")
                 LabeledContent("Customers", value: "\(rows.count)")
@@ -162,13 +164,13 @@ struct MoneyOwedView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.customer.name).font(.headline)
                 Text(detail(for: row, today: today))
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             Text(row.amount, format: .currency(code: "GBP"))
                 .font(.headline)
-                .foregroundStyle(.red)
+                .foregroundStyle(Color.owedText)
         }
         .contentShape(Rectangle())
     }

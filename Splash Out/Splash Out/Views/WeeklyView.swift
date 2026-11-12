@@ -21,9 +21,17 @@ struct WeeklyView: View {
     /// Green when work meets target, amber within 10% below, red lower.
     private func colour(for week: WeekMetrics.Week) -> Color {
         if week.target == 0 { return .secondary }
-        if week.work >= week.target { return .green }
-        if week.work >= week.target * Decimal(string: "0.9")! { return .orange }
-        return .red
+        if week.work >= week.target { return .paidText }
+        if week.work >= week.target * Decimal(string: "0.9")! { return .notPaidText }
+        return .owedText
+    }
+
+    /// A shape as well as the colour: met, nearly, short.
+    private func symbol(for week: WeekMetrics.Week) -> String? {
+        if week.target == 0 { return nil }
+        if week.work >= week.target { return "checkmark.circle.fill" }
+        if week.work >= week.target * Decimal(string: "0.9")! { return "minus.circle.fill" }
+        return "arrow.down.circle.fill"
     }
 
     private func status(_ week: WeekMetrics.Week, today: Date, usualDaysInWeek: Int) -> String {
@@ -66,9 +74,15 @@ struct WeeklyView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(pounds(week.work))
-                                .font(.headline)
-                                .foregroundStyle(colour(for: week))
+                            HStack(spacing: 4) {
+                                if let symbol = symbol(for: week) {
+                                    Image(systemName: symbol).font(.subheadline)
+                                        .accessibilityLabel(week.work >= week.target ? "Target met" : "Short of target")
+                                }
+                                Text(pounds(week.work))
+                                    .font(.headline)
+                            }
+                            .foregroundStyle(colour(for: week))
                             Text("target \(pounds(week.target))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

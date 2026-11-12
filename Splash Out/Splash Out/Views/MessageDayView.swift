@@ -33,7 +33,11 @@ struct MessageDayView: View {
                 } header: {
                     Text("Message")
                 } footer: {
-                    Text("{name} becomes the customer's name and {date} the day, like \"Tuesday 13 October\". {when} gives \"tomorrow\" or \"on Tuesday\" instead. The same message can be changed in Settings.")
+                    InfoFooter(text: "Fill-ins change for each customer.", title: "Fill-ins", points: [
+                        "{name}: the customer's name",
+                        "{date}: the day, e.g. Tuesday 13 October",
+                        "{when}: \"tomorrow\" or \"on Tuesday\"",
+                        "Change the usual message in Settings."])
                 }
 
                 Section {
@@ -45,10 +49,10 @@ struct MessageDayView: View {
                         }
                     } else if !queue.isEmpty {
                         Label("Everyone has been messaged", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Color.paidText)
                     }
                 } footer: {
-                    Text("Opens WhatsApp with the message ready. Press Send there, then come back and tap again. \(sentCount) of \(queue.count) done." + (sentCount > 0 && nextToSend != nil ? " The rest joined this day after you started, for example when someone was skipped." : ""))
+                    Text("Press Send in WhatsApp, then come back for the next. \(sentCount) of \(queue.count) done." + (sentCount > 0 && nextToSend != nil ? " These joined the day after you started." : ""))
                 }
 
                 Section("Customers (\(day.customers.count))") {
@@ -88,7 +92,7 @@ struct MessageDayView: View {
             }
             Spacer()
             if customer.phone.isEmpty {
-                Text("No number").font(.caption).foregroundStyle(.orange)
+                Text("No number").font(.caption).foregroundStyle(Color.notPaidText)
             } else if customer.contact == .ring {
                 if let url = URL(string: "tel:\(customer.phone.filter(\.isNumber))") {
                     Link(destination: url) { Label("Ring", systemImage: "phone") }
@@ -96,7 +100,7 @@ struct MessageDayView: View {
             } else {
                 Button { send(customer) } label: {
                     if sent.contains(customer.id.uuidString) {
-                        Label("Sent", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("Sent", systemImage: "checkmark.circle.fill").foregroundStyle(Color.paidText)
                     } else {
                         Label("Send", systemImage: "paperplane")
                     }
@@ -113,7 +117,7 @@ struct MessageDayView: View {
         // Messaged for this day: they're booked in, so the round keeps them on it.
         customer.bookedFor = day.date
         UIApplication.shared.open(url) { success in
-            if !success { failure = "WhatsApp couldn't be opened for \(customer.name). Check it is installed and the number \(customer.phone) is right." }
+            if !success { failure = "Couldn't open WhatsApp for \(customer.name). Check the number: \(customer.phone)." }
         }
     }
 

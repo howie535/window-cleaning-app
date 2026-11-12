@@ -3,7 +3,7 @@ import SwiftData
 import Charts
 
 /// The dashboard (Docs/SPEC.md section 5): tiles for the week, today, money owed and so on.
-struct TodayView: View {
+struct StatsView: View {
     @Environment(RoundClock.self) private var clock
     /// nil outside the tab bar (always shown).
     @Environment(TabState.self) private var tabs: TabState?
@@ -13,6 +13,8 @@ struct TodayView: View {
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
     @State private var destination: Destination?
+    /// The figures beyond the top four, folded away unless opened.
+    @AppStorage("stats.showMoreFigures") private var showMoreFigures = false
 
     private func pounds2(_ value: Decimal) -> String {
         value.formatted(.currency(code: "GBP").precision(.fractionLength(2)))
@@ -27,7 +29,7 @@ struct TodayView: View {
         if tabs == nil || tabs?.selection == .today {
             content
         } else {
-            Color(.systemGroupedBackground)
+            Color.sudsyBackground
         }
     }
 
@@ -63,45 +65,69 @@ struct TodayView: View {
         let risesDueCount = risesDue.count
         let _ = VisitLookup.end()
         let showIdeal = { destination = .ideal }
-        let tiles = LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)], spacing: 12) {
+        let grid = [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)]
+        // The four figures that say how things stand, large and tinted; the rest folded away below.
+        let top = LazyVGrid(columns: grid, spacing: 12) {
                     card(.weeklyWork, Tile(title: "This week", value: pounds(week.work),
                          detail: "of \(pounds(week.target)) · \(week.houses) houses",
-                         tint: week.work >= week.target ? .green : .primary))
+                         tint: week.work >= week.target ? .paidText : .primary, symbol: "calendar", color: .accentColor, featured: true))
                     card(nil, Tile(title: "Today", value: pounds(todayWork),
-                         detail: dayTarget > 0 ? "of \(pounds(dayTarget)) · \(todayHouses) houses" : "Not a working day"))
-                    card(.taxYear, Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))", value: pounds(yearTotals.work),
-                         detail: "\(pounds(yearTotals.paid)) paid · \(yearTotals.cleans) cleans"))
+                         detail: dayTarget > 0 ? "of \(pounds(dayTarget)) · \(todayHouses) houses" : "Not a working day",
+                         symbol: "sun.max.fill", color: .yellow, featured: true))
                     card(nil, Tile(title: "Money owed", value: pounds(owed.amount),
                          detail: "\(owed.cleans) cleans" + (oldestOwed.map { " · since \(RoundCalendar.short($0))" } ?? ""),
-                         tint: owed.amount > 0 ? .red : .primary))
+                         tint: owed.amount > 0 ? .owedText : .primary, symbol: "sterlingsign.circle.fill", color: .owed, featured: true))
                     card(.monthlyWork, Tile(title: "This month", value: pounds(stats.work(from: stats.thisMonthStart, through: today)),
-                         detail: "\(stats.houses(from: stats.thisMonthStart, through: today)) houses"))
+                         detail: "\(stats.houses(from: stats.thisMonthStart, through: today)) houses",
+                         symbol: "calendar.badge.clock", color: .indigo, featured: true))
+                }
+        let more = LazyVGrid(columns: grid, spacing: 12) {
+                    card(.taxYear, Tile(title: "Tax year \(TaxYear.label(startYear: taxYear))", value: pounds(yearTotals.work),
+                         detail: "\(pounds(yearTotals.paid)) paid · \(yearTotals.cleans) cleans", symbol: "sterlingsign", color: .green))
                     card(nil, Tile(title: "Round value", value: pounds(RoundMetrics.roundValue(customers)),
                          detail: notStarted > 0 ? "per round · incl. \(notStarted) not started" : "per round",
-                         ideal: ideal.roundValue.map { pounds($0) }, onIdeal: showIdeal))
+                         ideal: ideal.roundValue.map { pounds($0) }, onIdeal: showIdeal, symbol: "arrow.triangle.2.circlepath", color: .teal))
                     card(.perHouse, Tile(title: "Average price",
                          value: pounds2(average.average),
                          detail: "list prices of \(average.customers) customers, no extras",
-                         ideal: ideal.planned.map { pounds2($0.perHouse) }, onIdeal: showIdeal))
+                         ideal: ideal.planned.map { pounds2($0.perHouse) }, onIdeal: showIdeal, symbol: "house.fill", color: .blue))
                     card(.housesPerDay, Tile(title: "Houses per workday",
                          value: rate.map { $0.housesPerDay.formatted(.number.precision(.fractionLength(1))) } ?? "–",
-                         detail: rate.map { "over \($0.workedDays) days, \(stats.analysisLabel)" } ?? "no worked days yet"))
+                         detail: rate.map { "over \($0.workedDays) days, \(stats.analysisLabel)" } ?? "no worked days yet",
+                         symbol: "figure.walk", color: .cyan))
                     card(.roundLength, Tile(title: "Round length",
                          value: gap.map { $0.weeks.formatted(.number.precision(.fractionLength(1))) + " weeks" } ?? "–",
                          detail: gap == nil ? "not enough history yet" : "average gap, last 12 weeks",
-                         ideal: "\(ideal.weeks) weeks", onIdeal: showIdeal))
+                         ideal: "\(ideal.weeks) weeks", onIdeal: showIdeal, symbol: "ruler.fill", color: .mint))
                     card(nil, Tile(title: "Customers", value: "\(listed)",
                          detail: "incl. \(notStarted) not started · \(everyOther) every-other · \(customers.filter { $0.status == .paused }.count) paused",
-                         ideal: ideal.planned.map { "\($0.peopleNeeded)" }, onIdeal: showIdeal))
+                         ideal: ideal.planned.map { "\($0.peopleNeeded)" }, onIdeal: showIdeal, symbol: "person.2.fill", color: .purple))
                     card(nil, Tile(title: "New vs lost", value: newVsLost,
-                         detail: "this tax year"))
+                         detail: "this tax year", symbol: "arrow.up.arrow.down", color: .pink))
                     card(.priceRise, Tile(title: "Price rises due", value: "\(risesDueCount)",
                          detail: risesDueCount > 0
                             ? "+\(risePercent.formatted(.percent.precision(.fractionLength(0...1)))) adds \(pounds(riseAdds)) a round"
-                            : "none due"))
+                            : "none due", symbol: "arrow.up.right", color: .orange))
                     card(.skipRate, Tile(title: "Skip rate", value: stats.trailingSkipRate.formatted(.percent.precision(.fractionLength(1))),
-                             detail: stats.skipRateLabel))
+                             detail: stats.skipRateLabel, symbol: "forward.fill", color: .red))
                 }
+        let tiles = VStack(alignment: .leading, spacing: 12) {
+            top
+            Button { withAnimation { showMoreFigures.toggle() } } label: {
+                HStack {
+                    Text("More figures").font(.headline)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(showMoreFigures ? 180 : 0))
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(Color.accentColor)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if showMoreFigures { more }
+        }
 
         NavigationStack {
             GeometryReader { geometry in
@@ -128,7 +154,7 @@ struct TodayView: View {
                 }
             }
             .navigationTitle("Stats")
-            .background(Color(.systemGroupedBackground))
+            .background(Color.sudsyBackground)
             .navigationDestination(item: $destination) { destination in
                 switch destination {
                 case .weeklyWork: StatDetailView(metric: .weeklyWork)
@@ -172,14 +198,26 @@ struct Tile: View {
     var onIdeal: (() -> Void)? = nil
     /// Tapping opens more detail.
     var opens = false
+    /// A small coloured symbol beside the title.
+    var symbol: String? = nil
+    var color: Color = .accentColor
+    /// The top figures get a soft tint of their colour behind them.
+    var featured = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 6) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(color)
+                        .accessibilityHidden(true)
+                }
                 Text(title.uppercased())
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     .minimumScaleFactor(0.75)
                 Spacer(minLength: 0)
                 if opens {
@@ -198,9 +236,9 @@ struct Tile: View {
             }
             if !detail.isEmpty {
                 Text(detail)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
+                    .lineLimit(typeSize.isAccessibilitySize ? 6 : 2, reservesSpace: !typeSize.isAccessibilitySize)
             }
             Spacer(minLength: 0)
             if let ideal {
@@ -210,7 +248,7 @@ struct Tile: View {
                         Image(systemName: "info.circle")
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accentColor)
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
@@ -218,9 +256,13 @@ struct Tile: View {
             }
         }
         // Every card the same size: the target line (when there is one) sits along the bottom.
-        .frame(maxWidth: .infinity, minHeight: Tile.height, maxHeight: Tile.height, alignment: .topLeading)
+        // Very large text: the card grows to fit rather than cutting words off.
+        .frame(maxWidth: .infinity, minHeight: Tile.height, maxHeight: typeSize.isAccessibilitySize ? .infinity : Tile.height, alignment: .topLeading)
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background {
+            RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground))
+            if featured { RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.12)) }
+        }
         .contentShape(RoundedRectangle(cornerRadius: 16))
     }
 }

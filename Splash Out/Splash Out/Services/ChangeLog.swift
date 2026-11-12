@@ -11,6 +11,17 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "2.0", date: "November 2026", changes: [
+            "Opens on the Round. Stats is now the second tab.",
+            "Sudsy blue throughout, coloured icons on More, and a tinted background.",
+            "Stats leads with four figures. The rest are under More figures.",
+            "Round rows are easier to read. Tap ⓘ at the top for what each mark means.",
+            "Explanations are one line, with the detail behind an ⓘ.",
+            "To Check on More: paying under price, dates to check, frequent skips and the round review, on one screen. More shows how many need action.",
+            "Undo shows for 10 seconds. For 2 minutes after that, shake the phone to undo.",
+            "Works with very large text, and coloured text is easier to read in sunlight.",
+            "The customer page starts with contact, money owed and logging.",
+        ]),
         Release(version: "1.9", date: "November 2026", changes: [
             "Price history on a customer's page: swipe left to delete an entry made by mistake. The price stays as it is.",
             "Changing a price more than once in a day now keeps one entry for that day, and changing it back removes it.",

@@ -51,7 +51,7 @@ struct AddCleanLogView: View {
                         paymentStatusRow
                     }
                 } footer: {
-                    Text("Most cleans are paid in full. Turn this on if the customer paid more or less than charged.")
+                    Text("Turn on if they paid more or less than charged.")
                 }
                 Section {
                     LabeledField(label: "Notes") {
@@ -80,13 +80,13 @@ struct AddCleanLogView: View {
             let difference = amountPaid - amountCharged
             if difference == 0 {
                 Label("Paid in full", systemImage: "checkmark.circle")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.paidText)
             } else if difference > 0 {
                 Label("Overpaid by \(difference, format: .currency(code: "GBP"))", systemImage: "arrow.up.circle")
                     .foregroundStyle(.blue)
             } else {
                 Label("Underpaid by \(-difference, format: .currency(code: "GBP"))", systemImage: "arrow.down.circle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.notPaidText)
             }
         }
     }

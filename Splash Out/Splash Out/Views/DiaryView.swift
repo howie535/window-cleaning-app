@@ -70,7 +70,8 @@ struct DiaryView: View {
                     }
                 }
                 changesThisMonth(byDate: byDate)
-                Text("Tap a day to mark a holiday or illness, or to change who is working. Days outside the usual week count as worked once enough houses are cleaned.")
+                InfoFooter(text: "Tap a day for a holiday, illness or a change of crew.", points: [
+                    "Days outside the usual week count as worked once enough houses are cleaned."])
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,7 +79,7 @@ struct DiaryView: View {
             .padding(.horizontal)
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color.sudsyBackground)
         .navigationTitle("Diary")
         .sheet(item: $selected) { day in
             DiaryDayEditor(date: day.date, entry: byDate[day.date], crews: crews, settings: appSettings, resolver: resolver)
@@ -135,7 +136,7 @@ struct DiaryView: View {
                 .frame(width: 26, height: 26)
                 .background(isToday ? Color.accentColor : Color.clear, in: Circle())
             if isOff {
-                Text("Off").font(.caption2.weight(.semibold)).foregroundStyle(.orange)
+                Text("Off").font(.caption2.weight(.semibold)).foregroundStyle(Color.notPaidText)
             } else if target > 0 {
                 Text(initials(members)).font(.caption2.weight(.medium)).foregroundStyle(changed ? Color.accentColor : .secondary)
                 if sizeClass == .regular {
@@ -176,7 +177,7 @@ struct DiaryView: View {
                         }
                         Spacer()
                         Text(entry.dayOff ? "Day off" : (entry.crewMembers.isEmpty ? "Usual" : entry.crewMembers.joined(separator: " + ")))
-                            .foregroundStyle(entry.dayOff ? .orange : .secondary)
+                            .foregroundStyle(entry.dayOff ? Color.notPaidText : Color.secondary)
                     }
                     .padding(.vertical, 4)
                 }

@@ -79,7 +79,7 @@ struct CustomerListView: View {
                 Button("Skip and send a reminder") { OwedReminder.open(for: person); perform(.skipped, for: person) }
             }
             Button("Skip anyway", role: .destructive) { perform(.skipped, for: person) }
-            Button("Go back", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: { person in
             let owed = RoundMetrics.moneyOwed([person])
             Text("\(person.name) still owes \(owed.amount.formatted(.currency(code: "GBP"))) from \(owed.cleans) earlier clean\(owed.cleans == 1 ? "" : "s").")
@@ -112,9 +112,12 @@ struct CustomerListView: View {
                 }
             } footer: {
                 if criteria.isActive {
-                    Text("\(shown.count) of \(customers.count) customers. Clear the search and filters to see the groups.")
+                    Text("\(shown.count) of \(customers.count). Clear the search to see groups.")
                 } else {
-                    Text("Groups are kept on the same day. Press and hold a customer to drag them into another group (drop on a customer to go after them, or on a heading to go first), or for more options.")
+                    InfoFooter(text: "Groups are kept on the same day.", title: "Groups", points: [
+                        "Press and hold a customer to drag them to another group.",
+                        "Drop on a customer to go after them, or on a heading to go first.",
+                        "Press and hold for more options too."])
                 }
             }
             }
@@ -327,7 +330,7 @@ private struct CustomerRow: View {
                     .clipShape(Capsule())
             } else if !customer.area.isEmpty {
                 Text(customer.area)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }

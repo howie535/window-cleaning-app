@@ -318,10 +318,10 @@ struct StatDetailView: View {
         switch metric {
         case .weeklyWork: "Work charged each week; orange fell short. Dashed: the target."
         case .monthlyWork: "Work charged each month."
-        case .perHouse: "What was actually charged per house each \(daily ? "day" : "week"), extras included. Line: 12-week average. Dashed: average for the range."
-        case .housesPerDay: "Houses per worked day\(daily ? "" : " each week"). Line: 12-week average. Dashed: average for the range."
-        case .skipRate: "Skips as a share of visits each month. Dashed: average for the range."
-        case .roundLength: "Average weeks between cleans, by the week of the later clean. Rising means the round is slowing down. Line: 12-week average. Dashed: average for the range. Every-other customers and gaps with a skip are left out."
+        case .perHouse: "What was actually charged per house each \(daily ? "day" : "week"), extras included. Line: 12-week average. Dashed: range average."
+        case .housesPerDay: "Houses per worked day\(daily ? "" : " each week"). Line: 12-week average. Dashed: range average."
+        case .skipRate: "Skips as a share of visits each month. Dashed: range average."
+        case .roundLength: "Average weeks between cleans. Rising means the round is slowing. Line: 12-week average. Dashed: range average."
         }
     }
 }

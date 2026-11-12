@@ -38,6 +38,8 @@ struct AddEditCustomerView: View {
     @State private var isConfirmingOwedCancel = false
     @State private var cancelAnyway = false
     @State private var contactsMessage: String?
+    /// The message is about Contacts access being off, so offer a way to Settings.
+    @State private var contactsNeedsSettings = false
     /// The form is filled from the customer once. Coming back from a picker list (Round, Area, Pays by) shows the
     /// form again, and filling it again then threw away the choice just made.
     @State private var loaded = false
@@ -135,7 +137,8 @@ struct AddEditCustomerView: View {
                         }
                     }
                 } footer: {
-                    Text("For customers who alternate, e.g. front only one time and full the next. Logging a clean then asks which, with the one not used last time first.")
+                    InfoFooter(text: "For customers who alternate, e.g. front only, then full.", points: [
+                        "Logging a clean asks which, with the one not done last time first."])
                 }
                 Section("Round") {
                     Picker("Status", selection: $status) {
@@ -203,7 +206,7 @@ struct AddEditCustomerView: View {
             }
             .alert("They still owe money", isPresented: $isConfirmingOwedCancel) {
                 Button("Cancel anyway", role: .destructive) { cancelAnyway = true; save() }
-                Button("Go back", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             } message: {
                 if let customer {
                     let owed = RoundMetrics.moneyOwed([customer])
@@ -211,6 +214,7 @@ struct AddEditCustomerView: View {
                 }
             }
             .alert("Contacts", isPresented: Binding(get: { contactsMessage != nil }, set: { if !$0 { contactsMessage = nil; dismiss() } })) {
+                if contactsNeedsSettings { Button("Open Settings") { openAppSettings() } }
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(contactsMessage ?? "")
@@ -347,7 +351,7 @@ struct AddEditCustomerView: View {
                 case .saved, .alreadyThere:
                     dismiss()
                 case .notAllowed:
-                    contactsMessage = "The customer is saved, but Splash Out isn't allowed to use Contacts. You can allow it in Settings > Privacy & Security > Contacts."
+                    contactsMessage = "Saved, but Sudsy isn't allowed to use Contacts."; contactsNeedsSettings = true
                 case .failed(let reason):
                     contactsMessage = "The customer is saved, but couldn't be added to Contacts: \(reason)"
                 }

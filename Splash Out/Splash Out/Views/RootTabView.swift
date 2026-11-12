@@ -2,14 +2,14 @@ import SwiftUI
 import SwiftData
 
 enum AppTab: Int, CaseIterable {
-    case today, round, customers, owed, more
+    case round, today, customers, owed, more
 }
 
 /// Which tab is showing. The heavy screens (Stats, Owed) read it and skip their sums while hidden: the tab bar keeps
 /// them alive, so otherwise they recalculated in the background every time a clean was logged.
 @MainActor @Observable
 final class TabState {
-    var selection: AppTab = .today
+    var selection: AppTab = .round
 }
 
 struct RootTabView: View {
@@ -20,17 +20,20 @@ struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("onboarding.seen") private var onboardingSeen = false
     @State private var showTour = false
+    /// A shake asking to undo the last action.
+    @State private var shakeUndo: UndoCenter.Entry?
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         TabView(selection: $tabState.selection) {
-            TodayView()
-                .tag(AppTab.today)
-                .tabItem { Label("Stats", systemImage: "chart.bar.xaxis") }
-
+            // The Round comes first: it's the screen used all day.
             NextUpView()
                 .tag(AppTab.round)
                 .tabItem { Label("Round", systemImage: "list.bullet.clipboard") }
+
+            StatsView()
+                .tag(AppTab.today)
+                .tabItem { Label("Stats", systemImage: "chart.bar.xaxis") }
 
             CustomerListView()
                 .tag(AppTab.customers)
@@ -56,6 +59,12 @@ struct RootTabView: View {
             PriceHistoryImport.mergeBundledOnce(context: modelContext)
         }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
+        // Shake to undo, as in Apple's own apps: asks first, naming what it will undo.
+        .onReceive(NotificationCenter.default.publisher(for: .sudsyDidShake)) { _ in shakeUndo = undoCenter.shakeable }
+        .alert("Undo \(shakeUndo?.message ?? "")?", isPresented: Binding(get: { shakeUndo != nil }, set: { if !$0 { shakeUndo = nil } })) {
+            Button("Cancel", role: .cancel) { shakeUndo = nil }
+            Button("Undo") { undoCenter.performUndo(); shakeUndo = nil }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 clock.refresh()

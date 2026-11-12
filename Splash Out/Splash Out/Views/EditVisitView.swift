@@ -53,7 +53,7 @@ struct EditVisitView: View {
                             .bold()
                         }
                     } footer: {
-                        Text("Paid saves it as paid in full. A different amount: type it in Paid. Paid less than charged shows on Money Owed.")
+                        Text("Tap Paid for paid in full, or type what was paid. Anything short shows on Money Owed.")
                     }
                 }
                 Section {
@@ -66,7 +66,7 @@ struct EditVisitView: View {
                 }
             }
             .keyboardDoneButton()
-            .navigationTitle("Edit visit")
+            .navigationTitle("Edit Visit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

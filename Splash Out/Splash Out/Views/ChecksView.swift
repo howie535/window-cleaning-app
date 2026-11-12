@@ -1,20 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Things worth a look. Nothing here changes any figures (Docs/SPEC.md 4.11).
-struct ChecksView: View {
-    @Query private var customers: [Customer]
-    @Query private var visits: [Visit]
-    @Query private var crews: [Crew]
-    @Query private var workDays: [WorkDay]
-    @Query private var settings: [AppSettings]
+/// Things worth a look; nothing here changes any figures (Docs/SPEC.md 4.11). A part of To Check.
+struct ChecksSections: View {
+    let under: [RoundStats.UnderPriceRow]
+    let issues: [RoundStats.DataIssue]
 
     var body: some View {
-        let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays)
-        let under = stats.payingUnderPrice()
-        let issues = stats.dataIssues()
-
-        List {
             Section {
                 if under.isEmpty { Text("Nobody is paying under their price.").foregroundStyle(.secondary) }
                 ForEach(under) { row in
@@ -30,15 +22,15 @@ struct ChecksView: View {
                             VStack(alignment: .trailing, spacing: 3) {
                                 Text("Price \(row.customer.price.pounds)")
                                 Text("Last paid \(row.lastPaid.pounds)")
-                                    .font(.caption).foregroundStyle(.orange)
+                                    .font(.caption).foregroundStyle(Color.notPaidText)
                             }
                         }
                     }
                 }
             } header: {
-                Text("Paying under price (\(under.count))")
+                Text("Paying Under Price (\(under.count))")
             } footer: {
-                Text("The last clean was paid for less than the list price. Front-only customers are left out.")
+                Text("Last clean paid under list price. Front-only left out.")
             }
 
             Section {
@@ -49,16 +41,14 @@ struct ChecksView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(issue.customer.name).font(.headline)
-                            Text(issue.message).font(.caption).foregroundStyle(.orange)
+                            Text(issue.message).font(.caption).foregroundStyle(Color.notPaidText)
                         }
                     }
                 }
             } header: {
-                Text("Visits to check (\(issues.count))")
+                Text("Dates to Check (\(issues.count))")
             } footer: {
-                Text("Visits dated in the future, or two on the same day for one customer. Worth a look in case a date was typed wrongly.")
+                Text("Future dates, or two visits on one day. Probably a typing slip.")
             }
-        }
-        .navigationTitle("Checks")
     }
 }

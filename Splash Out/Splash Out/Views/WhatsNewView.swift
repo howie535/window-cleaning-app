@@ -13,6 +13,6 @@ struct WhatsNewView: View {
                 }
             }
         }
-        .navigationTitle("What's new")
+        .navigationTitle("What's New")
     }
 }

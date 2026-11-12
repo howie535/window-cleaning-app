@@ -57,7 +57,7 @@ struct PlaceInRoundView: View {
                 }
             }
             .searchable(text: $search, prompt: "Name, address or area")
-            .navigationTitle("Place in round")
+            .navigationTitle("Place in Round")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

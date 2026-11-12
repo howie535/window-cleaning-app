@@ -43,7 +43,7 @@ struct ExpensesView: View {
                 }
             }
             if inYear.isEmpty {
-                Section { Text("No expenses this tax year.").foregroundStyle(.secondary) }
+                Section { Button { isAdding = true } label: { Label("Add the first expense this tax year", systemImage: "plus.circle.fill") } }
             }
             ForEach(byMonth, id: \.key) { month, items in
                 Section {

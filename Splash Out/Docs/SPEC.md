@@ -205,16 +205,15 @@ For days with a known crew (a WorkDay override, or the usual crew): average £ p
 
 | Screen | Purpose |
 |---|---|
-| Today | Tiles: this week (£ v target, houses), today (£ v day target, crew), ahead/behind, money owed, this month, round value and cycle, customers, new v lost, skip rate, rises due. Plus a 12-week bar chart against target. |
+| Stats (second tab; the app opens on Round) | Four large tiles (this week, today, money owed, this month), the rest under More figures: this week (£ v target, houses), today (£ v day target, crew), ahead/behind, money owed, this month, round value and cycle, customers, new v lost, skip rate, rises due. Plus a 12-week bar chart against target. |
 | Round / Next Up | §3 and §4.6. The working screen. |
 | Customers | Search and filter by round, area and status. Drag to reorder. |
 | Money Owed | §4.8, with record-payment. |
 | Weekly | One row per week from records start: work, houses, target, days worked. Green when work ≥ target, amber when within 10% below, red when lower. |
 | Daily (the Days side of Weekly & Daily; tapping a week opens that week's days) | One row per day with cleans, newest first, by month: houses, £ a house (orange when below the 12-month average of the days, §4.12), day total. Tapping a day shows houses, charged, £ a house, paid, skips, and each customer cleaned in round order with what they were charged (list price shown when different). The Charged per house and Houses per workday charts use one bar a day on the 1M and 3M ranges (weekly otherwise) and list the range's days underneath. |
 | Tax Year | Pick a year. Months with work, paid, not yet paid, cleans, extras and average per week, plus totals by round. Export to CSV/PDF for Self Assessment. |
-| Frequent Skips | §4.9 |
+| To Check | One screen (More shows how many need action; the round review is not counted): paying under price and dates to check (§4.11), frequent skips (§4.9), and the round review. |
 | Price Rise | §4.10 |
-| Checks | §4.11 |
 | Diary | Optional WorkDay entries: day off, crew override, note. |
 | Settings | Everything in §2 Settings, plus export and import. |
 | Tips | List and add. Total shown; never counted as income. |

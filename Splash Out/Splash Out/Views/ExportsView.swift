@@ -25,7 +25,9 @@ struct ExportsView: View {
             } header: {
                 Text("Customers")
             } footer: {
-                Text("Every customer with their address, phone, price, round, area, status and notes. Opens in Numbers or Excel. The same columns can be brought back in with Import on the Customers screen.")
+                InfoFooter(text: "Opens in Numbers or Excel.", points: [
+                    "Address, phone, price, round, area, status and notes for every customer.",
+                    "Bring it back in with Import on Customers."])
             }
 
             Section {
@@ -40,7 +42,10 @@ struct ExportsView: View {
             } header: {
                 Text("Tax year")
             } footer: {
-                Text("One line for every clean in the tax year: date, what was charged, what was paid and when it was paid, with totals at the bottom. For the month-by-month summary, use Tax Year under Reports. Tips are never counted as income.")
+                InfoFooter(text: "Every clean in the year, with totals.", points: [
+                    "Date, charged, paid and when paid.",
+                    "Month by month: More › Tax Year.",
+                    "Tips are never counted as income."])
             }
 
             Section {
@@ -53,7 +58,9 @@ struct ExportsView: View {
             } header: {
                 Text("For analysis")
             } footer: {
-                Text("One file with the weekly, monthly and round figures, every customer and every visit, written so you can drop it into Claude and ask questions. Names, addresses and notes (gate codes and so on) are in it by default: switch them off first if you'd rather share it anonymously. Customers then appear as IDs like C001.")
+                InfoFooter(text: "Every figure, customer and visit, to ask Claude about.", points: [
+                    "Names, addresses and notes (gate codes too) are in it unless switched off above.",
+                    "Switched off, customers show as IDs like C001."])
             }
 
             Section {
@@ -102,6 +109,9 @@ struct BackupReminder: View {
     @Query private var customers: [Customer]
     @AppStorage(AutoBackup.exportedKey) private var lastExported = 0.0
     @AppStorage("export.snoozeUntil") private var snoozeUntil = 0.0
+    /// Once "Later" has been tapped, the reminder comes back as a single row.
+    @AppStorage("export.bannerCompact") private var compact = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     @AppStorage(AutoBackup.bookmarkKey) private var bookmark: Data?
     @AppStorage(AutoBackup.folderErrorKey) private var folderError = ""
 
@@ -119,18 +129,31 @@ struct BackupReminder: View {
 
     private var message: String {
         if bookmark != nil { return "Saving to your backup folder has stopped working. Choose the folder again." }
-        guard lastExported > 0 else { return "Your round is only saved on this phone. Pick a folder in iCloud Drive or OneDrive and a copy is saved there every day, so it survives a lost phone." }
-        return "Your round is only saved on this phone. Pick a folder in iCloud Drive or OneDrive and a copy is saved there every day."
+        guard lastExported > 0 else { return "Your round is only on this phone. Choose a folder in iCloud Drive or OneDrive for a daily copy." }
+        return "Your round is only on this phone. Choose a folder in iCloud Drive or OneDrive for a daily copy."
     }
 
     var body: some View {
         if due {
+            Group {
+            if compact && bookmark == nil {
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout())) {
+                    Label("Back up your round", systemImage: "externaldrive.badge.exclamationmark")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.notPaidText)
+                    if !typeSize.isAccessibilitySize { Spacer() }
+                    Button("Set up") { isChoosingFolder = true }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                }
+            } else {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Back up your round", systemImage: "externaldrive.badge.exclamationmark")
                     .font(.headline)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.notPaidText)
                 Text(message).font(.subheadline)
-                HStack {
+                // Very large text: the buttons stack instead of squashing side by side.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout())) {
                     Button("Choose a folder") { isChoosingFolder = true }
                         .buttonStyle(.borderedProminent)
                     Button("Save one copy") {
@@ -140,9 +163,11 @@ struct BackupReminder: View {
                         } catch { failure = error.localizedDescription }
                     }
                     .buttonStyle(.bordered)
-                    Button("Later") { snoozeUntil = Date().timeIntervalSince1970 + 7 * 86_400 }
+                    Button("Later") { snoozeUntil = Date().timeIntervalSince1970 + 7 * 86_400; compact = true }
                         .buttonStyle(.borderless)
                 }
+            }
+            }
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
