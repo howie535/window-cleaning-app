@@ -385,6 +385,71 @@ enum SimulatorSelfTest {
             check("a cluster that only goes a little over stays in round order", smallPlaced.filter { $0.dayIndex == 0 }.map(\.key).sorted() == [1, 2, 3, 4, 5, 6])
         }
 
+        // ---- 16 Nov: logging Steve Hankey took the day to its target (after a skip) and sent Mrs Ffoulkes, next door
+        //      in the same cluster, to Tuesday. A cluster started today is finished today.
+        do {
+            let cal = RoundCalendar.london
+            let old = cal.date(byAdding: .day, value: -40, to: today)!
+            func cand(_ seq: Int, _ price: Decimal, group: Int, today kind: VisitKind? = nil) -> NextUp.Candidate {
+                var c = NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: price, everyOther: false, lastCleaned: old,
+                                         lastNotDue: nil, lastVisit: kind == nil ? old : today, lastVisitBeforeToday: old, group: group)
+                c.visitedToday = kind
+                if kind == .cleaned { c.chargedToday = price; c.lastCleaned = today }
+                return c
+            }
+            let days = [NextUp.Day(date: today, target: 200), NextUp.Day(date: cal.date(byAdding: .day, value: 1, to: today)!, target: 200)]
+            func dayOf(_ seq: Int, _ people: [NextUp.Candidate]) -> Int? {
+                NextUp.plan(people, days: days, today: today, overbook: 0.1, hideWeeks: 5, lapDays: 35, calendar: cal).first { $0.key == seq }?.dayIndex
+            }
+            // £192 cleaned and one skip so far; then two neighbours at £12 each, then a house on another street.
+            let before = [cand(1, 192, group: 0, today: .cleaned), cand(2, 15, group: 1, today: .skipped),
+                          cand(3, 12, group: 2), cand(4, 12, group: 2), cand(5, 20, group: 3)]
+            check("both neighbours are on today before either is cleaned", dayOf(3, before) == 0 && dayOf(4, before) == 0)
+            var after = before
+            after[2] = cand(3, 12, group: 2, today: .cleaned)
+            check("cleaning one of a cluster keeps the neighbour on today", dayOf(4, after) == 0, "\(String(describing: dayOf(4, after)))")
+            check("a house outside the cluster still waits for the next day", dayOf(5, after) == 1, "\(String(describing: dayOf(5, after)))")
+            let ended = NextUp.plan(after, days: days, today: today, overbook: 0.1, hideWeeks: 5, lapDays: 35, todayEnded: true, calendar: cal)
+            check("finishing for the day still moves the neighbour on", ended.first { $0.key == 4 }?.dayIndex == 1)
+            // A cluster bigger than a day stays split after its first clean.
+            var big = (1...16).map { cand($0, 20, group: 0) }
+            big[0] = cand(1, 20, group: 0, today: .cleaned)
+            let bigPlan = NextUp.plan(big, days: days, today: today, overbook: 0.1, hideWeeks: 5, lapDays: 35, calendar: cal)
+            check("a cluster bigger than a day stays split once started", bigPlan.filter { $0.dayIndex == 0 }.count == 11, "\(bigPlan.filter { $0.dayIndex == 0 }.count)")
+        }
+
+        // ---- 16 Nov: the weekly target follows the diary. Mon-Wed changed to a £200 crew: £600, not the usual £1,100.
+        do {
+            let cal = RoundCalendar.london
+            let monday = WeekMetrics.monday(onOrBefore: today, calendar: cal)
+            func day(_ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: monday)! }
+            var config = WeekMetrics.Config(usualTargets: [400, 400, 300, 0, 0, 0, 0], extraTarget: 400, minHouses: 5, daysOff: [])
+            let usual = WeekMetrics.week(starting: monday, today: today, days: [:], config: config, calendar: cal)
+            config.crewTargets = [day(0): 200, day(1): 200, day(2): 200]
+            let changed = WeekMetrics.week(starting: monday, today: today, days: [:], config: config, calendar: cal)
+            check("weekly target uses the diary's crew for a changed day", usual.target == 1100 && changed.target == 600, "\(usual.target) \(changed.target)")
+            config.crewTargets = [day(3): 200]
+            config.daysOff = [day(0)]
+            let mixed = WeekMetrics.week(starting: monday, today: today, days: [day(3): .init(houses: 9, work: 150, paid: 150)], config: config, calendar: cal)
+            check("a crew put on an extra day adds its own target once, and a day off takes its away", mixed.target == 900 && mixed.usualDays == 3, "\(mixed.target) \(mixed.usualDays)")
+
+            let crewA = Crew(name: "ST A + B", members: ["A", "B"], dayTarget: 400), crewB = Crew(name: "ST A alone", members: ["A"], dayTarget: 200)
+            let s = AppSettings(); s.usualWeek = ["ST A + B", "ST A + B", "", "", "", "", ""]
+            let diary = [WorkDay(date: day(0), dayOff: false, crewMembers: ["A"], note: nil)]
+            let live = RoundStats(customers: [], settings: s, crews: [crewA, crewB], workDays: diary, today: today).thisWeek
+            check("this week's target on Stats follows a crew change in the diary", live.target == 600, "\(live.target)")
+        }
+
+        // ---- 16 Nov: a quote to do sits in the round, greyed and uncounted, until it's taken
+        do {
+            let q = Customer(name: "ST quote", price: 0, status: .quote)
+            let c = Customer(name: "ST counted", price: 20)
+            check("a quote isn't a customer on the round or in the average price", RoundMetrics.onRound([q, c]).count == 1 && RoundMetrics.averagePrice([q, c]).average == 20)
+            let p = RoundPlanner.plan(customers: [q, c], settings: settings, crews: crews, workDays: workDays, today: today)
+            let row = p.days.flatMap(\.rows).first { $0.customer === q }
+            check("a quote shows in the round, greyed, and isn't in the day's work", row?.isPending == true && !p.days.contains { $0.customers.contains { $0 === q } })
+        }
+
         // ---- Day-one fixes (Phase B): payments in advance, second price, edit and delete
         let advance = synthetic("ST advance"); add(advance, .cleaned, daysAgo: 30)
         let ahead = VisitLogger.recordPayment(15, across: [], on: today, creditTo: advance.allVisits.first)

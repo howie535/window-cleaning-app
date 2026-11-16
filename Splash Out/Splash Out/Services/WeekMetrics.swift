@@ -12,6 +12,8 @@ enum WeekMetrics {
         var minHouses: Int
         /// Dates logged as a day off (holiday or illness).
         var daysOff: Set<Date>
+        /// Day target on dates where the diary has a different crew from the usual week.
+        var crewTargets: [Date: Decimal] = [:]
     }
 
     struct DayTotals {
@@ -50,9 +52,11 @@ enum WeekMetrics {
 
     // MARK: Weeks
 
-    /// Usual-pattern target for one date, zero if it was logged as a day off.
+    /// Planned target for one date: zero if it was logged as a day off, the diary crew's target if the crew was
+    /// changed for the day, otherwise the usual week's.
     private static func usualTarget(on date: Date, config: Config, calendar: Calendar) -> Decimal {
         if config.daysOff.contains(date) { return 0 }
+        if let changed = config.crewTargets[date] { return changed }
         return config.usualTargets[weekdayIndex(date, calendar: calendar)]
     }
 

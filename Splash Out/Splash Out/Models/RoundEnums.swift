@@ -6,6 +6,8 @@ import Foundation
 enum CustomerStatus: String, CaseIterable, Identifiable {
     case active
     case notStarted = "not_started"
+    /// A quote to give when the round is next there: sits in the round, greyed, never counted.
+    case quote
     case paused
     case leaving
     case cancelled
@@ -16,6 +18,7 @@ enum CustomerStatus: String, CaseIterable, Identifiable {
         switch self {
         case .active: "Active"
         case .notStarted: "Not started"
+        case .quote: "Quote to do"
         case .paused: "Paused"
         case .leaving: "Leaving"
         case .cancelled: "Cancelled"

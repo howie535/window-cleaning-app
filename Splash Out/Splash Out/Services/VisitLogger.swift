@@ -62,7 +62,7 @@ enum VisitLogger {
         if visit.kind == .cleaned { customer.nextVisitNote = nil }
 
         // "not_started until their first clean"
-        if visit.kind == .cleaned && customer.status == .notStarted {
+        if visit.kind == .cleaned && (customer.status == .notStarted || customer.status == .quote) {
             customer.status = .active
         }
 
@@ -104,7 +104,7 @@ enum VisitLogger {
         visit.customer = customer
         customer.bookedFor = nil
         customer.nextVisitNote = nil
-        if customer.status == .notStarted { customer.status = .active }
+        if customer.status == .notStarted || customer.status == .quote { customer.status = .active }
         return { [weak customer] in
             if let customer, customer.status != previousStatus { customer.status = previousStatus }
             customer?.bookedFor = previousBooking

@@ -379,7 +379,8 @@ private struct NextUpRow: View {
                 HStack(spacing: 6) {
                     Text(customer.name).font(.headline)
                     switch state {
-                    case .notStarted: tag("Not started · tap to start")
+                    case .notStarted:
+                        if customer.status == .quote { tag("Quote to do", colour: .orange) } else { tag("Not started · tap to start") }
                     case .everyOtherOff: tag("EO · not this round", colour: .gray)
                     case .booked: tag("Booked", colour: .purple)
                     case .skippedToday: tag("Skipped today", colour: .red)
@@ -461,11 +462,29 @@ struct CustomerLogPanel: View {
     var onLogged: () -> Void = {}
 
     @State private var logSheet: VisitSheet?
+    @State private var isAcceptingQuote = false
+    @State private var isConfirmingRemoveQuote = false
+    @Environment(\.modelContext) private var modelContext
 
     private var owed: (amount: Decimal, cleans: Int) { RoundMetrics.moneyOwed([customer]) }
 
     var body: some View {
         List {
+            if customer.status == .quote {
+                Section {
+                    Button { isAcceptingQuote = true } label: {
+                        Label("Quote taken: set the price", systemImage: "checkmark.circle.fill")
+                            .font(.title3)
+                            .padding(.vertical, 6)
+                    }
+                    Button("Not taken: remove", role: .destructive) { isConfirmingRemoveQuote = true }
+                } header: {
+                    Text("Quote to do")
+                } footer: {
+                    Text("Greyed out, and not counted, until the quote is taken.")
+                }
+            }
+
             if customer.status == .notStarted {
                 Section {
                     Button { customer.status = .active } label: {
@@ -508,8 +527,10 @@ struct CustomerLogPanel: View {
                 }
             }
 
-            Section("Log") {
-                VisitQuickActions(customer: customer, onLogged: onLogged, sheet: $logSheet)
+            if customer.status != .quote {
+                Section("Log") {
+                    VisitQuickActions(customer: customer, onLogged: onLogged, sheet: $logSheet)
+                }
             }
 
             Section {
@@ -522,6 +543,16 @@ struct CustomerLogPanel: View {
         .navigationTitle(customer.name)
         .navigationBarTitleDisplayMode(.inline)
         .visitLogSheets(customer: customer, selection: $logSheet, onLogged: onLogged)
+        .sheet(isPresented: $isAcceptingQuote) { AddEditCustomerView(customer: customer, acceptingQuote: true) }
+        .confirmationDialog("Remove this quote?", isPresented: $isConfirmingRemoveQuote, titleVisibility: .visible) {
+            Button("Remove \(customer.name)", role: .destructive) {
+                let gone = customer
+                onLogged()
+                modelContext.delete(gone)
+            }
+        } message: {
+            Text("They come off the round. This can't be undone.")
+        }
     }
 }
 
@@ -556,6 +587,7 @@ private struct RoundKeyButton: View {
                     keyRow("WhatsApp") { Image(systemName: "message.fill").foregroundStyle(Color.paidText) }
                     keyRow("Ring") { Image(systemName: "phone.fill").foregroundStyle(Color.notPaidText) }
                     keyRow("Every other round") { Text("EO").font(.caption.bold()).foregroundStyle(Color.accentColor) }
+                    keyRow("Quote to give when the round gets there") { Text("Quote").font(.caption.bold()).foregroundStyle(.orange) }
                     keyRow("Note for the next visit") { Image(systemName: "pin.fill").foregroundStyle(.purple) }
                     keyRow("Has unpaid cleans") { Text("Owes").font(.footnote).foregroundStyle(Color.owedText) }
                     Text("Swipe right for Paid or Not paid, left for Skipped.")

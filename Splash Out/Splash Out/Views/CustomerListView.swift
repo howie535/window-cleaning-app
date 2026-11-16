@@ -15,6 +15,7 @@ struct CustomerListView: View {
     /// The customer whose group is being changed from the long-press menu.
     @State private var grouping: Customer?
     @State private var isShowingAddCustomer = false
+    @State private var isShowingAddQuote = false
     @State private var isShowingFileImporter = false
     @State private var pendingImport: PendingImport?
     @State private var importErrorMessage: String?
@@ -64,6 +65,9 @@ struct CustomerListView: View {
         .sheet(item: $grouping) { GroupPickerView(customer: $0) }
         .sheet(isPresented: $isShowingAddCustomer) {
             AddEditCustomerView(customer: nil)
+        }
+        .sheet(isPresented: $isShowingAddQuote) {
+            AddEditCustomerView(customer: nil, asQuote: true)
         }
         .sheet(item: $pendingImport) { pending in
             ImportCustomersView(headers: pending.headers, rows: pending.rows)
@@ -240,10 +244,11 @@ struct CustomerListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        isShowingAddCustomer = true
+                    Menu {
+                        Button { isShowingAddCustomer = true } label: { Label("New Customer", systemImage: "person.badge.plus") }
+                        Button { isShowingAddQuote = true } label: { Label("New Quote to Do", systemImage: "text.badge.plus") }
                     } label: {
-                        Label("Add Customer", systemImage: "plus")
+                        Label("Add", systemImage: "plus")
                     }
                     .keyboardShortcut("n", modifiers: .command)
                 }

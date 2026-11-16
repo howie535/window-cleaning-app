@@ -105,7 +105,7 @@ enum RoundPlanner {
                 lastVisitBeforeToday: lastVisitBeforeToday,
                 visitDates: visitDates,
                 cleanDates: cleans,
-                isPending: customer.status == .notStarted,
+                isPending: customer.status == .notStarted || customer.status == .quote,
                 visitedToday: visitedToday,
                 chargedToday: chargedToday,
                 bookedFor: customer.bookedFor.map { RoundCalendar.startOfDay($0) },

@@ -11,6 +11,12 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "2.1", date: "November 2026", changes: [
+            "Quotes to do: on Customers, tap + then New Quote to Do. Give the name and address and place them in the round. They show greyed on the Round when it's their turn, and on To Check.",
+            "Tap a quote on the Round: Quote taken sets the price and makes them a customer; Not taken removes them.",
+            "This week's target now follows the Diary. Change a day's crew and the weekly target changes with it.",
+            "Logging a clean no longer moves the neighbours still to do to the next day. A group started today stays on today.",
+        ]),
         Release(version: "2.0", date: "November 2026", changes: [
             "Opens on the Round. Stats is now the second tab.",
             "Sudsy blue throughout, coloured icons on More, and a tinted background.",

@@ -54,7 +54,10 @@ struct RoundStats {
             usualTargets: targets,
             extraTarget: crews.first { $0.name == settings.extraDayCrew }?.dayTarget ?? 0,
             minHouses: settings.minHousesForWorkingDay,
-            daysOff: Set(workDays.filter(\.dayOff).map(\.date))
+            daysOff: Set(workDays.filter(\.dayOff).map(\.date)),
+            crewTargets: Dictionary(workDays.filter { !$0.dayOff && !$0.crewMembers.isEmpty }.map { day in
+                (day.date, crews.first { Set($0.members) == Set(day.crewMembers) }?.dayTarget ?? 0)
+            }, uniquingKeysWith: { first, _ in first })
         )
     }
 

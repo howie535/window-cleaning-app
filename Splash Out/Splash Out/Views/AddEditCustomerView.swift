@@ -9,6 +9,10 @@ struct AddEditCustomerView: View {
     let customer: Customer?
     /// A cancelled customer whose house has a new occupant: the address, round and price carry over, the person doesn't.
     var replacing: Customer?
+    /// A new quote to do: name and address now, price once it's been quoted.
+    var asQuote = false
+    /// The quote was taken: the form opens ready for the price, as a customer who hasn't started yet.
+    var acceptingQuote = false
 
     @Query(sort: \Customer.sequence) private var allCustomers: [Customer]
 
@@ -50,7 +54,7 @@ struct AddEditCustomerView: View {
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && (payMethod == .directDebit ? monthlyAmount != nil : Decimal(string: priceText) != nil)
+            && (status == .quote || (payMethod == .directDebit ? monthlyAmount != nil : Decimal(string: priceText) != nil))
             && (altPriceText.trimmingCharacters(in: .whitespaces).isEmpty || Decimal(string: altPriceText) != nil)
     }
 
@@ -181,7 +185,7 @@ struct AddEditCustomerView: View {
                         .lineLimit(3...6)
                 }
             }
-            .navigationTitle(isEditing ? "Edit Customer" : (replacing == nil ? "New Customer" : "New Occupant"))
+            .navigationTitle(acceptingQuote ? "Quote Taken" : isEditing ? "Edit Customer" : asQuote ? "New Quote" : (replacing == nil ? "New Customer" : "New Occupant"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -253,17 +257,20 @@ struct AddEditCustomerView: View {
             altPriceLabel = old.altPriceLabel ?? ""
             return
         }
-        guard let customer else { return }
+        guard let customer else {
+            if asQuote { status = .quote; saveToContacts = false }
+            return
+        }
         name = customer.name
         address = customer.address
         phone = customer.phone
-        priceText = NSDecimalNumber(decimal: customer.price).stringValue
+        priceText = acceptingQuote && customer.price == 0 ? "" : NSDecimalNumber(decimal: customer.price).stringValue
         if let alt = customer.altPrice { altPriceText = NSDecimalNumber(decimal: alt).stringValue }
         altPriceLabel = customer.altPriceLabel ?? ""
         round = customer.round
         area = customer.area
         notesText = customer.notesText
-        status = customer.status
+        status = acceptingQuote ? .notStarted : customer.status
         everyOther = customer.everyOther
         frontOnly = customer.frontOnly
         contact = customer.contact
@@ -288,7 +295,8 @@ struct AddEditCustomerView: View {
         let target: Customer
 
         if let customer {
-            if price != customer.price {
+            // A quote's first price is a starting price, not a rise.
+            if price != customer.price && customer.status != .quote {
                 PriceHistoryEditing.record(customer, from: customer.price, to: price, context: modelContext)
             }
             customer.name = name

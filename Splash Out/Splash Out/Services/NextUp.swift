@@ -12,6 +12,7 @@ import Foundation
 /// - Customers visited **today** stay on today, shown as done; a clean counts towards today's total, so marking a
 ///   clean never pulls new customers onto the day. A skip doesn't count, so the next customers move up.
 /// - **Booked** customers (messaged for a day) stay on that day whatever else happens.
+/// - A **cluster started today** (one of its houses cleaned) keeps the rest of its houses on today.
 /// - **Every-other** customers who were cleaned last lap are shown greyed as "not this round" and aren't counted.
 /// - Each day is then filled in round order, a whole cluster of neighbours at a time, until it reaches its target plus
 ///   the overbook allowance. A cluster that won't fit starts the next day and a later one that fits fills the gap.
@@ -270,6 +271,21 @@ enum NextUp {
                     result.append(Placement(key: m.c.key, dayIndex: day, state: .planned, order: m.order))
                 }
             }
+        }
+
+        // A cluster started today is finished today: once one of its houses has been cleaned, the rest stay on today
+        // (up to about 20% over target, as when a cluster goes on whole). Otherwise logging a clean that takes the day
+        // to its target would send the neighbours still to do to the next day.
+        if let todayIndex, !todayEnded {
+            let startedGroups = Set(lap.filter { $0.visitedToday == .cleaned }.map(groupID))
+            for index in units.indices where startedGroups.contains(groupID(units[index][0].c)) {
+                let unit = units[index]
+                if load[todayIndex] + need(unit, todayIndex) <= capacity[todayIndex] + days[todayIndex].target / 10 {
+                    place(unit, todayIndex)
+                    units[index] = []
+                }
+            }
+            units.removeAll { $0.isEmpty }
         }
 
         var day = 0
