@@ -11,6 +11,10 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "2.2", date: "November 2026", changes: [
+            "Swiping a customer off the Round is smoother: the rows below close up without blinking, as in Mail.",
+            "Customers on today's list stay on today. Logging a clean, even someone from another day, no longer moves anyone to the next day.",
+        ]),
         Release(version: "2.1", date: "November 2026", changes: [
             "Quotes to do: on Customers, tap + then New Quote to Do. Give the name and address and place them in the round. They show greyed on the Round when it's their turn, and on To Check.",
             "Tap a quote on the Round: Quote taken sets the price and makes them a customer; Not taken removes them.",

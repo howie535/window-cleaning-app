@@ -94,13 +94,12 @@ struct NextUpView: View {
                     let done = day.rows.filter(\.isDone)
                     if day.date == today && !done.isEmpty {
                         doneSummary(done, total: day.doneTotal)
-                        // One list with stable identities, so a row that becomes done never hands its open swipe to
-                        // whichever row slides into its place.
-                        ForEach(showDone ? day.rows : day.rows.filter { !$0.isDone }) { dayRow in
-                            row(for: dayRow, on: day.date, today: today)
-                        }
-                    } else {
-                        ForEach(day.rows) { dayRow in row(for: dayRow, on: day.date, today: today) }
+                    }
+                    // One ForEach in the same place whatever has been done, so every row keeps its identity: the first
+                    // clean of the day doesn't swap the list for a new one (which redrew every row), and a row that
+                    // becomes done never hands its open swipe to whichever row slides into its place.
+                    ForEach(day.date == today && !showDone ? day.rows.filter { !$0.isDone } : day.rows) { dayRow in
+                        row(for: dayRow, on: day.date, today: today)
                     }
                     if day.date == today {
                         finishRow(plan: plan, today: today)
@@ -278,17 +277,20 @@ struct NextUpView: View {
             paidRequest = PaidRequest(customer: customer)
             return
         }
-        perform(action, for: customer)
+        perform(action, for: customer, fromSwipe: true)
     }
 
-    /// Swipes save straight away, animated, so a full swipe slides the row off and the list closes up behind it.
-    private func perform(_ action: VisitLogger.Action, for customer: Customer) {
-        withAnimation {
+    /// Saves straight away. From a swipe, the swipe's own removal (the destructive role) is the only animation, as in
+    /// Mail: wrapping the change in a second animation made the list animate it twice, and the row below the swiped one
+    /// blinked out and back. Logged after a question (no swipe removal), the change is animated so the row still leaves.
+    private func perform(_ action: VisitLogger.Action, for customer: Customer, fromSwipe: Bool = false) {
+        let apply = {
             let undo = VisitLogger.perform(action, for: customer, in: modelContext)
             // Saved now, so the list updates in the same moment the row slides away (no flicker back).
             try? modelContext.save()
             undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         }
+        if fromSwipe { apply() } else { withAnimation { apply() } }
     }
 
     /// After logging, move on to whoever is next in the round.

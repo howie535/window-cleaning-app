@@ -181,6 +181,8 @@ enum SimulatorSelfTest {
             check("a clean stays on today, ticked, and counts towards today", stateOf(dueNow, in: after) == .cleanedToday && dayIndex(of: dueNow, in: after) == 0 && after.days[0].doneTotal - doneBefore == dueNow.price)
             let stillToday = Set(after.days[0].rows.filter { $0.state.counts || $0.isDone }.map(\.customer.id))
             check("marking a clean doesn't pull new customers onto today", stillToday.isSubset(of: todayBefore) && stillToday.contains(dueNow.id), "\(stillToday.subtracting(todayBefore).count) new")
+            let keptToday = todaysPlanned.subtracting([dueNow.id]).filter { id in after.days[0].rows.contains { $0.customer.id == id } }.count
+            check("marking a clean doesn't push today's customers to another day", keptToday == todaysPlanned.count - 1, "\(keptToday) of \(todaysPlanned.count - 1)")
             done()
             check("undo puts them back on the plan", listed(dueNow) && stateOf(dueNow, in: plan()) == .planned)
 
@@ -191,7 +193,7 @@ enum SimulatorSelfTest {
                 let firstDayNow = Set(after.days[0].customers.map(\.id))
                 let secondDayBefore = Set(planBefore.days[1].customers.map(\.id))
                 let stayed = todaysPlanned.subtracting([further.id]).filter { firstDayNow.contains($0) }.count
-                check("cleaning out of order keeps today's customers on today", Double(stayed) >= Double(todaysPlanned.count) * 0.8, "\(stayed) of \(todaysPlanned.count)")
+                check("cleaning out of order keeps today's customers on today", stayed == todaysPlanned.subtracting([further.id]).count, "\(stayed) of \(todaysPlanned.subtracting([further.id]).count)")
                 check("cleaning out of order doesn't send anyone to the end of the round", secondDayBefore.allSatisfy { id in after.days.prefix(4).contains { $0.rows.contains { $0.customer.id == id } } })
                 check("the customer cleaned out of order shows on today, done", stateOf(further, in: after) == .cleanedToday && dayIndex(of: further, in: after) == 0)
                 let again = plan()
@@ -328,11 +330,12 @@ enum SimulatorSelfTest {
         }
 
         // ---- Skips only top today back up to its real target (day three: Jay jumped from Monday to today)
+        //      Prices match what was charged, so the start-of-day plan is the real one (whoever was on today then stays).
         do {
             let cal = RoundCalendar.london
             let old = cal.date(byAdding: .day, value: -40, to: today)!
             func visited(_ seq: Int, _ kind: VisitKind, _ charged: Decimal) -> NextUp.Candidate {
-                NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: 20, everyOther: false, lastCleaned: kind == .cleaned ? today : old,
+                NextUp.Candidate(key: seq, sequence: seq, isListable: true, price: kind == .cleaned ? charged : 20, everyOther: false, lastCleaned: kind == .cleaned ? today : old,
                                  lastNotDue: nil, lastVisit: today, lastVisitBeforeToday: old, visitedToday: kind, chargedToday: charged)
             }
             let jay = NextUp.Candidate(key: 9, sequence: 9, isListable: true, price: 20, everyOther: false, lastCleaned: old,

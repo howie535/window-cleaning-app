@@ -12,6 +12,7 @@ import Foundation
 /// - Customers visited **today** stay on today, shown as done; a clean counts towards today's total, so marking a
 ///   clean never pulls new customers onto the day. A skip doesn't count, so the next customers move up.
 /// - **Booked** customers (messaged for a day) stay on that day whatever else happens.
+/// - Whoever was on **today's list at the start of the day** stays on today, whatever is logged.
 /// - A **cluster started today** (one of its houses cleaned) keeps the rest of its houses on today.
 /// - **Every-other** customers who were cleaned last lap are shown greyed as "not this round" and aren't counted.
 /// - Each day is then filled in round order, a whole cluster of neighbours at a time, until it reaches its target plus
@@ -204,6 +205,17 @@ enum NextUp {
         let capacity = days.map { $0.target * (1 + overbook) }
         var load = [Decimal](repeating: 0, count: days.count)
         let todayIndex = days.firstIndex { $0.date == today }
+
+        // Whoever was on today's list when the day started stays on today, whatever is logged. Without this, a clean
+        // (in order, out of order, or with an extra) adds to today's total and pushes customers still to do onto the
+        // next day. Worked out by planning the day as it stood before anything was logged.
+        var pinnedToday = Set<Int>()
+        if let todayIndex, !todayEnded, all.contains(where: { $0.visitedToday != nil }) {
+            let startOfDay = all.map { startOfDayCopy($0, today: today, calendar: calendar) }
+            let before = plan(startOfDay, days: days, today: today, overbook: overbook, hideWeeks: hideWeeks, lapDays: lapDays,
+                              everyOtherFactor: everyOtherFactor, todayEnded: false, calendar: calendar)
+            pinnedToday = Set(before.filter { $0.dayIndex == todayIndex && $0.state == .planned }.map(\.key))
+        }
         var someoneSkippedToday = false
         var placed = Set<Int>()
         var result: [Placement] = []
@@ -271,6 +283,18 @@ enum NextUp {
                     result.append(Placement(key: m.c.key, dayIndex: day, state: .planned, order: m.order))
                 }
             }
+        }
+
+        // Today's customers from the start of the day stay on today (see pinnedToday above).
+        if let todayIndex, !pinnedToday.isEmpty {
+            for index in units.indices {
+                let (pinned, rest) = (units[index].filter { pinnedToday.contains($0.c.key) },
+                                      units[index].filter { !pinnedToday.contains($0.c.key) })
+                guard !pinned.isEmpty else { continue }
+                place(pinned, todayIndex)
+                units[index] = rest
+            }
+            units.removeAll { $0.isEmpty }
         }
 
         // A cluster started today is finished today: once one of its houses has been cleaned, the rest stay on today
@@ -344,6 +368,21 @@ enum NextUp {
             splitFront()                                                                  // nothing fits: split it
         }
         return result
+    }
+
+    /// The customer as they stood at the start of today: nothing logged today.
+    static func startOfDayCopy(_ c: Candidate, today: Date, calendar: Calendar) -> Candidate {
+        guard c.visitedToday != nil else { return c }
+        var copy = c
+        let before = { (d: Date) in calendar.startOfDay(for: d) < today }
+        copy.visitedToday = nil
+        copy.chargedToday = 0
+        copy.lastVisit = c.lastVisitBeforeToday
+        copy.lastCleaned = c.cleanDates.filter(before).max()
+        if let notDue = c.lastNotDue, !before(notDue) { copy.lastNotDue = nil }
+        copy.visitDates = c.visitDates.filter(before)
+        copy.cleanDates = c.cleanDates.filter(before)
+        return copy
     }
 
     /// Typical days between cleans: the median gap between consecutive cleans of regular (not every-other) customers,
