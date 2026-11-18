@@ -67,3 +67,25 @@ enum LagTour {
         try? context.save()
     }
 }
+
+/// Development aid for the swipe check (Tools/swipe-check.sh): with `-RowProbe` in the Simulator, writes every Round
+/// row appearing or disappearing, and every swipe, to Documents/rows.txt. A row that disappears and comes back straight
+/// after a swipe is the blink. Does nothing otherwise.
+enum RowProbe {
+    #if targetEnvironment(simulator)
+    static let enabled = CommandLine.arguments.contains("-RowProbe")
+    #else
+    static let enabled = false
+    #endif
+
+    static func log(_ event: String, _ name: String) {
+        guard enabled else { return }
+        let line = String(format: "%.3f %@ %@\n", Date().timeIntervalSince1970, event, name)
+        let url = URL.documentsDirectory.appendingPathComponent("rows.txt")
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile(); handle.write(Data(line.utf8)); try? handle.close()
+        } else {
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+}

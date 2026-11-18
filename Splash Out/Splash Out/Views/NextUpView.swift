@@ -34,6 +34,8 @@ struct NextUpView: View {
     @State private var movedTo: Date?
     /// Today's done customers are folded into one row unless this is on.
     @State private var showDone = false
+    /// Rows swiped away whose clean is still to be saved (see `perform`): hidden from the list straight away.
+    @State private var leaving: Set<UUID> = []
 
     var body: some View {
         let perfStart = PerfProbe.now()
@@ -98,7 +100,8 @@ struct NextUpView: View {
                     // One ForEach in the same place whatever has been done, so every row keeps its identity: the first
                     // clean of the day doesn't swap the list for a new one (which redrew every row), and a row that
                     // becomes done never hands its open swipe to whichever row slides into its place.
-                    ForEach(day.date == today && !showDone ? day.rows.filter { !$0.isDone } : day.rows) { dayRow in
+                    ForEach((day.date == today && !showDone ? day.rows.filter { !$0.isDone } : day.rows)
+                        .filter { !leaving.contains($0.id) }) { dayRow in
                         row(for: dayRow, on: day.date, today: today)
                     }
                     if day.date == today {
@@ -234,11 +237,14 @@ struct NextUpView: View {
             }
         }
         .accessibilityValue(dayRow.inCluster ? "Kept with neighbours" : "")
+        .accessibilityIdentifier(owes ? "roundRowOwes" : "roundRow")
+        .onAppear { RowProbe.log("appear", customer.name) }
+        .onDisappear { RowProbe.log("disappear", customer.name) }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !dayRow.isDone {
-                Button(role: leaves && !owes ? .destructive : nil) { log(.cleanedPaid, for: customer) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }
+                Button(role: leaves && !owes ? .destructive : nil) { log(.cleanedPaid, for: customer, leaves: leaves) } label: { Label("Paid", systemImage: "checkmark.circle.fill") }
                     .tint(.green)
-                Button(role: leaves ? .destructive : nil) { log(.cleanedNotPaid, for: customer) } label: { Label("Not paid", systemImage: "clock.badge.exclamationmark") }
+                Button(role: leaves ? .destructive : nil) { log(.cleanedNotPaid, for: customer, leaves: leaves) } label: { Label("Not paid", systemImage: "clock.badge.exclamationmark") }
                     .tint(.orange)
             }
         }
@@ -247,7 +253,7 @@ struct NextUpView: View {
                 // An every-other customer on their off round isn't due, so there's nothing to skip (a skip would count
                 // against their skip rate). Leave them greyed; they can still be cleaned with the swipe the other way.
                 if dayRow.state != .everyOtherOff {
-                Button(role: leaves && !owes ? .destructive : nil) { log(.skipped, for: customer) } label: { Label("Skipped", systemImage: "forward.circle") }
+                Button(role: leaves && !owes ? .destructive : nil) { log(.skipped, for: customer, leaves: leaves) } label: { Label("Skipped", systemImage: "forward.circle") }
                     .tint(.red)
                 }
                 if date > today && !dayRow.isPending {
@@ -268,7 +274,8 @@ struct NextUpView: View {
         }
     }
 
-    private func log(_ action: VisitLogger.Action, for customer: Customer) {
+    private func log(_ action: VisitLogger.Action, for customer: Customer, leaves: Bool) {
+        RowProbe.log("swipe", customer.name)
         if case .skipped = action, RoundMetrics.moneyOwed([customer]).cleans > 0 {
             skipAsk = customer
             return
@@ -277,20 +284,26 @@ struct NextUpView: View {
             paidRequest = PaidRequest(customer: customer)
             return
         }
-        perform(action, for: customer, fromSwipe: true)
+        perform(action, for: customer, swipedAway: leaves)
     }
 
-    /// Saves straight away. From a swipe, the swipe's own removal (the destructive role) is the only animation, as in
-    /// Mail: wrapping the change in a second animation made the list animate it twice, and the row below the swiped one
-    /// blinked out and back. Logged after a question (no swipe removal), the change is animated so the row still leaves.
-    private func perform(_ action: VisitLogger.Action, for customer: Customer, fromSwipe: Bool = false) {
+    /// Like Mail: a row swiped away leaves the list in the same moment the swipe takes it (the "destructive" role),
+    /// and the clean is saved once the slide has finished. Saving during the slide made the list catch up halfway
+    /// through and redraw every row, and the row below the swiped one blinked out and back. Logged after a question,
+    /// or with done rows showing (the row stays), the change is saved at once and animated.
+    private func perform(_ action: VisitLogger.Action, for customer: Customer, swipedAway: Bool = false) {
         let apply = {
             let undo = VisitLogger.perform(action, for: customer, in: modelContext)
-            // Saved now, so the list updates in the same moment the row slides away (no flicker back).
             try? modelContext.save()
             undoCenter.offer("\(customer.name): \(action.summary)", undo: undo)
         }
-        if fromSwipe { apply() } else { withAnimation { apply() } }
+        guard swipedAway else { withAnimation { apply() }; return }
+        leaving.insert(customer.id)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            apply()
+            leaving.remove(customer.id)
+        }
     }
 
     /// After logging, move on to whoever is next in the round.

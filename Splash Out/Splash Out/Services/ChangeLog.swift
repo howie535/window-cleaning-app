@@ -11,6 +11,9 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "2.3", date: "November 2026", changes: [
+            "Swiping a customer off the Round no longer makes the next customer blink out and back: the row slides away and the rest close up, as in Mail.",
+        ]),
         Release(version: "2.2", date: "November 2026", changes: [
             "Swiping a customer off the Round is smoother: the rows below close up without blinking, as in Mail.",
             "Customers on today's list stay on today. Logging a clean, even someone from another day, no longer moves anyone to the next day.",

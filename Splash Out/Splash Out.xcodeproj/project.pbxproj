@@ -8,7 +8,18 @@
 
 /* Begin PBXFileReference section */
 		DA5A78B130262FD900712602 /* Splash Out.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Splash Out.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA5A78C030262FDA00712602 /* Splash OutUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Splash OutUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		DA5A78CA30262FDA00712602 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DA5A78A930262FD900712602 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DA5A78B030262FD900712602;
+			remoteInfo = "Splash Out";
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DA5A78B330262FD900712602 /* Splash Out */ = {
@@ -16,10 +27,22 @@
 			path = "Splash Out";
 			sourceTree = "<group>";
 		};
+		DA5A78C130262FDA00712602 /* Splash OutUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Splash OutUITests";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		DA5A78AE30262FD900712602 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA5A78C430262FDA00712602 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				DA5A78B330262FD900712602 /* Splash Out */,
+				DA5A78C130262FDA00712602 /* Splash OutUITests */,
 				DA5A78B230262FD900712602 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				DA5A78B130262FD900712602 /* Splash Out.app */,
+				DA5A78C030262FDA00712602 /* Splash OutUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = DA5A78B130262FD900712602 /* Splash Out.app */;
 			productType = "com.apple.product-type.application";
 		};
+		DA5A78C230262FDA00712602 /* Splash OutUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA5A78C630262FDA00712602 /* Build configuration list for PBXNativeTarget "Splash OutUITests" */;
+			buildPhases = (
+				DA5A78C330262FDA00712602 /* Sources */,
+				DA5A78C430262FDA00712602 /* Frameworks */,
+				DA5A78C530262FDA00712602 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DA5A78C930262FDA00712602 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DA5A78C130262FDA00712602 /* Splash OutUITests */,
+			);
+			name = "Splash OutUITests";
+			packageProductDependencies = (
+			);
+			productName = "Splash OutUITests";
+			productReference = DA5A78C030262FDA00712602 /* Splash OutUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					DA5A78B030262FD900712602 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					DA5A78C230262FDA00712602 = {
+						CreatedOnToolsVersion = 27.2;
+						TestTargetID = DA5A78B030262FD900712602;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				DA5A78B030262FD900712602 /* Splash Out */,
+				DA5A78C230262FDA00712602 /* Splash OutUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		DA5A78AF30262FD900712602 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA5A78C530262FDA00712602 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DA5A78C330262FDA00712602 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DA5A78C930262FDA00712602 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DA5A78B030262FD900712602 /* Splash Out */;
+			targetProxy = DA5A78CA30262FDA00712602 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		DA5A78BA30262FDA00712602 /* Debug */ = {
@@ -252,7 +327,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = SNWUVB6NLT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -271,7 +346,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.2;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.splashout.Splash-Out";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -290,7 +365,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = SNWUVB6NLT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -309,7 +384,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.2;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.splashout.Splash-Out";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -319,6 +394,40 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		DA5A78C730262FDA00712602 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SNWUVB6NLT;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.splashout.Splash-OutUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Splash Out";
+			};
+			name = Debug;
+		};
+		DA5A78C830262FDA00712602 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SNWUVB6NLT;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.splashout.Splash-OutUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Splash Out";
 			};
 			name = Release;
 		};
@@ -339,6 +448,15 @@
 			buildConfigurations = (
 				DA5A78BD30262FDA00712602 /* Debug */,
 				DA5A78BE30262FDA00712602 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DA5A78C630262FDA00712602 /* Build configuration list for PBXNativeTarget "Splash OutUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA5A78C730262FDA00712602 /* Debug */,
+				DA5A78C830262FDA00712602 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
