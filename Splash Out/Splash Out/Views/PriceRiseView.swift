@@ -17,6 +17,13 @@ struct PriceRiseView: View {
     private var percentText: String { percent.formatted(.percent.precision(.fractionLength(0...1))) }
 
     var body: some View {
+        let perfStart = PerfProbe.now()
+        let view = probedBody
+        PerfProbe.end("PriceRise", perfStart)
+        return view
+    }
+
+    @ViewBuilder private var probedBody: some View {
         let _ = VisitLookup.begin(visits)
         let months = settings.first?.priceRiseDueAfterMonths ?? 24
         let today = clock.today

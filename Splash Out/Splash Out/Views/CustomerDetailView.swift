@@ -177,7 +177,7 @@ struct CustomerDetailView: View {
                     if let cluster {
                         LabeledContent("Group", value: "\(cluster.name) · \(cluster.members.count) house\(cluster.members.count == 1 ? "" : "s")")
                     }
-                    Button("Change group...") { isChangingGroup = true }
+                    Button("Change or split group...") { isChangingGroup = true }
                 } footer: {
                     Text("Houses in a group are kept on the same day.")
                 }

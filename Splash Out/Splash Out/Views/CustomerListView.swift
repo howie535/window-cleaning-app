@@ -7,6 +7,10 @@ struct CustomerListView: View {
     @Environment(UndoCenter.self) private var undoCenter
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Query(sort: \Customer.sequence) private var customers: [Customer]
+    /// nil outside the tab bar (always shown).
+    @Environment(TabState.self) private var tabs: TabState?
+    /// The last filtered list: reused while another tab is showing (logging on the Round redrew it each time).
+    @State private var lastShown = ShownCache()
 
     /// Regular width (iPad): the chosen customer is shown in the right-hand panel.
     @State private var selectedID: UUID?
@@ -36,8 +40,14 @@ struct CustomerListView: View {
 
     var body: some View {
         let perfStart = PerfProbe.now()
-        let shown = CustomerFilter.apply(criteria, to: customers)
-        let _ = PerfProbe.end("Customers", perfStart)
+        let hidden = tabs.map { $0.selection != .customers } ?? false
+        let shown: [Customer] = {
+            if hidden, let cached = lastShown.customers, !cached.contains(where: { $0.isDeleted || $0.modelContext == nil }) { return cached }
+            let fresh = CustomerFilter.apply(criteria, to: customers)
+            lastShown.customers = fresh
+            return fresh
+        }()
+        let _ = PerfProbe.end(hidden ? "CustomersHidden" : "Customers", perfStart)
         Group {
             if sizeClass == .regular {
                 NavigationSplitView {
@@ -345,4 +355,10 @@ private struct CustomerRow: View {
 #Preview {
     CustomerListView()
         .modelContainer(for: Customer.self, inMemory: true)
+}
+
+/// Customers' last filtered list, kept out of SwiftUI's change tracking.
+final class ShownCache {
+    /// Reused only while none of them has been deleted (never show a deleted customer).
+    var customers: [Customer]?
 }

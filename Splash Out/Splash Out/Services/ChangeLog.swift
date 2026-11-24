@@ -11,6 +11,11 @@ enum ChangeLog {
     }
 
     static let releases: [Release] = [
+        Release(version: "2.4", date: "November 2026", changes: [
+            "Split a group where you choose: Change or split group, then tap Split here between two houses.",
+            "Skip rate is now the last 12 months, and the Ideal figures use it.",
+            "Skips from March to May 2026, lost between the two worksheets, are now in the records.",
+        ]),
         Release(version: "2.3", date: "November 2026", changes: [
             "Swiping a customer off the Round no longer makes the next customer blink out and back: the row slides away and the rest close up, as in Mail.",
         ]),

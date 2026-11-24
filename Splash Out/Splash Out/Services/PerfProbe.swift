@@ -33,7 +33,7 @@ enum PerfProbe {
 }
 
 /// Development aid for the lag check (Tools/lag-check.sh): with `-PerfLog -LagTour` in the Simulator, the app visits
-/// every tab, logs one clean as a swipe would, then sits idle, marking each phase in perf.txt. The clean is undone at
+/// every tab and every Stats screen, logs a clean and a skip as swipes would, then sits idle, marking each phase in perf.txt. The clean is undone at
 /// the end. Does nothing otherwise.
 @MainActor
 enum LagTour {
@@ -51,19 +51,37 @@ enum LagTour {
             tabs.selection = tab
             try? await Task.sleep(for: .milliseconds(1500))
         }
+        // Every screen under Stats, with More figures open, then back.
+        PerfProbe.mark("STATS")
+        tabs.selection = .today
+        tabs.tourMoreFigures = true
+        try? await Task.sleep(for: .milliseconds(1500))
+        for destination: StatsView.Destination in [.weeklyWork, .monthlyWork, .perHouse, .housesPerDay, .skipRate, .roundLength,
+                                                    .taxYear, .priceRise, .ideal] {
+            tabs.tourStats = destination
+            try? await Task.sleep(for: .milliseconds(1500))
+            tabs.tourStats = nil
+            try? await Task.sleep(for: .milliseconds(800))
+        }
+        tabs.tourMoreFigures = false
+        tabs.selection = .round
+        try? await Task.sleep(for: .milliseconds(1500))
         PerfProbe.mark("LOG")
         let today = RoundCalendar.startOfDay()
         let customers = (try? context.fetch(FetchDescriptor<Customer>(sortBy: [SortDescriptor(\.sequence)]))) ?? []
-        var undo: (() -> Void)?
-        if let target = customers.first(where: { $0.status == .active && !$0.allVisits.contains { $0.date == today } }) {
-            undo = VisitLogger.perform(.cleanedPaid, for: target, in: context)
+        var undos: [() -> Void] = []
+        let fresh = customers.filter { $0.status == .active && !$0.allVisits.contains { $0.date == today } }
+        // A clean, then a skip, as swipes would.
+        for (target, action) in zip(fresh.prefix(2), [VisitLogger.Action.cleanedPaid, .skipped]) {
+            undos.append(VisitLogger.perform(action, for: target, in: context))
             try? context.save()
+            try? await Task.sleep(for: .seconds(2))
         }
-        try? await Task.sleep(for: .seconds(3))
+        try? await Task.sleep(for: .seconds(1))
         PerfProbe.mark("IDLE")
         try? await Task.sleep(for: .seconds(12))
         PerfProbe.mark("END")
-        undo?()
+        for undo in undos.reversed() { undo() }
         try? context.save()
     }
 }

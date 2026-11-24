@@ -3,16 +3,57 @@ import SwiftData
 import Charts
 
 /// The dashboard (Docs/SPEC.md section 5): tiles for the week, today, money owed and so on.
+/// The figures are their own view (`StatsFigures`), so opening or closing a card doesn't work them all out again.
 struct StatsView: View {
-    @Environment(RoundClock.self) private var clock
     /// nil outside the tab bar (always shown).
+    @Environment(TabState.self) private var tabs: TabState?
+    @State private var nav = StatsNav()
+
+    var body: some View {
+        // Hidden tabs stay alive; skip the sums until this tab is showing again.
+        if tabs == nil || tabs?.selection == .today {
+            NavigationStack {
+                StatsFigures(nav: nav)
+                    .equatable()
+                    .onChange(of: tabs?.tourStats) { _, opens in nav.destination = opens }
+                    .navigationDestination(item: Bindable(nav).destination) { destination in
+                        switch destination {
+                        case .weeklyWork: StatDetailView(metric: .weeklyWork)
+                        case .monthlyWork: StatDetailView(metric: .monthlyWork)
+                        case .perHouse: StatDetailView(metric: .perHouse)
+                        case .housesPerDay: StatDetailView(metric: .housesPerDay)
+                        case .skipRate: StatDetailView(metric: .skipRate)
+                        case .roundLength: StatDetailView(metric: .roundLength)
+                        case .taxYear: TaxYearView()
+                        case .priceRise: PriceRiseView()
+                        case .ideal: if let ideal = nav.ideal { IdealWorkingView(ideal: ideal) }
+                        }
+                    }
+            }
+        } else {
+            Color.sudsyBackground
+        }
+    }
+
+    /// Where tapping a card (or an Ideal line) goes.
+    enum Destination: Hashable {
+        case weeklyWork, monthlyWork, perHouse, housesPerDay, skipRate, roundLength, taxYear, priceRise, ideal
+    }
+}
+
+/// Every figure on Stats. Reads `nav` only when a card is tapped, never while drawing. Equal while `nav` is the same,
+/// so it only redraws when its own data changes, not when a card opens or closes.
+struct StatsFigures: View, Equatable {
+    let nav: StatsNav
+    nonisolated static func == (a: StatsFigures, b: StatsFigures) -> Bool { a.nav === b.nav }
+    @Environment(RoundClock.self) private var clock
+    /// nil outside the tab bar.
     @Environment(TabState.self) private var tabs: TabState?
     @Query private var customers: [Customer]
     @Query private var visits: [Visit]
     @Query private var crews: [Crew]
     @Query private var workDays: [WorkDay]
     @Query private var settings: [AppSettings]
-    @State private var destination: Destination?
     /// The figures beyond the top four, folded away unless opened.
     @AppStorage("stats.showMoreFigures") private var showMoreFigures = false
 
@@ -25,16 +66,14 @@ struct StatsView: View {
     }
 
     var body: some View {
-        // Hidden tabs stay alive; skip the sums until this tab is showing again.
-        if tabs == nil || tabs?.selection == .today {
-            content
-        } else {
+        if let tabs, tabs.selection != .today {
             Color.sudsyBackground
+        } else {
+            figures
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
+    @ViewBuilder private var figures: some View {
         let perfStart = PerfProbe.now()
         let today = clock.today
         let _ = VisitLookup.begin(VisitIndex.statsWindow(visits, today: today))
@@ -60,11 +99,12 @@ struct StatsView: View {
         let riseAdds = risesDue.reduce(Decimal(0)) { $0 + PriceRise.proposal(for: $1, percent: risePercent).addsPerRound }
         let notStarted = customers.filter { $0.status == .notStarted }.count
         let everyOther = customers.filter { ($0.status == .active || $0.status == .leaving) && $0.everyOther }.count
-        let _ = PerfProbe.end("Stats", perfStart)
         let newVsLost = "\(stats.newCustomers(taxYear: taxYear)) / \(stats.lostCustomers(taxYear: taxYear))"
         let risesDueCount = risesDue.count
         let _ = VisitLookup.end()
-        let showIdeal = { destination = .ideal }
+        let _ = PerfProbe.end("Stats", perfStart)
+        let _ = { nav.ideal = ideal }()
+        let showIdeal = { nav.destination = .ideal }
         let grid = [GridItem(.adaptive(minimum: 170), spacing: 12, alignment: .top)]
         // The four figures that say how things stand, large and tinted; the rest folded away below.
         let top = LazyVGrid(columns: grid, spacing: 12) {
@@ -129,58 +169,39 @@ struct StatsView: View {
             if showMoreFigures { more }
         }
 
-        NavigationStack {
-            GeometryReader { geometry in
-                // Wide enough (iPad landscape): tiles on the left, the chart beside them.
-                let sideBySide = geometry.size.width > 800
-                ScrollView {
-                    BackupReminder()
-                        .padding(.horizontal)
-                        .padding(.bottom, 4)
-                    if sideBySide {
-                        HStack(alignment: .top, spacing: 12) {
-                            tiles
-                                .frame(width: geometry.size.width * 0.5)
-                            WeeksChart(weeks: Array(stats.weeks.suffix(12)), height: 420)
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom)
-                    } else {
+        GeometryReader { geometry in
+            // Wide enough (iPad landscape): tiles on the left, the chart beside them.
+            let sideBySide = geometry.size.width > 800
+            ScrollView {
+                BackupReminder()
+                    .padding(.horizontal)
+                    .padding(.bottom, 4)
+                if sideBySide {
+                    HStack(alignment: .top, spacing: 12) {
                         tiles
-                            .padding(.horizontal)
-                        WeeksChart(weeks: Array(stats.weeks.suffix(12)))
-                            .padding()
+                            .frame(width: geometry.size.width * 0.5)
+                        WeeksChart(weeks: Array(stats.weeks.suffix(12)), height: 420)
                     }
-                }
-            }
-            .navigationTitle("Stats")
-            .background(Color.sudsyBackground)
-            .navigationDestination(item: $destination) { destination in
-                switch destination {
-                case .weeklyWork: StatDetailView(metric: .weeklyWork)
-                case .monthlyWork: StatDetailView(metric: .monthlyWork)
-                case .perHouse: StatDetailView(metric: .perHouse)
-                case .housesPerDay: StatDetailView(metric: .housesPerDay)
-                case .skipRate: StatDetailView(metric: .skipRate)
-                case .roundLength: StatDetailView(metric: .roundLength)
-                case .taxYear: TaxYearView()
-                case .priceRise: PriceRiseView()
-                case .ideal: IdealWorkingView(ideal: ideal)
+                    .padding(.horizontal)
+                    .padding(.bottom)
+                } else {
+                    tiles
+                        .padding(.horizontal)
+                    WeeksChart(weeks: Array(stats.weeks.suffix(12)))
+                        .padding()
                 }
             }
         }
-    }
-
-    /// Where tapping a card (or an Ideal line) goes.
-    enum Destination: Hashable {
-        case weeklyWork, monthlyWork, perHouse, housesPerDay, skipRate, roundLength, taxYear, priceRise, ideal
+        .navigationTitle("Stats")
+        .background(Color.sudsyBackground)
+        .onChange(of: tabs?.tourMoreFigures) { _, open in if let open { showMoreFigures = open } }
     }
 
     /// A card that opens `opens` when tapped (nil: not tappable). Its Ideal line has its own tap.
-    private func card(_ opens: Destination?, _ tile: Tile) -> some View {
+    private func card(_ opens: StatsView.Destination?, _ tile: Tile) -> some View {
         var tile = tile
         tile.opens = opens != nil
-        return tile.onTapGesture { if let opens { destination = opens } }
+        return tile.onTapGesture { if let opens { nav.destination = opens } }
     }
 }
 
@@ -294,4 +315,11 @@ private struct WeeksChart: View {
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
+}
+
+/// The Stats screen open from a card.
+@Observable final class StatsNav {
+    var destination: StatsView.Destination?
+    /// The Ideal figures as last drawn, for the Ideal screen. Not watched: setting it never redraws.
+    @ObservationIgnored var ideal: Ideal?
 }

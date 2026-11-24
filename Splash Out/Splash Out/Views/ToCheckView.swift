@@ -13,6 +13,13 @@ struct ToCheckView: View {
     @State private var showAll = false
 
     var body: some View {
+        let perfStart = PerfProbe.now()
+        let view = probedBody
+        PerfProbe.end("ToCheck", perfStart)
+        return view
+    }
+
+    @ViewBuilder private var probedBody: some View {
         let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays)
         let under = stats.payingUnderPrice()
         let issues = stats.dataIssues()

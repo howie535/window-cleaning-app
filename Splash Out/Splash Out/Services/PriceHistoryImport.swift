@@ -179,6 +179,31 @@ enum PriceHistoryImport {
         return added
     }
 
+    /// Set once the skips between the 2025-6 and 2026-7 worksheets have been merged (2.4).
+    static let boundarySkipsKey = "worksheetBoundarySkipsMerged"
+
+    /// The one-time merge of the skips lost where the 2025-6 worksheet ends and 2026-7 begins (Tools/boundary_skips.py,
+    /// built in as PriceHistory2026Skips.json). Skips and off-cycle visits only, so no £ total changes; none goes on
+    /// a day the customer already has a visit. Waits for the 2025-6 merge. Returns the number of visits added.
+    @discardableResult
+    static func mergeBoundarySkipsOnce(context: ModelContext) -> Int? {
+        guard UserDefaults.standard.bool(forKey: mergedKey), !UserDefaults.standard.bool(forKey: boundarySkipsKey),
+              let url = Bundle.main.url(forResource: "PriceHistory2026Skips", withExtension: "json"),
+              let data = try? Data(contentsOf: url), let file = try? decode(data),
+              let before = try? context.fetchCount(FetchDescriptor<Visit>())
+        else { return nil }
+        let onlySkips = File(schema: file.schema, worksheets: nil, customers: [], former: nil,
+                             visits: file.visits?.map { set in
+                                 var set = set
+                                 set.visits = set.visits.filter { $0.kind != VisitKind.cleaned.rawValue }
+                                 return set
+                             })
+        guard (try? addVisits(onlySkips, context: context)) != nil,
+              let after = try? context.fetchCount(FetchDescriptor<Visit>()) else { return nil }
+        UserDefaults.standard.set(true, forKey: boundarySkipsKey)
+        return after - before
+    }
+
     /// Adds the worksheet's cleans, skips and off-cycle visits (none on a day the customer already has one), and moves
     /// Records start back to the first of them so Stats and Weekly include them. Returns the number of cleans added.
     /// Charged is what was paid, or the list price if unpaid, so no customer's balance or next price changes.

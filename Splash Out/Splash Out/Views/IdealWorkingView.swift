@@ -12,6 +12,13 @@ struct IdealWorkingView: View {
     }
 
     var body: some View {
+        let perfStart = PerfProbe.now()
+        let view = probedBody
+        PerfProbe.end("Ideal", perfStart)
+        return view
+    }
+
+    @ViewBuilder private var probedBody: some View {
         List {
             if let rate = ideal.rate {
                 Section {

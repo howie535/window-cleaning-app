@@ -14,6 +14,11 @@ struct NextUpView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(UndoCenter.self) private var undoCenter
     @Environment(RoundClock.self) private var clock
+    /// nil outside the tab bar (always shown).
+    @Environment(TabState.self) private var tabs: TabState?
+    /// The last plan worked out. While another tab is showing, the hidden Round reuses it instead of working the
+    /// plan out again (each tab switch redrew it, about 80 ms), and keeps its scroll place.
+    @State private var lastPlan = PlanCache()
 
     /// A skip waiting for "they still owe money" confirmation.
     @State private var skipAsk: Customer?
@@ -40,11 +45,19 @@ struct NextUpView: View {
     var body: some View {
         let perfStart = PerfProbe.now()
         let today = clock.today
-        let _ = VisitLookup.begin(visits)
-        let plan = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today,
-                                     todayEnded: endedDay == RoundCalendar.dayString(today))
-        let _ = VisitLookup.end()
-        let _ = PerfProbe.end("Round", perfStart)
+        let hidden = tabs.map { $0.selection != .round } ?? false
+        let plan: RoundPlanner.Plan = {
+            if hidden, let cached = lastPlan.plan, lastPlan.day == today, lastPlan.count == customers.count { return cached }
+            VisitLookup.begin(visits)
+            defer { VisitLookup.end() }
+            let fresh = RoundPlanner.plan(customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today,
+                                          todayEnded: endedDay == RoundCalendar.dayString(today))
+            lastPlan.plan = fresh
+            lastPlan.day = today
+            lastPlan.count = customers.count
+            return fresh
+        }()
+        let _ = PerfProbe.end(hidden ? "RoundHidden" : "Round", perfStart)
 
         if sizeClass == .regular {
             NavigationSplitView {
@@ -267,7 +280,7 @@ struct NextUpView: View {
             if date > today && !dayRow.isDone && !dayRow.isPending {
                 Button { withAnimation { customer.bookedFor = today } } label: { Label("Do today", systemImage: "arrow.up.to.line") }
             }
-            Button { grouping = customer } label: { Label("Change group...", systemImage: "square.stack.3d.up") }
+            Button { grouping = customer } label: { Label("Change or split group...", systemImage: "square.stack.3d.up") }
             if customer.bookedFor != nil {
                 Button(role: .destructive) { withAnimation { customer.bookedFor = nil } } label: { Label("Remove booking", systemImage: "xmark.circle") }
             }
@@ -621,4 +634,12 @@ private struct RoundKeyButton: View {
             Text(text).font(.subheadline)
         }
     }
+}
+
+/// The Round's last plan, kept out of SwiftUI's change tracking (a plain class, so storing it never redraws).
+final class PlanCache {
+    var plan: RoundPlanner.Plan?
+    var day: Date?
+    /// A customer added or deleted elsewhere means working it out again (never show a deleted customer).
+    var count = -1
 }

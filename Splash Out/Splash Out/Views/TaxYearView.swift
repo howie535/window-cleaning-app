@@ -19,6 +19,13 @@ struct TaxYearView: View {
     }
 
     var body: some View {
+        let perfStart = PerfProbe.now()
+        let view = probedBody
+        PerfProbe.end("TaxYear", perfStart)
+        return view
+    }
+
+    @ViewBuilder private var probedBody: some View {
         let today = clock.today
         let stats = RoundStats(visits: visits, customers: customers, settings: settings.first, crews: crews, workDays: workDays, today: today)
         let years = Array(Set(RoundMetrics.taxYearsWithWork(customers) + [stats.currentTaxYear])).sorted()

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Lag check for Splash Out: run after any new feature or code change, before installing on the phone.
 # Builds for the Simulator, runs the self-test (which also times the round plan, stats and backup on the full data),
-# then loads the full data and runs a scripted tour: every tab, one logged clean, then 12 seconds idle.
+# then loads the full data and runs a scripted tour: every tab, every Stats screen, a clean and a skip, then 12 seconds idle.
 # Fails (exit 1) if anything goes over its time budget or the app rebuilds while idle.
 # Budgets are Simulator times on a Mac; a phone is slower, so they're kept tight.
 
@@ -42,7 +42,7 @@ echo "Tour with the full data..."
 xcrun simctl launch $SIM $BUNDLE -ImportFile in.json >/dev/null; sleep 12; xcrun simctl terminate $SIM $BUNDLE 2>/dev/null
 rm -f "$D/perf.txt"
 xcrun simctl launch $SIM $BUNDLE -PerfLog -LagTour >/dev/null
-for i in $(seq 1 30); do grep -q "MARK-END" "$D/perf.txt" 2>/dev/null && break; sleep 2; done
+for i in $(seq 1 60); do grep -q "MARK-END" "$D/perf.txt" 2>/dev/null && break; sleep 2; done
 sleep 1
 xcrun simctl terminate $SIM $BUNDLE 2>/dev/null
 cp "$D/perf.txt" /tmp/splash-lag-perf.txt 2>/dev/null

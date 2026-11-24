@@ -45,6 +45,8 @@ The iPad is where the round spreadsheet is used today, in landscape.
 
 **Quotes to do (2.1).** Customers > + > New Quote to Do adds a name and address with no price, placed in the round. It has the status "Quote to do": greyed on the Round with an orange tag when the round reaches it, listed on To Check, never counted in a day's work or in Stats. Tapping it on the Round gives Quote taken (set the price, becomes Not started) or Not taken (remove).
 
+**Split a group (2.4).** Change or split group (on the Round's long press, or the customer page) lists the group in round order with Split here between each pair of houses. Houses above stay in the group; the rest start a new one. Nobody moves in the round.
+
 **Weekly target (2.1).** A week's target is the sum of its planned days: the usual week, with a day off counting nothing and a Diary crew change counting that crew's day target.
 
 **Calendar (Settings > Calendar).** Keeps a "Splash Out" calendar in the phone's Calendar app up to date: the crew for each working day, or "Day off", for four months ahead. No targets, notes or customers. One way: the app writes, nothing is read back. Share it from the Calendar app (Calendars > i > Add Person) with iPhone users. For someone on Android, make it a Public Calendar and send her the link to add to Google Calendar. It refreshes whenever the app opens and after each diary change.

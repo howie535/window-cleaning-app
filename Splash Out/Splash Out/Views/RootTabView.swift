@@ -10,6 +10,9 @@ enum AppTab: Int, CaseIterable {
 @MainActor @Observable
 final class TabState {
     var selection: AppTab = .round
+    /// Lag tour only: a Stats screen to open, and whether More figures is open.
+    var tourStats: StatsView.Destination?
+    var tourMoreFigures: Bool?
 }
 
 struct RootTabView: View {
@@ -57,6 +60,7 @@ struct RootTabView: View {
             // One-time merge of the 2025-6 worksheet history (does nothing once done), a few seconds after opening.
             try? await Task.sleep(for: .seconds(4))
             PriceHistoryImport.mergeBundledOnce(context: modelContext)
+            PriceHistoryImport.mergeBoundarySkipsOnce(context: modelContext)
         }
         .fullScreenCover(isPresented: $showTour) { OnboardingView() }
         // Shake to undo, as in Apple's own apps: asks first, naming what it will undo.

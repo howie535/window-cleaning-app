@@ -188,20 +188,13 @@ struct RoundStats {
         return total == 0 ? 0 : Double(skipped) / Double(total)
     }
 
-    /// The skip rate's period: the last 6 months (182 days to yesterday), or since the first clean while there's less history.
-    var skipRateStart: Date {
-        let sixMonthsAgo = calendar.date(byAdding: .day, value: -182, to: today)!
-        let first = dayTotals.keys.filter { $0 < today }.min() ?? today
-        return max(sixMonthsAgo, first)
-    }
+    /// The skip rate's period: the last 12 months, the same as the other averages (2.4; it was 6 months).
+    var skipRateStart: Date { analysisStart }
 
-    /// "last 6 months", or "since 6 Apr" while there's less than 6 months of history.
-    var skipRateLabel: String {
-        let sixMonthsAgo = calendar.date(byAdding: .day, value: -182, to: today)!
-        return skipRateStart <= sixMonthsAgo ? "last 6 months" : "since \(RoundCalendar.short(skipRateStart))"
-    }
+    /// "last 12 months", or "since 6 Apr" while there's less than a year of history.
+    var skipRateLabel: String { analysisLabel }
 
-    /// Skipped / (skipped + cleaned) over the last 6 months up to yesterday, on the rules of `skipRateVisits`.
+    /// Skipped / (skipped + cleaned) over the last 12 months up to yesterday, on the rules of `skipRateVisits`.
     var trailingSkipRate: Double {
         let start = skipRateStart
         var skipped = 0, total = 0
@@ -252,7 +245,7 @@ struct RoundStats {
         var daysPerWeek: Decimal
         /// Total £ ÷ total houses (each house counts once, unlike the spreadsheet's average of days).
         var perHouse: Decimal
-        /// Skipped share of visits over the last 6 months (not-due visits and cancelled customers left out).
+        /// Skipped share of visits over the last 12 months (not-due visits and cancelled customers left out).
         var skipRate: Double
         var weeks: Decimal
     }

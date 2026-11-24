@@ -39,6 +39,30 @@ struct GroupPickerView: View {
                         Text("Houses in a group are kept on the same day.")
                     }
 
+                    if mine.members.count > 1 {
+                        Section {
+                            ForEach(Array(mine.members.enumerated()), id: \.element.id) { index, member in
+                                if index > 0 {
+                                    Button {
+                                        GroupEditing.newGroup(after: mine.members[index - 1], all: customers)
+                                        save()
+                                    } label: {
+                                        Label("Split here · \(index) + \(mine.members.count - index)", systemImage: "scissors")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                }
+                                Text(member.name + (member === customer ? " (this house)" : ""))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } header: {
+                            Text("Split the group")
+                        } footer: {
+                            InfoFooter(text: "Tap where to split, in round order.",
+                                       points: ["Houses above stay in this group; the rest start a new one.",
+                                                "Nobody moves in the round."])
+                        }
+                    }
+
                     Section("Join or move next to a group, nearest first") {
                         ForEach(GroupEditing.candidates(for: mine, in: clusters).prefix(25)) { target in
                             Button {
