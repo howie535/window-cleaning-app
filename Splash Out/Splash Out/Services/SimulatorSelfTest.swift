@@ -275,6 +275,25 @@ enum SimulatorSelfTest {
             check("today carries on in round order from the start of the day", day0 == [6, 7, 8, 9, 10], "\(day0)")
         }
 
+        // ---- A first clean away from the round (25 Nov 2026: Mrs Williams, cleaned out of order 4 weeks before the
+        //      round reached Sydenham Avenue, was passed over with her neighbours)
+        do {
+            let cal = RoundCalendar.london
+            func ago(_ d: Int) -> Date { cal.date(byAdding: .day, value: -d, to: today)! }
+            var first = NextUp.Candidate(key: 1, sequence: 1, isListable: true, price: 20, everyOther: false,
+                                         lastCleaned: ago(29), lastNotDue: nil, lastVisit: ago(29), lastVisitBeforeToday: ago(29),
+                                         visitDates: [ago(29)], cleanDates: [ago(29)])
+            check("first clean with the round: hidden for the usual weeks", !NextUp.isDue(first, today: today, hideWeeks: 5, calendar: cal))
+            first.firstCleanOutOfOrder = true
+            check("first clean away from the round: due with the neighbours 4 weeks on", NextUp.isDue(first, today: today, hideWeeks: 5, calendar: cal))
+            var recent = first
+            recent.lastCleaned = ago(10); recent.lastVisit = ago(10); recent.visitDates = [ago(10)]; recent.cleanDates = [ago(10)]
+            check("first clean away from the round: still hidden 10 days on", !NextUp.isDue(recent, today: today, hideWeeks: 5, calendar: cal))
+            var second = first
+            second.cleanDates = [ago(70), ago(29)]; second.visitDates = second.cleanDates
+            check("a second clean hides for the usual weeks", !NextUp.isDue(second, today: today, hideWeeks: 5, calendar: cal))
+        }
+
         // ---- Day five: average price, ending the day early, price rise to target, Direct Debit
         do {
             let a = Customer(name: "A", price: 10); let b = Customer(name: "B", price: 20); b.altPrice = 12

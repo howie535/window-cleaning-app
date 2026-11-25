@@ -68,7 +68,7 @@ enum RoundPlanner {
 
         // Candidates carry an index back into `customers`.
         var regularCleans: [[Date]] = []
-        let candidates = customers.enumerated().map { index, customer -> NextUp.Candidate in
+        var candidates = customers.enumerated().map { index, customer -> NextUp.Candidate in
             var lastCleaned: Date?
             var lastNotDue: Date?
             var lastVisit: Date?
@@ -111,6 +111,16 @@ enum RoundPlanner {
                 bookedFor: customer.bookedFor.map { RoundCalendar.startOfDay($0) },
                 group: groupOf[index]
             )
+        }
+
+        // A customer whose only visit is a first clean that neither round neighbour shared was cleaned away from the round.
+        let listed = candidates.filter { $0.isListable && !$0.isPending }.sorted { $0.sequence < $1.sequence }
+        for (position, c) in listed.enumerated() where c.cleanDates.count == 1 && Set(c.visitDates).count == 1 {
+            let day = c.cleanDates[0]
+            let neighbours = [position - 1, position + 1].filter { listed.indices.contains($0) }.map { listed[$0] }
+            if !neighbours.isEmpty, !neighbours.contains(where: { $0.visitDates.contains(day) }) {
+                candidates[c.key].firstCleanOutOfOrder = true
+            }
         }
 
         let resolver = DayResolver(settings: settings, crews: crews, workDays: workDays, customers: customers)

@@ -155,6 +155,7 @@ The Tax Year screen leads with **Total sales** (work value of every clean in the
 1. **Pointer:** the customer with the latest cleaned visit date. On a tie, the one furthest along in sequence.
 2. **Order:** customers in sequence order starting just after the pointer, wrapping round to the start.
 3. **Who's included:** status `active` or `leaving`, and not cleaned in the last 3 weeks. For every-other customers it's 8 weeks: they're left out if their last visit was cleaned within 8 weeks, or was `not_due` within the last 3 weeks.
+   A customer whose only visit is a first clean that neither round neighbour had that day (cleaned away from the round) is hidden for half the usual weeks, so they join their neighbours when the round reaches them (25 Nov 2026).
 4. **Days to fill:** the next 20 working days from today. That's the usual pattern minus dayOff days, plus any future WorkDay with a crew.
 5. **How each day fills:** to day target × (1 + overbook), using a running total of the customers' prices.
 6. **Shown for each customer:** day, area, name, address, price, EO, Ring/WhatsApp, front only, last clean, anything owed, notes.

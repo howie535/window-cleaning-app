@@ -46,6 +46,9 @@ enum NextUp {
         var bookedFor: Date? = nil
         /// Their cluster (neighbours kept on the same day). nil: a cluster of their own.
         var group: Int? = nil
+        /// Their only visit is a first clean done away from the round (neither round neighbour was visited that day).
+        /// It hides them for half the usual weeks, so they join their neighbours when the round reaches them.
+        var firstCleanOutOfOrder: Bool = false
     }
 
     struct Day: Equatable {
@@ -100,7 +103,11 @@ enum NextUp {
 
     static func isDoneThisLap(_ c: Candidate, today: Date, hideWeeks: Int, calendar: Calendar) -> Bool {
         guard let last = c.lastVisit else { return false }
-        return days(from: last, to: today, calendar: calendar) < 7 * hideWeeks
+        // A first clean done away from the round (25 Nov 2026: Mrs Williams, cleaned out of order 4 weeks before the
+        // round reached Sydenham Avenue, was passed over with her neighbours).
+        let firstOutOfOrder = c.firstCleanOutOfOrder && c.cleanDates.count == 1 && c.cleanDates.first == last
+        let hideDays = firstOutOfOrder ? 7 * hideWeeks / 2 : 7 * hideWeeks
+        return days(from: last, to: today, calendar: calendar) < hideDays
     }
 
     /// An every-other customer cleaned within about one and a half laps is on their off round.
