@@ -118,17 +118,23 @@ enum SimulatorSelfTest {
 
         // Credit gets used up (the bug fixed this stage)
         let beforeCredit = subject.allVisits.count
-        _ = VisitLogger.logCustomClean(for: subject, date: today, charged: price, paid: price + 5, note: nil, in: context)
+        let creditBase = Snapshot(all)
+        var creditUndos: [() -> Void] = []
+        creditUndos.append(VisitLogger.logCustomClean(for: subject, date: today, charged: price, paid: price + 5, note: nil, in: context))
         check("overpaying £5 gives £5 credit", subject.outstandingBalance == 5 && subject.suggestedNextPrice == price - 5, "\(subject.outstandingBalance)")
-        _ = VisitLogger.perform(.cleanedPaid, for: subject, in: context)
+        creditUndos.append(VisitLogger.perform(.cleanedPaid, for: subject, in: context))
         let next = subject.allVisits.filter { $0.creditApplied != 0 }
         check("next clean takes the credit off", next.count == 1 && next[0].charged == price - 5 && next[0].creditApplied == 5, "\(next.map(\.charged))")
         check("credit is used up afterwards", subject.outstandingBalance == 0 && subject.suggestedNextPrice == price, "\(subject.outstandingBalance)")
-        _ = VisitLogger.logCustomClean(for: subject, date: today, charged: price, paid: price - 5, note: nil, in: context)
+        creditUndos.append(VisitLogger.logCustomClean(for: subject, date: today, charged: price, paid: price - 5, note: nil, in: context))
         check("underpaying £5 leaves a £5 shortfall", subject.outstandingBalance == -5 && subject.suggestedNextPrice == price + 5)
-        _ = VisitLogger.perform(.cleanedPaid, for: subject, in: context)
+        creditUndos.append(VisitLogger.perform(.cleanedPaid, for: subject, in: context))
         check("shortfall is recovered then cleared", subject.outstandingBalance == 0 && subject.suggestedNextPrice == price)
         check("self-test added the expected visits", subject.allVisits.count == beforeCredit + 4)
+        // Take the four cleans off again: left on, they made a real customer look cleaned four times today (£120 done)
+        // for every check after this one, including the round plan.
+        for undo in creditUndos.reversed() { undo() }
+        check("undoing the credit cleans restores everything", Snapshot(all) == creditBase && subject.allVisits.count == beforeCredit && subject.outstandingBalance == 0)
 
         // Round placement
         let anchor = all[5]
@@ -243,9 +249,14 @@ enum SimulatorSelfTest {
                       && Decimal(recent.reduce(0) { $0 + $1.days }) / Decimal(recent.count) / 7 == card.weeks)
             }
         }
+        // Test customers go after the real round, in the order they're made. Left at sequence 0 they tied, and renumbering
+        // the round put them among the first houses in whatever order the fetch gave, so the plan changed run to run.
+        // Below 99_999 and 900_000, which some tests set by hand to put a customer last.
+        var nextTestSequence = 50_000
         func synthetic(_ name: String, price: Decimal = 20, status: CustomerStatus = .active, eo: Bool = false, frontOnly: Bool = false) -> Customer {
             let c = Customer(name: name, price: price, status: status)
             c.everyOther = eo; c.frontOnly = frontOnly
+            c.sequence = nextTestSequence; nextTestSequence += 1
             context.insert(c); return c
         }
         func add(_ c: Customer, _ kind: VisitKind, daysAgo: Int, charged: Decimal = 20, paid: Decimal = 20, listPrice: Decimal = 20) {
@@ -947,12 +958,21 @@ enum SimulatorSelfTest {
             let shownIDs = planned.days.flatMap(\.rows).map(\.customer.id)
             check("plan: nobody appears twice", Set(shownIDs).count == shownIDs.count && Set(placed.map(\.id)).count == placed.count)
             var reachesTarget = true, overTarget = true
+            var overDetail: [String] = []
             for day in planned.days.dropLast() where !day.customers.isEmpty && day.bookedCount == 0 {
                 if day.total + day.doneTotal < day.target { reachesTarget = false }
-                if day.total + day.doneTotal > day.target * Decimal(1.2) + 50 { overTarget = false }
+                // The plan's load, not money taken: a house cleaned today counts at its list price, as the plan had it at the
+                // start of the day. Extras, credit and repeat cleans logged today don't make the plan overfill: today's
+                // customers stay on today whatever is logged (the self-test logs four cleans today on one customer).
+                let cleanedToday = day.rows.filter { $0.state == .cleanedToday }.reduce(Decimal(0)) { $0 + $1.customer.price }
+                if day.total + cleanedToday > day.target * Decimal(1.2) + 50 {
+                    overTarget = false
+                    let rows = day.rows.map { r in "#\(r.customer.sequence) \(r.customer.price.pounds) cluster \(r.group.map(String.init) ?? "-") \(r.state)" }
+                    overDetail.append("\(day.date.formatted(date: .abbreviated, time: .omitted)) target \(day.target.pounds), to do \(day.total.pounds) + cleaned today \(cleanedToday.pounds) (charged \(day.doneTotal.pounds)): " + rows.joined(separator: ", "))
+                }
             }
             check("plan: every full day reaches its target", reachesTarget)
-            check("plan: no day goes far over (keeping a cluster whole allows up to about 20% over)", overTarget)
+            check("plan: no day goes far over (keeping a cluster whole allows up to about 20% over)", overTarget, overDetail.joined(separator: " | "))
             var pendingSeen: [UUID: Int] = [:]
             var pendingCounted = false, totalsMatch = true
             for day in planned.days {
